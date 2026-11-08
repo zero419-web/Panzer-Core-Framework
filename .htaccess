@@ -1,8 +1,8 @@
 <IfModule mod_headers.c>
-<FilesMatch "sw\.js$">
+<FilesMatch ".js$">
     Header set Service-Worker-Allowed "/"
 </FilesMatch>
-<FilesMatch "(PWA\.webmanifest|sw\.js)$">
+<FilesMatch "(.webmanifest|js\.js)$">
     Satisfy Any
     Allow from all
     Header set Access-Control-Allow-Origin "*"
