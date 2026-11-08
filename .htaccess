@@ -1,5 +1,5 @@
 <IfModule mod_headers.c>
-<FilesMatch ".js$">
+<FilesMatch "ServiceWorker.js$">
     Header set Service-Worker-Allowed "/"
 </FilesMatch>
 <FilesMatch "(.webmanifest|js\.js)$">
