@@ -1,0 +1,25 @@
+{
+  "background_color": "#050505",
+  "dir": "auto",
+  "display": "standalone",
+  "name": "Comune_01",
+  "short_name": "Com_01",
+  "description": "Comune di xxx",
+  "orientation": "portrait",
+  "start_url": "./index.html",
+  "scope": "./",
+  "theme_color": "#d4af37",
+  "lang": "it",
+  "id": "PWA_COM_01",
+  "categories": [
+    "food"
+  ],
+  "icons": [
+    {
+      "src": "icon.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any"
+    }
+  ]
+}

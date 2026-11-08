@@ -1,0 +1,545 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+    <meta http-equiv="Content-Security-Policy" content="default-src 'self' blob: data:; script-src 'self' 'unsafe-inline' blob: data:; style-src 'self' 'unsafe-inline'; img-src 'self' blob: data:; connect-src 'self' blob: data:;">
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+    <title>🌀🪖 SDK / Dashboard Beta v2.x - PA : Generico Ente Comunale</title>
+
+    <link rel="manifest" href="PA_PWA.webmanifest">
+    <link rel="icon" type="image/png" href="icon.png">
+
+    <style>
+        /* 🎨 Stili Grafici della Dashboard PWA & Ottimizzazione Viewport Anti-Overflow */
+        :root {
+            --bg-color: #0d1117;
+            --card-bg: #161b22;
+            --border-color: #30363d;
+            --text-main: #c9d1d9;
+            --text-muted: #8b949e;
+            --accent-blue: #58a6ff;
+            --accent-green: #2ea043;
+            --accent-red: #da3633;
+            --accent-orange: #d29922;
+            --accent-purple: #a371f7;
+            --term-bg: #040d1a;
+            --font-mono: 'SFMono-Regular', Consolas, 'Liberation Mono', Menlo, monospace;
+        }
+
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+
+        body {
+            background-color: var(--bg-color);
+            color: var(--text-main);
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+            line-height: 1.5;
+            padding: 12px;
+            max-width: 100vw;
+            overflow-x: hidden;
+        }
+
+        @media (min-width: 768px) {
+            body {
+                padding: 20px;
+            }
+        }
+
+        /* 🖥️ Header Applicativo PA Responsive */
+        .header {
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+            padding-bottom: 15px;
+            border-bottom: 1px solid var(--border-color);
+            margin-bottom: 20px;
+        }
+
+        @media (min-width: 768px) {
+            .header {
+                flex-direction: row;
+                justify-content: space-between;
+                align-items: center;
+                padding-bottom: 20px;
+                margin-bottom: 25px;
+            }
+        }
+
+        .header-title h1 {
+            font-size: 1.25rem;
+            color: var(--accent-blue);
+            display: flex;
+            flex-wrap: wrap;
+            align-items: center;
+            gap: 8px;
+        }
+
+        @media (min-width: 768px) {
+            .header-title h1 {
+                font-size: 1.5rem;
+            }
+        }
+
+        .header-title p {
+            font-size: 0.8rem;
+            color: var(--text-muted);
+        }
+
+        @media (min-width: 768px) {
+            .header-title p {
+                font-size: 0.85rem;
+            }
+        }
+
+        /* 🏷️ Badge di Stato */
+        .badge-status {
+            padding: 6px 14px;
+            border-radius: 20px;
+            font-size: 0.8rem;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            border: 1px solid transparent;
+            text-align: center;
+            align-self: flex-start;
+        }
+
+        @media (min-width: 768px) {
+            .badge-status {
+                font-size: 0.85rem;
+                align-self: auto;
+            }
+        }
+
+        .badge-init { background: rgba(210, 153, 34, 0.15); color: var(--accent-orange); border-color: var(--accent-orange); }
+        .badge-ready { background: rgba(46, 160, 67, 0.15); color: var(--accent-green); border-color: var(--accent-green); }
+        .badge-sync { background: rgba(88, 166, 255, 0.15); color: var(--accent-blue); border-color: var(--accent-blue); }
+        .badge-error { background: rgba(218, 54, 51, 0.15); color: var(--accent-red); border-color: var(--accent-red); }
+
+        /* 📐 Grid Layout Responsive fluido al 100% */
+        .grid-layout {
+            display: grid;
+            grid-template-columns: 1fr;
+            gap: 15px;
+            width: 100%;
+            max-width: 1400px;
+            margin: 0 auto;
+        }
+
+        @media (min-width: 992px) {
+            .grid-layout {
+                grid-template-columns: 340px minmax(0, 1fr);
+                gap: 20px;
+            }
+        }
+
+        .card {
+            background-color: var(--card-bg);
+            border: 1px solid var(--border-color);
+            border-radius: 8px;
+            padding: 15px;
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+            width: 100%;
+            min-width: 0;
+        }
+
+        @media (min-width: 768px) {
+            .card {
+                padding: 20px;
+                gap: 15px;
+            }
+        }
+
+        .card-title {
+            font-size: 1rem;
+            font-weight: 600;
+            color: var(--text-main);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            border-bottom: 1px solid var(--border-color);
+            padding-bottom: 8px;
+            gap: 8px;
+            flex-wrap: wrap;
+        }
+
+        @media (min-width: 768px) {
+            .card-title {
+                font-size: 1.1rem;
+                padding-bottom: 10px;
+            }
+        }
+
+        .btn {
+            background-color: #21262d;
+            color: var(--text-main);
+            border: 1px solid var(--border-color);
+            padding: 10px 16px;
+            border-radius: 6px;
+            cursor: pointer;
+            font-weight: 600;
+            font-size: 0.85rem;
+            transition: all 0.2s ease;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+            text-decoration: none;
+            width: 100%;
+            text-align: center;
+        }
+
+        @media (min-width: 768px) {
+            .btn {
+                font-size: 0.9rem;
+                width: auto;
+            }
+        }
+
+        .btn:hover {
+            background-color: #30363d;
+            border-color: #8b949e;
+        }
+
+        .btn-primary { background-color: #238636; color: #fff; border-color: #2ea043; }
+        .btn-primary:hover { background-color: #2ea043; }
+
+        .btn-danger { background-color: #da3633; color: #fff; border-color: #f85149; }
+        .btn-danger:hover { background-color: #b62324; }
+
+        .btn-sm { padding: 4px 8px; font-size: 0.75rem; width: auto; }
+
+        .progress-container {
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+        }
+
+        progress {
+            width: 100%;
+            height: 12px;
+            border-radius: 6px;
+            overflow: hidden;
+            appearance: none;
+        }
+
+        progress::-webkit-progress-bar { background-color: #21262d; }
+        progress::-webkit-progress-value { background-color: var(--accent-blue); transition: width 0.3s ease; }
+        progress::-moz-progress-bar { background-color: var(--accent-blue); }
+
+        .metrics-grid {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 8px;
+        }
+
+        @media (min-width: 480px) {
+            .metrics-grid {
+                gap: 10px;
+            }
+        }
+
+        .metric-card {
+            background: #0d1117;
+            padding: 10px;
+            border-radius: 6px;
+            border: 1px solid var(--border-color);
+            text-align: center;
+        }
+
+        @media (min-width: 768px) {
+            .metric-card {
+                padding: 12px;
+            }
+        }
+
+        .metric-card .value {
+            font-size: 1.2rem;
+            font-weight: 700;
+            color: var(--accent-blue);
+        }
+
+        @media (min-width: 768px) {
+            .metric-card .value {
+                font-size: 1.4rem;
+            }
+        }
+
+        .metric-card .label {
+            font-size: 0.7rem;
+            color: var(--text-muted);
+        }
+
+        @media (min-width: 768px) {
+            .metric-card .label {
+                font-size: 0.75rem;
+            }
+        }
+
+        /* 💻 Terminale Diagnostico */
+        .terminal-container {
+            background-color: var(--term-bg);
+            border: 1px solid var(--border-color);
+            border-radius: 6px;
+            height: 280px;
+            overflow-y: auto;
+            padding: 10px;
+            font-family: var(--font-mono);
+            font-size: 0.75rem;
+            display: flex;
+            flex-direction: column;
+            gap: 4px;
+            width: 100%;
+            word-break: break-all;
+        }
+
+        @media (min-width: 768px) {
+            .terminal-container {
+                height: 380px;
+                padding: 12px;
+                font-size: 0.82rem;
+            }
+        }
+
+        .terminal-line { word-break: break-all; }
+        .log-info { color: #8b949e; }
+        .log-success { color: #56d364; }
+        .log-warn { color: #e3b341; }
+        .log-error { color: #f85149; }
+        .log-sync { color: #58a6ff; }
+        .log-vault { color: #d2a8ff; }
+
+        /* 📂 Tabella Ispezione Stiva Contenuta e Scrollabile localmente */
+        .table-responsive-wrapper {
+            width: 100%;
+            overflow-x: auto;
+            -webkit-overflow-scrolling: touch;
+            border-radius: 6px;
+            border: 1px solid var(--border-color);
+        }
+
+        .storage-table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 0.8rem;
+            white-space: nowrap;
+        }
+
+        @media (min-width: 768px) {
+            .storage-table {
+                font-size: 0.85rem;
+                white-space: normal;
+            }
+        }
+
+        .storage-table th, .storage-table td {
+            padding: 8px 10px;
+            text-align: left;
+            border-bottom: 1px solid var(--border-color);
+        }
+
+        @media (min-width: 768px) {
+            .storage-table th, .storage-table td {
+                padding: 8px 12px;
+            }
+        }
+
+        .storage-table th {
+            background-color: #0d1117;
+            color: var(--text-muted);
+        }
+
+        .search-input {
+            width: 100%;
+            background: #0d1117;
+            border: 1px solid var(--border-color);
+            padding: 8px 12px;
+            color: var(--text-main);
+            border-radius: 6px;
+            font-size: 0.85rem;
+        }
+
+        /* 🔒 MODAL SANDBOX CSP REAL FULLSCREEN (100dvh x 100vw) CON ZOOM & SCROLL ABILITATO */
+        .modal-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            width: 100vw;
+            height: 100vh;
+            height: 100dvh;
+            background: #000;
+            display: none;
+            flex-direction: column;
+            z-index: 9999999;
+        }
+
+        .modal-overlay.active {
+            display: flex !important;
+        }
+
+        .modal-header {
+            padding: 10px 16px;
+            background: #0d1117;
+            border-bottom: 1px solid var(--border-color);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            flex-shrink: 0;
+            height: 50px;
+            z-index: 10000001;
+        }
+
+        .modal-body-wrapper {
+            position: relative;
+            flex: 1;
+            width: 100%;
+            height: calc(100% - 50px);
+            background: #111;
+            overflow: auto;
+        }
+
+        .modal-body-wrapper iframe {
+            width: 100%;
+            height: 100%;
+            border: none;
+            background-color: #111;
+            position: absolute;
+            top: 0;
+            left: 0;
+            z-index: 1;
+        }
+    </style>
+</head>
+<body>
+
+    <header class="header">
+        <div class="header-title">
+            <h1>🌀🪖 SDK / Dashboard Beta v2.x - PA <span style="font-size: 0.85rem; color: var(--accent-purple);">[ Bunker Mode 🛡️📦 ]</span></h1>
+            <p>Comune Generico - Console di Sincronizzazione Atti, Modulistica e Stiva Cifrata Locale</p>
+        </div>
+        <div id="PA-status-badge" class="badge-status badge-init">⚡ Inizializzazione...</div>
+    </header>
+
+    <div class="grid-layout">
+
+        <aside style="display: flex; flex-direction: column; gap: 15px; min-width: 0;">
+            <div class="card">
+                <div class="card-title">
+                    <span>🎮 Comandi Stiva PA</span>
+                </div>
+                <button id="PA-btn-sync" class="btn btn-primary">
+                    🔄 Avvia Download & 🔐 Cifratura
+                </button>
+                <button id="PA-btn-purge" class="btn btn-danger">
+                    🚨🗑️ Purga Totale Stiva...
+                </button>
+            </div>
+
+            <div class="card">
+                <div class="card-title">
+                    <span>📊 Avanzamento Sincronizzazione</span>
+                </div>
+                <div class="progress-container">
+                    <div style="display: flex; justify-content: space-between; font-size: 0.8rem;">
+                        <span>Stato Operazione</span>
+                        <span id="PA-progress-text">0% ( 0 / 0 )</span>
+                    </div>
+                    <progress id="PA-progress-bar" value="0" max="100"></progress>
+                </div>
+                <div id="PA-metrics-container" class="metrics-grid">
+                    <div class="metric-card">
+                        <div id="metric-completed" class="value">0</div>
+                        <div class="label">Completati</div>
+                    </div>
+                    <div class="metric-card">
+                        <div id="metric-total" class="value">0</div>
+                        <div class="label">Totali</div>
+                    </div>
+                    <div class="metric-card">
+                        <div id="metric-failed" class="value" style="color: var(--accent-red);">0</div>
+                        <div class="label">Falliti</div>
+                    </div>
+                    <div class="metric-card">
+                        <div id="metric-retries" class="value" style="color: var(--accent-orange);">0</div>
+                        <div class="label">Retry Rete</div>
+                    </div>
+                </div>
+            </div>
+        </aside>
+
+        <main style="display: flex; flex-direction: column; gap: 15px; min-width: 0;">
+
+            <div class="card">
+                <div class="card-title">
+                    <span>💻 Console Telemetria in Tempo Reale</span>
+                    <button id="PA-btn-clear-log" class="btn btn-sm">🧹 Pulisci Console</button>
+                </div>
+                <div id="PA-terminal-output" class="terminal-container">
+                    <div class="terminal-line log-info">ℹ️ In attesa dell'avvio del modulo applicativo PA...</div>
+                </div>
+            </div>
+
+            <div class="card">
+                <div class="card-title">
+                    <span>🔍🗄️ Ispezione Stiva Locale </span>
+                    <button id="PA-btn-refresh-storage" class="btn btn-sm">🔄 Aggiorna Registro</button>
+                </div>
+
+                <div style="display: flex; gap: 12px; align-items: center; justify-content: space-between; flex-wrap: wrap; width: 100%;">
+                    <input type="text" id="PA-storage-search" class="search-input" style="flex: 1; min-width: 220px;" placeholder="Filtra atti per nome, tipo o categoria...">
+                    <label style="display: flex; align-items: center; gap: 8px; font-size: 0.8rem; cursor: pointer; color: var(--text-muted); white-space: nowrap; user-select: none;">
+                        <input type="checkbox" id="PA-toggle-core-assets" style="cursor: pointer; accent-color: var(--accent-blue);">
+                        <span>⚙️ Mostra File Core</span>
+                    </label>
+                </div>
+
+                <div class="table-responsive-wrapper">
+                    <table class="storage-table">
+                        <thead>
+                            <tr>
+                                <th>Nome Risorsa / URL</th>
+                                <th>Tipo / MIME</th>
+                                <th>Dimensione</th>
+                                <th>Storage Cache</th>
+                                <th style="min-width: 200px;">Azione / Visualizzazione</th>
+                            </tr>
+                        </thead>
+                        <tbody id="PA-storage-tbody">
+                            <tr>
+                                <td colspan="5" style="text-align: center; color: var(--text-muted);">Nessuna risorsa caricata nella stiva locale.</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+        </main>
+
+    </div>
+
+    <div id="PA-sandbox-modal" class="modal-overlay">
+        <div class="modal-header">
+            <span id="PA-sandbox-title" style="font-weight: 600; color: var(--accent-purple); font-size: 0.85rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 45vw;">
+                👁️🔒 Visore CSP <br> ( Read-Only 💾❌ )
+            </span>
+            <div style="display: flex; gap: 6px; align-items: center; flex-shrink: 0;">
+                <button id="PA-btn-zoom-out" class="btn btn-sm" title="Rimpicciolisci" style="padding: 6px 10px; font-size: 0.8rem;">🔍🔻</button>
+                <button id="PA-btn-zoom-in" class="btn btn-sm" title="Ingrandisci" style="padding: 6px 10px; font-size: 0.8rem;">🔍🔺</button>
+                <button id="PA-btn-close-sandbox" class="btn btn-sm btn-danger" style="padding: 6px 12px; font-size: 0.8rem;">[ ❎ ]</button>
+            </div>
+        </div>
+        <div class="modal-body-wrapper" id="PA-modal-body-wrapper">
+            <iframe id="PA-sandbox-frame" title="Isolamento CSP Documento Read-Only"></iframe>
+        </div>
+    </div>
+
+    <script type="module" src="js/app.js"></script>
+</body>
+</html>
