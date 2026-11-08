@@ -27,7 +27,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     // 📜🛒 il file del manifesto delle risorse...
     const getDefined_Manifest_Assets = './Res-PA-manifest.json';
     // 🎯 definisci i percorsi per lo scope e il Service-Worker.
-    const getDefined_scope = '/';
+    const getDefined_scope = '/Panzer-Core-Framework/';
     const getDefined_swPath = './ServiceWorker.js';
     
     // 🎯 DOM UI Elements
