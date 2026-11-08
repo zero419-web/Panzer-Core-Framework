@@ -38,7 +38,9 @@
 ---
 ![LOGO](https://img.shields.io/badge/Logo-CORE_PANZER_v7.x+-1f4e79)
 <p align="center"><img src="https://raw.githubusercontent.com/zero419-web/Panzer-Core-Framework/main/sw_logo.svg" width="200" alt="Core Logo - Panzer v7.x+"></p>
+
 ---
+
 # 🌐 Browser Supportati !
 | 🌐 Browser | 🔎 Stato |
 | :--- | :--- |
