@@ -36,10 +36,8 @@
 </h2>
 
 ---
-
 ![LOGO](https://img.shields.io/badge/Logo-CORE_PANZER_v7.x+-1f4e79)
 <p align="center"><img src="https://raw.githubusercontent.com/zero419-web/Panzer-Core-Framework/main/sw_logo.svg" width="200" alt="Core Logo - Panzer v7.x+"></p>
-
 ---
 # 🌐 Browser Supportati !
 | 🌐 Browser | 🔎 Stato |
@@ -57,8 +55,7 @@
 > `Es. Edge, Brave, Opera, Vivaldi, Arc `.
 > - ✅ **Supporto :**
 >    - 🐺 *Watchdog Anti-Incognito* ❌🕵️
-
-***
+---
 ## 🚀 Obiettivi del Progetto :
 
 - 🌀 **Proof of Concept :** <br> ( *PoC* ) di un'architettura software sovrana per <br>Progressive Web App ( 📲 **PWA** ) basata sul **⚙️🪖 Core Panzer v7.x+**, progettata in modalità *🔐 Zero-Trust*. Il sistema garantisce **massima resilienza informatica**, continuità operativa offline-first, consultazione protetta di atti e documenti PA, e piena conformità alle linee guida tecniche 📑 **AgID** e al **📜 Codice dell'Amministrazione Digitale** ( *CAD* ) per il riuso ( *🇪🇺 EUPL v1.2* ).
@@ -68,7 +65,7 @@
 > [!NOTE]
 > 💡 **La demo live serve per provare immediatamente: la Resilienza, la Modalità Bunker 🗄️, il Lie-Fi 🤥🛜 , il Download 📥 simultanio delle Risorse dal Manifesto...** `ecc...`
 > 
-
+---
 ## 📣⚙️🪖 NOVITÀ & BUG Fix & Altro...
 - **🪖 NOVITÀ v7.9.7+ :** <br> `🐛 BUG Fix`
     - 🪳 **Bug Fixed : `Evento Fetch` Del SW ( ⚙️🪖 ),**
@@ -142,7 +139,6 @@
 - **🎖️ Conformità Costituzionale e Normativa PA:** <br> Sviluppato interamente in **🍦 Vanilla JS** ( *Zero-Dipendenze* ), garantendo assenza di debiti tecnici e rispondenza all'**Art. 69 del CAD**.
 
 ---
-
 ## 👤 Autore : <br> **Valentino Aglianò**
 - 📌 Perito Industriale <br> **Informatico** ( *2013* )
 
@@ -159,11 +155,9 @@
 - ⚙️🛡️ Specialista in ingegneria difensiva, architetture PWA in Bunker Mode e cyber security applicata <br> ( 🟣 Purple Team: bilanciamento tra mentalità offensiva Red team 🔴, e blindatura il Blue Team 🔵 ).
 
 ---
-
 ## ⚖️ Licenza :
 - ⚙️📑 Progetto rilasciato sotto licenza **🇪🇺 EUPL v1.2**. <br> La legalità del riuso, la trasparenza del codice e la conformità ai framework normativi dell'Unione Europea sono garantiti. Consulta il file [`LICENSE`](https://github.com/zero419-web/Panzer-Core-Framework?tab=License-1-ov-file#%E2%84%B9%EF%B8%8F--eupl-v12---european-union-public-licence).
 
 ---
-
 ## 📖 Documentazione Ufficiale :
 - 🔍🚀 Per l'analisi dei vettori crittografici, le metriche forensi di stabilità e gli scenari applicativi per Enti e Pubblica Amministrazione, consulta la nostra [📚 Wiki Ufficiale](https://github.com/zero419-web/Panzer-Core-Framework/wiki).
