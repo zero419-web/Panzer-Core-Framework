@@ -1,0 +1,73 @@
+publiccodeYmlVersion: "0.5"
+name: "PWA-Pizza-Engine"
+applicationSuite: ""
+softwareVersion: "3.2.6.0"
+releaseDate: "2026-11-06"
+url: "https://zero419-web.github.io/PWA-Pizza-Engine/"
+repository: "https://github.com/zero419-web/PWA-Pizza-Engine"
+documentation: "https://github.com/zero419-web/PWA-Pizza-Engine/wiki"
+platforms:
+  - web
+categories:
+  - communication
+  - food-and-beverage
+developmentStatus: "stable"
+softwareType: "standalone/web"
+intendedAudience:
+  - public-administration
+  - private-sector
+description:
+  it:
+    shortDescription: "PWA ad alta resilienza con architettura Zero-Trust per la gestione digitale di servizi di ristorazione."
+    longDescription: |
+      Proof of Concept ( PoC ) di un'architettura Progressive Web App ( PWA ) progettata per il settore della ristorazione professionale, basata sul core engine Panzer v7.x+ con paradigma Zero-Trust.
+      Il sistema garantisce continuità operativa in scenari di connettività degradata, implementando logiche di Network Resiliency adattiva.
+      La sicurezza è blindata da validazione crittografica binaria ( Magic Numbers ), cifratura AES-GCM 256-bit e protocolli di protezione dell'integrità del Vault ( DeepVaultValidation ).
+      L'infrastruttura integra protocolli di Hardening Anti-Profiling ( sterilizzazione degli errori, iniezione di rumore temporale ) per prevenir attacchi di tipo side-channel.
+      Il PoC è ottimizzato per prevenire memory leak tramite bonifiche atomiche di RAM ( Zero-Trust ) e purga automatizzata ( Tabula Rasa ), garantendo un ambiente protetto per la gestione di ordini e servizi digitali.
+    features:
+      - "Architettura Zero-Trust con cifratura AES-GCM 256-bit ( Web Crypto API )."
+      - "Motore Service Worker Panzer v7.x+ con logica di resilienza adattiva e gestione asincrona."
+      - "Ispezione forense biometrica ( DNA Check ) degli asset tramite firma Magic Numbers."
+      - "Protocolli di auto-protezione, bonifica RAM ( Zero-Trust ) e purga atomica ( Tabula Rasa )."
+      - "Hardening operativo: Anti-Profiling, sterilizzazione stack trace e livellamento temporale RTT."
+  en:
+    shortDescription: "High-resilience PWA with Zero-Trust architecture for digital catering and food delivery services management."
+    longDescription: |
+      Proof of Concept (PoC) of a Progressive Web App (PWA) architecture tailored for the professional catering sector, powered by the Panzer v7.x+ Core Engine under a Zero-Trust paradigm.
+      The system guarantees operational continuity in degraded network scenarios by implementing adaptive Network Resiliency logics.
+      Security is enforced via binary cryptographic validation (Magic Numbers), AES-GCM 256-bit encryption, and Vault integrity protection protocols (DeepVaultValidation).
+      The infrastructure integrates Anti-Profiling Hardening protocols (error sanitization, temporal RTT noise injection) to mitigate side-channel attacks.
+      This PoC is optimized against memory leaks via atomic RAM zeroization (Zero-Trust) and automated purges (Tabula Rasa), delivering a hardened environment for handling orders and digital services.
+    features:
+      - "Zero-Trust architecture with AES-GCM 256-bit encryption (Web Crypto API)."
+      - "Panzer v7.x+ Service Worker core engine with adaptive resilience and isolated async routing."
+      - "Forensic binary inspection (DNA Check) of network assets using Hex Magic Numbers signatures."
+      - "Self-protection protocols, active RAM zeroization (.fill(0)) and atomic purge (Tabula Rasa)."
+      - "Operational hardening: Anti-Profiling, stack trace sterilization, and RTT jitter injection."
+legal:
+  license: "EUPL-1.2"
+  mainCopyrightOwner: "Valentino Aglianò"
+  repoOwner: "Valentino Aglianò"
+maintenance:
+  type: "internal"
+  contacts:
+    - name: "Valentino Aglianò"
+      affiliation: "Istruttore Informatico - Idoneo Concorso Nazionale ASMEL 2025"
+      email: "valentinoagliano@live.it"
+localization:
+  localizationReady: true
+  availableLanguages:
+    - it
+    - en
+it:
+  conformance:
+    agid:
+      - "linee-guida-design"
+      - "misure-minime-sicurezza"
+      - "linee-guida-acquisizione-riuso"
+  piattaforme:
+    pagoPa: false
+    spid: false
+    cie: false
+    anpr: false
