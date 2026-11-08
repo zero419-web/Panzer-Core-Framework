@@ -1,6 +1,6 @@
 ![LOGO](https://img.shields.io/badge/🌀_PANZER_SDK_BETA-v2.x-1f4e79)
 ![LOGO](https://img.shields.io/badge/PoC-📱_PWA_x_PA-af0000)
-![LOGO](https://img.shields.io/badge/File:_📜_sw.js_=-_⚙️🪖_FrameWork_CORE_PANZER_v7.9.7+-4f4f00)
+![LOGO](https://img.shields.io/badge/File:_📜_ServiceWorker.js_=-_⚙️🪖_FrameWork_CORE_PANZER_v7.9.7+-4f4f00)
 
 # 🏗️ **SDK** <br> ( ⚙️📦 *Software Development Kit* )
 > [!Important]
