@@ -1,7 +1,7 @@
 /**
  * ⚙️⚡ App Controller 
  * Dashboard PA & Gestione UI
- * v2.1.2
+ * v2.1.2.1
  *
  * * 👤 Autore: Valentino Aglianó
  * Perito Informatico / Idoneo ASMEL 2025
@@ -27,7 +27,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     // 📜🛒 il file del manifesto delle risorse...
     const getDefined_Manifest_Assets = './Res-PA-manifest.json';
     // 🎯 definisci i percorsi per lo scope e il Service-Worker.
-    const getDefined_scope = '/PWA-Pizza-Engine/SDK_BETA/';
+    const getDefined_scope = '/';
     const getDefined_swPath = './ServiceWorker.js';
     
     // 🎯 DOM UI Elements
