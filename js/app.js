@@ -1,1 +1,580 @@
+/**
+ * ⚙️⚡ App Controller 
+ * Dashboard PA & Gestione UI
+ * v2.1.2
+ *
+ * * 👤 Autore: Valentino Aglianó
+ * Perito Informatico / Idoneo ASMEL 2025
+ *
+ * * 📜 License: EUPL-1.2
+ */
+import { PanzerSDK } from './SDK.js';
 
+document.addEventListener('DOMContentLoaded', async () => {
+    // ⚙️📄 Funzione per definire i Core Assets
+    const getDefinedCoreAssets = () => [
+        './',
+        './index.html',
+        './js/pdf_min.js',
+        './js/pdf_worker_min.js',
+        './js/app.js',
+        './js/SDK.js',
+        './ServiceWorker.js',
+        './PA_PWA.webmanifest',
+        './icon.png',
+        './Res-PA-manifest.json'
+    ];
+    // 📜🛒 il file del manifesto delle risorse...
+    const getDefined_Manifest_Assets = './Res-PA-manifest.json';
+    // 🎯 definisci i percorsi per lo scope e il Service-Worker.
+    const getDefined_scope = '/PWA-Pizza-Engine/SDK_BETA/';
+    const getDefined_swPath = './ServiceWorker.js';
+    
+    // 🎯 DOM UI Elements
+    const statusBadge = document.getElementById('PA-status-badge');
+    const btnSync = document.getElementById('PA-btn-sync');
+    const btnPurge = document.getElementById('PA-btn-purge');
+    const btnClearLog = document.getElementById('PA-btn-clear-log');
+    const btnRefreshStorage = document.getElementById('PA-btn-refresh-storage');
+
+    const progressBar = document.getElementById('PA-progress-bar');
+    const progressText = document.getElementById('PA-progress-text');
+
+    const metricCompleted = document.getElementById('metric-completed');
+    const metricTotal = document.getElementById('metric-total');
+    const metricFailed = document.getElementById('metric-failed');
+    const metricRetries = document.getElementById('metric-retries');
+
+    const terminalOutput = document.getElementById('PA-terminal-output');
+    const storageTbody = document.getElementById('PA-storage-tbody');
+    const storageSearch = document.getElementById('PA-storage-search');
+    const toggleCoreAssets = document.getElementById('PA-toggle-core-assets');
+
+    // 🔒 Modal Sandbox CSP & Zoom
+    const sandboxModal = document.getElementById('PA-sandbox-modal');
+    const sandboxFrame = document.getElementById('PA-sandbox-frame');
+    const sandboxTitle = document.getElementById('PA-sandbox-title');
+    const btnCloseSandbox = document.getElementById('PA-btn-close-sandbox');
+    const btnZoomIn = document.getElementById('PA-btn-zoom-in');
+    const btnZoomOut = document.getElementById('PA-btn-zoom-out');
+
+    let manifestCache = null;
+    let activeObjectUrl = null;
+    let currentZoom = 1.0;
+    let totalCombinedCount = 0;
+
+    const logToTerminal = (level, text) => {
+        const timeString = new Date().toLocaleTimeString('it-IT', { hour12: false });
+        const line = document.createElement('div');
+        const classMap = {
+            info: 'log-info',
+            success: 'log-success',
+            warn: 'log-warn',
+            error: 'log-error',
+            sync: 'log-sync',
+            vault: 'log-vault'
+        };
+        line.className = `terminal-line ${classMap[level] || 'log-info'}`;
+        line.textContent = `[${timeString}] ${text}`;
+        terminalOutput.appendChild(line);
+        terminalOutput.scrollTop = terminalOutput.scrollHeight;
+    };
+
+    const setStatusBadge = (stateText, badgeClass) => {
+        statusBadge.textContent = stateText;
+        statusBadge.className = `badge-status ${badgeClass}`;
+    };
+
+    // 🔍 Helper per MIME Type in assenza di header corretti.
+    const detectMimeType = (url, headerType) => {
+        if (headerType && headerType !== 'application/octet-stream' && headerType !== 'text/plain') {
+            return headerType;
+        }
+        const ext = url.split('.').pop().toLowerCase();
+        const mimeMap = {
+            'png': 'image/png',
+            'jpg': 'image/jpeg',
+            'jpeg': 'image/jpeg',
+            'webp': 'image/webp',
+            'gif': 'image/gif',
+            'svg': 'image/svg+xml',
+            'pdf': 'application/pdf'
+        };
+        return mimeMap[ext] || headerType || 'application/octet-stream';
+    };
+
+    // 🔍 Zoom dinamico universale.
+    const applyZoom = () => {
+        try {
+            const iframeDoc = sandboxFrame.contentDocument || sandboxFrame.contentWindow.document;
+            
+            // 1. Zoom Immagini
+            const targetImg = iframeDoc.getElementById('target-img');
+            if (targetImg) {
+                targetImg.style.transform = `scale(${currentZoom})`;
+                logToTerminal('vault', `🔍🖼️ Zoom immagine: ${Math.round(currentZoom * 100)}%`);
+                return;
+            }
+
+            // 2. Zoom Canvas PDF
+            const canvases = iframeDoc.querySelectorAll('canvas');
+            if (canvases.length > 0) {
+                canvases.forEach(canvas => {
+                    const baseW = parseFloat(canvas.dataset.baseWidth);
+                    const baseH = parseFloat(canvas.dataset.baseHeight);
+                    if (baseW && baseH) {
+                        canvas.style.width = (baseW * currentZoom) + 'px';
+                        canvas.style.height = (baseH * currentZoom) + 'px';
+                    }
+                });
+                logToTerminal('vault', `🔍📄 Zoom PDF: ${Math.round(currentZoom * 100)}%`);
+            }
+        } catch (e) {
+            console.warn("❌🔎 Zoom non applicabile.", e);
+        }
+    };
+
+    // Gestori eventi Zoom
+    btnZoomIn.addEventListener('click', () => {
+        currentZoom = Math.min(currentZoom + 0.25, 3.0);
+        applyZoom();
+    });
+
+    btnZoomOut.addEventListener('click', () => {
+        currentZoom = Math.max(currentZoom - 0.25, 0.25);
+        applyZoom();
+    });
+
+    // 🔒 Visore Sandbox Protetto.
+    const openInSandbox = async (url, fileName) => {
+        try {
+            // 📱/💻 Rilevamento Responsivo: 50% su Mobile (<=768px), 100% su Desktop
+            const isMobile = window.innerWidth <= 768;
+            currentZoom = isMobile ? 0.5 : 1.0;
+
+            logToTerminal('vault', `🫙🔒 Apertura visore protetto per: ${fileName || url} (Zoom iniziale: ${Math.round(currentZoom * 100)}%)`);
+            
+            const response = await fetch(url);
+            if (!response || !response.ok) throw new Error(`HTTP ${response?.status || 'Risorsa irreperibile'}`);
+
+            const blob = await response.blob();
+            const rawMime = response.headers.get('Content-Type') || blob.type;
+            const mimeType = detectMimeType(url, rawMime);
+
+            if (btnZoomIn && btnZoomOut) {
+                btnZoomIn.disabled = false;
+                btnZoomOut.disabled = false;
+                btnZoomIn.style.opacity = '1';
+                btnZoomIn.style.cursor = 'pointer';
+                btnZoomOut.style.opacity = '1';
+                btnZoomOut.style.cursor = 'pointer';
+            }
+
+            if (activeObjectUrl) {
+                URL.revokeObjectURL(activeObjectUrl);
+            }
+
+            const typedBlob = new Blob([blob], { type: mimeType });
+            activeObjectUrl = URL.createObjectURL(typedBlob);
+
+            sandboxFrame.removeAttribute('sandbox');
+            sandboxFrame.src = 'about:blank';
+
+            let renderedContentHtml = '';
+
+            if (mimeType.startsWith('image/')) {
+                // 🖼️ IMMAGINE PROTETTA
+                renderedContentHtml = `
+                    <!DOCTYPE html>
+                    <html>
+                    <head>
+                        <meta charset="UTF-8">
+                        <style>
+                            * { margin:0; padding:0; box-sizing:border-box; user-select:none; -webkit-user-select:none; -webkit-touch-callout:none; }
+                            body, html { width:100%; height:100%; background:#000; overflow:auto; -webkit-overflow-scrolling:touch; display:flex; justify-content:center; align-items:center; }
+                            .container { width:100%; height:100%; display:flex; justify-content:center; align-items:center; padding:20px; }
+                            img { 
+                                max-width: 100%; 
+                                height: auto; 
+                                object-fit: contain; 
+                                pointer-events: none;
+                                -webkit-user-drag: none; 
+                                transform: scale(${currentZoom});
+                                transition: transform 0.15s ease;
+                            }
+                        </style>
+                    </head>
+                    <body oncontextmenu="return false;" ondragstart="return false;" onselectstart="return false;">
+                        <div class="container">
+                            <img id="target-img" src="${activeObjectUrl}" alt="Immagine protetta" />
+                        </div>
+                    </body>
+                    </html>
+                `;
+            } else if (mimeType.includes('pdf')) {
+                // 📄 PDF PROTETTO SU CANVAS
+                const baseUrl = window.location.href.substring(0, window.location.href.lastIndexOf('/') + 1);
+                const PDFlib = baseUrl + 'js/pdf_min.js';
+                const PDFworker = baseUrl + 'js/pdf_worker_min.js';
+
+                renderedContentHtml = `
+                    <!DOCTYPE html>
+                    <html>
+                    <head>
+                        <meta charset="UTF-8">
+                        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+                        <style>
+                            * { margin:0; padding:0; box-sizing:border-box; user-select:none; -webkit-user-select:none; -webkit-touch-callout:none; }
+                            body, html { width:100%; height:100%; background:#0f172a; overflow:auto; -webkit-overflow-scrolling:touch; }
+                            #pdf-wrapper { display:flex; flex-direction:column; align-items:center; padding:20px 10px; min-width:100%; width:max-content; margin:0 auto; gap:15px; }
+                            canvas { max-width:100%; height:auto; box-shadow:0 4px 20px rgba(0,0,0,0.6); background:#fff; border-radius:6px; pointer-events:none; display:block; transition: width 0.15s ease, height 0.15s ease; }
+                            .loading { color:#f8fafc; display:flex; flex-direction:column; justify-content:center; align-items:center; height:100vh; font-family:sans-serif; gap:10px; }
+                        </style>
+                        <script src="${PDFlib}"><\/script>
+                    </head>
+                    <body oncontextmenu="return false;" ondragstart="return false;" onselectstart="return false;">
+                        <div id="loading" class="loading"><div>⏳📄 Loading...</div></div>
+                        <div id="pdf-wrapper"></div>
+                        <script>
+                            async function renderSecurePDF() {
+                                try {
+                                    if (typeof pdfjsLib === 'undefined') throw new Error("Libreria PDF.js non disponibile.");
+                                    
+                                    pdfjsLib.GlobalWorkerOptions.workerSrc = '${PDFworker}';
+
+                                    const loadingTask = pdfjsLib.getDocument({
+                                        url: "${activeObjectUrl}",
+                                        isEvalSupported: false
+                                    });
+
+                                    const pdfDoc = await loadingTask.promise;
+                                    document.getElementById('loading').style.display = 'none';
+                                    const container = document.getElementById('pdf-wrapper');
+
+                                    const initialZoom = ${currentZoom};
+
+                                    for (let pageNum = 1; pageNum <= pdfDoc.numPages; pageNum++) {
+                                        const page = await pdfDoc.getPage(pageNum);
+                                        const viewport = page.getViewport({ scale: 1.5 });
+                                        
+                                        const canvas = document.createElement('canvas');
+                                        const context = canvas.getContext('2d');
+                                        canvas.height = viewport.height;
+                                        canvas.width = viewport.width;
+
+                                        canvas.dataset.baseWidth = viewport.width;
+                                        canvas.dataset.baseHeight = viewport.height;
+                                        canvas.style.width = (viewport.width * initialZoom) + 'px';
+                                        canvas.style.height = (viewport.height * initialZoom) + 'px';
+
+                                        container.appendChild(canvas);
+
+                                        await page.render({
+                                            canvasContext: context,
+                                            viewport: viewport
+                                        }).promise;
+                                    }
+                                } catch (err) {
+                                    document.getElementById('loading').innerHTML = '<div style="color:#f87171; text-align:center; padding:20px;">❌ Errore rendering PDF: ' + err.message + '</div>';
+                                }
+                            }
+                            window.addEventListener('DOMContentLoaded', renderSecurePDF);
+                        <\/script>
+                    </body>
+                    </html>
+                `;
+            } else {
+                renderedContentHtml = `
+                    <!DOCTYPE html>
+                    <html>
+                    <head><meta charset="UTF-8"></head>
+                    <body style="margin:0; background:#111; display:flex; justify-content:center; align-items:center; height:100vh;">
+                        <object data="${activeObjectUrl}" type="${mimeType}" width="100%" height="100%"></object>
+                    </body>
+                    </html>
+                `;
+            }
+
+            setTimeout(() => {
+                sandboxFrame.srcdoc = renderedContentHtml;
+            }, 50);
+
+            sandboxTitle.textContent = `🔎🔒 ${fileName || url}`;
+            sandboxModal.classList.add('active');
+
+            logToTerminal('success', `🛡📦️ Risorsa decifrata e caricata correttamente nel visore.`);
+        } catch (err) {
+            logToTerminal('error', `❌ 👁️‍🗨️Errore apertura visore: ${err.message}`);
+        }
+    };
+
+    const closeSandbox = () => {
+        sandboxModal.classList.remove('active');
+        sandboxFrame.src = 'about:blank';
+
+        if (activeObjectUrl) {
+            URL.revokeObjectURL(activeObjectUrl);
+            activeObjectUrl = null;
+        }
+        logToTerminal('info', '🔎🔒 Visore chiuso.');
+    };
+
+    btnCloseSandbox.addEventListener('click', closeSandbox);
+
+    // 🚀 Inizializzazione SDK
+    const sdk = new PanzerSDK({
+        swPath: getDefined_swPath,
+        scope: getDefined_scope,
+        coreAssets: getDefinedCoreAssets(),
+        checkTimeout: 6660,
+        incognitoBlocker: {
+            Icons: `⚠️ ❌🕵️`,
+            ID: 'PA_popup_Incognite',
+            title: "Modalità Protetta Richiesta",
+            message: "Il sistema di sicurezza <strong>🪖 PANZER SDK</strong> richiede una sessione di navigazione standard per garantire la persistenza dei documenti della Pubblica Amministrazione.<br><br>Ti invitiamo ad aprire l'applicazione in una <strong>finestra di navigazione normale</strong>.",
+            buttonText: "🔄 Ricarica in modalità normale",
+            buttonAction: () => {
+                localStorage.removeItem('pwa_check_point');
+                window.location.reload();
+            },
+            overlayBg: "rgba(15, 23, 42, 0.98)",
+            cardBg: "#1e293b",
+            borderColor: "#475569",
+            titleColor: "#f87171",
+            textColor: "#cbd5e1",
+            buttonBg: "#2563eb",
+            buttonTextCol: "#ffffff"
+        },
+        onLogMessage: (level, msg) => logToTerminal(level, msg),
+        
+        onSyncStart: () => {
+            setStatusBadge('📡📥⚡ Sincronizzazione...', 'badge-sync');
+            const includeCore = toggleCoreAssets ? toggleCoreAssets.checked : true;
+            const coreCount = includeCore ? getDefinedCoreAssets().length : 0;
+            const manifestCount = manifestCache && manifestCache.assets ? manifestCache.assets.length : 0;
+            const totalFiles = includeCore ? totalCombinedCount : manifestCount;
+            
+            metricTotal.textContent = totalFiles;
+            metricCompleted.textContent = '0';
+            progressBar.value = 0;
+            progressText.textContent = `0% ( 0 / ${totalFiles} )`;
+        },
+        onProgress: (details) => {
+            if (details) {
+                const includeCore = toggleCoreAssets ? toggleCoreAssets.checked : true;
+                const coreCount = includeCore ? getDefinedCoreAssets().length : 0;
+                const grandTotal = includeCore ? (totalCombinedCount > 0 ? totalCombinedCount : (coreCount + (details.total || 0))) : (manifestCache?.assets?.length || details.total || 0);
+                const completedTotal = (includeCore ? coreCount : 0) + (details.current || 0);
+                const pct = grandTotal > 0 ? Math.min(100, Math.round((completedTotal / grandTotal) * 100)) : (details.percent ? Math.round(details.percent) : 0);
+
+                progressBar.value = pct;
+                progressText.textContent = `${pct}% ( ${completedTotal} / ${grandTotal} )`;
+
+                metricCompleted.textContent = completedTotal;
+                metricTotal.textContent = grandTotal;
+                metricFailed.textContent = details.request_failed || 0;
+                metricRetries.textContent = details.retries || 0;
+            }
+        },
+        onSyncRetry: (details) => {
+            setStatusBadge('📡📥🔄 Retry Rete...', 'badge-warn');
+            if (details) {
+                if (details.retries !== undefined) metricRetries.textContent = details.retries;
+                if (details.request_failed !== undefined) metricFailed.textContent = details.request_failed;
+            }
+        },
+        onComplete: (data) => {
+            progressBar.value = 100;
+            progressText.textContent = '100% ( Completato )';
+            setStatusBadge('🛡️🗄️ Stiva Pronta', 'badge-ready');
+            const includeCore = toggleCoreAssets ? toggleCoreAssets.checked : true;
+            const grandTotal = includeCore ? totalCombinedCount : (manifestCache?.assets?.length || 0);
+            metricCompleted.textContent = grandTotal;
+            metricTotal.textContent = grandTotal;
+            if (data) {
+                metricFailed.textContent = data.request_failed || 0;
+                metricRetries.textContent = data.retries || 0;
+            }
+            renderStorageTable();
+        },
+        onPurgeComplete: () => {
+            progressBar.value = 0;
+            progressText.textContent = '0% ( 0 / 0 )';
+            metricCompleted.textContent = '0';
+            // metricTotal.textContent = '0';
+            metricFailed.textContent = '0';
+            metricRetries.textContent = '0';
+            setStatusBadge('🗑️⚡ Purgato', 'badge-init');
+            renderStorageTable();
+        },
+        onError: (err) => {
+            setStatusBadge('🚨📡📥 Errore Sync', 'badge-error');
+        }
+    });
+
+    // 📊🔎🗄️ Rendering Tabella Ispezione Stiva.
+    const renderStorageTable = async () => {
+        const showCore = toggleCoreAssets ? toggleCoreAssets.checked : true;
+
+        const coreAssetObjects = showCore ? getDefinedCoreAssets().map(url => {
+            let mime = 'text/plain';
+            if (url.endsWith('.js')) mime = 'application/javascript';
+            else if (url.endsWith('.html') || url === '/') mime = 'text/html';
+            else if (url.endsWith('.json') || url.endsWith('.webmanifest')) mime = 'application/json';
+            else if (url.endsWith('.png')) mime = 'image/png';
+            else if (url.endsWith('.jpg') || url.endsWith('.jpeg')) mime = 'image/jpeg';
+
+            return {
+                url: url,
+                type: mime,
+                category: 'System Core',
+                size: 0
+            };
+        }) : [];
+
+        const manifestAssets = (manifestCache && manifestCache.assets) ? manifestCache.assets : [];
+
+        const assetMap = new Map();
+        [...coreAssetObjects, ...manifestAssets].forEach(item => {
+            if (!assetMap.has(item.url)) {
+                assetMap.set(item.url, item);
+            }
+        });
+
+        const allAssets = Array.from(assetMap.values());
+
+        const filterQuery = storageSearch.value.toLowerCase().trim();
+        const filteredAssets = allAssets.filter(asset => {
+            const url = (asset.url || '').toLowerCase();
+            const type = (asset.type || '').toLowerCase();
+            const category = (asset.category || '').toLowerCase();
+            return url.includes(filterQuery) || type.includes(filterQuery) || category.includes(filterQuery);
+        });
+
+        if (filteredAssets.length === 0) {
+            storageTbody.innerHTML = `<tr><td colspan="5" style="text-align: center; color: var(--text-muted);">Nessuna risorsa trovata per il filtro applicato.</td></tr>`;
+            return;
+        }
+
+        const assetsWithCacheState = await Promise.all(
+            filteredAssets.map(async (asset) => {
+                let isCached = false;
+                if ('caches' in window) {
+                    try {
+                        isCached = !!(await caches.match(asset.url));
+                    } catch (e) {
+                        isCached = false;
+                    }
+                }
+                return { asset, isCached };
+            })
+        );
+
+        storageTbody.innerHTML = '';
+
+        for (const { asset, isCached } of assetsWithCacheState) {
+            const tr = document.createElement('tr');
+            const sizeFormatted = asset.size ? (asset.size / 1024).toFixed(1) + ' KB' : 'N/A ( Core ⚙️📄 )';
+            const cacheBadge = isCached
+                ? `<span style="color: var(--accent-green); font-weight: bold;">🟢🗄️ Cifrato</span>`
+                : `<span style="color: var(--text-muted);">🔴🗄️ Non Presente</span>`;
+
+            tr.innerHTML = `
+                <td><strong>${asset.url}</strong> <br><small style="color: var(--text-muted);">Cat: ${asset.category || 'N/A'}</small></td>
+                <td><code>${asset.type || 'unknown'}</code></td>
+                <td>${sizeFormatted}</td>
+                <td>${cacheBadge}</td>
+                <td>
+                    <div style="display: flex; gap: 6px; flex-wrap: wrap;">
+                        <button class="btn btn-sm btn-sandbox-trigger" data-url="${asset.url}" style="border-color: var(--accent-purple); color: var(--accent-purple);">🔒👁 Visore ❌💾</button>
+                    </div>
+                </td>
+            `;
+            storageTbody.appendChild(tr);
+        }
+
+        storageTbody.querySelectorAll('.btn-sandbox-trigger').forEach(btn => {
+            btn.addEventListener('click', (e) => {
+                const targetUrl = e.currentTarget.getAttribute('data-url');
+                openInSandbox(targetUrl, targetUrl.split('/').pop());
+            });
+        });
+
+        logToTerminal('vault', `🔎🗄️ Ispezione stiva aggiornata: ${filteredAssets.length} risorse visualizzate.`);
+    };
+
+    // 📥📜🛒 Scaricamento del Manifesto dele risorse...
+    try {
+        logToTerminal('info', `📥📜🛒 Recupero file [ ${getDefined_Manifest_Assets} ] ...`);
+        const res = await fetch(getDefined_Manifest_Assets);
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+
+        manifestCache = await res.json();
+        logToTerminal('success', `✅📜🛒 Manifesto caricato: ${manifestCache.ente} (v${manifestCache.version})`);
+        
+        totalCombinedCount = new Set([...getDefinedCoreAssets(), ...manifestCache.assets.map(a => a.url)]).size;
+        const includeCore = toggleCoreAssets ? toggleCoreAssets.checked : true;
+        const grandTotal = includeCore ? totalCombinedCount : (manifestCache?.assets?.length || 0);
+        metricTotal.textContent = grandTotal;
+        setStatusBadge('⚡🪫 Inattivo', 'badge-init');
+        renderStorageTable();
+
+    } catch (err) {
+        logToTerminal('error', `❌ Errore caricamento, 📜🛒 ${getDefined_Manifest_Assets} : ${err.message}`);
+        setStatusBadge('🚨📜🛒 Errore Manifesto', 'badge-error');
+    }
+
+    // 🎮 Event Handlers
+    btnSync.addEventListener('click', () => {
+      setTimeout(() => {
+        if (!manifestCache) {
+            logToTerminal('error', '❌📜🛒 Manifesto assets non disponibile !');
+            return;
+        }
+
+        logToTerminal('sync', '🚀 Avvio sincronizzazione ( ⚙️📄 Core-File + Manifesto Assets 📜🛒 ) ...');
+        sdk.initDB(manifestCache?.version, manifestCache, getDefinedCoreAssets());
+      }, 666);
+    });
+
+    btnPurge.addEventListener('click', () => {
+        if (confirm('🚨🗑🗄 Confermi la purga totale della stiva e della cache locale?️')) {
+            sdk.purgeVault();
+        }
+    });
+
+    btnClearLog.addEventListener('click', () => {
+        terminalOutput.innerHTML = '';
+        logToTerminal('info', '🧹 Console pulita.');
+    });
+
+    btnRefreshStorage.addEventListener('click', () => {
+        renderStorageTable();
+    });
+
+    storageSearch.addEventListener('input', () => {
+        renderStorageTable();
+    });
+
+        if (toggleCoreAssets) {
+        toggleCoreAssets.addEventListener('change', () => {
+            renderStorageTable();
+            // 📊🔄 Aggiorna metriche a schermo in base allo stato attuale
+            if (manifestCache) {
+                const includeCore = toggleCoreAssets.checked;
+                const grandTotal = includeCore ? totalCombinedCount : (manifestCache.assets ? manifestCache.assets.length : 0);
+                metricTotal.textContent = grandTotal;
+                if (parseInt(metricCompleted.textContent) > grandTotal) {
+                    metricCompleted.textContent = grandTotal;
+                }
+            }
+        });
+    }
+
+    // ⚙️ Sincronizazzazione automatica con ritardo di 2.5s Avvio della PWA
+    /*
+    setTimeout(() => {
+        btnSync.click();
+    }, 2500);
+    */
+});
