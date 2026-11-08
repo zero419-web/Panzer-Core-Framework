@@ -5,28 +5,28 @@
   "last_updated": "2026-07-30T00:00:00Z",
   "assets": [
     {
-      "url": "./RES_DATAS/pdf/delibera_2026_001.pdf",
+      "url": "./Panzer-Core-Framework/RES_DATAS/pdf/delibera_2026_001.pdf",
       "type": "application/pdf",
       "size": 1048576,
       "category": "delibere",
       "hash": "a1b2c3d4e5f67890123456789abcdef0"
     },
     {
-      "url": "./RES_DATAS/pdf/allegato_tecnico_01.pdf",
+      "url": "./Panzer-Core-Framework/RES_DATAS/pdf/allegato_tecnico_01.pdf",
       "type": "application/pdf",
       "size": 2097152,
       "category": "regolamenti",
       "hash": "b2c3d4e5f67890123456789abcdef01a"
     },
     {
-      "url": "./RES_DATAS/img/stemma_ufficiale.jpeg",
+      "url": "./Panzer-Core-Framework/RES_DATAS/img/stemma_ufficiale.jpeg",
       "type": "image/jpeg",
       "size": 262144,
       "category": "media",
       "hash": "e5f67890123456789abcdef01234abcd"
     },
     {
-      "url": "./RES_DATAS/img/banner_trasparenza.jpeg",
+      "url": "./Panzer-Core-Framework/RES_DATAS/img/banner_trasparenza.jpeg",
       "type": "image/jpeg",
       "size": 131072,
       "category": "media",
