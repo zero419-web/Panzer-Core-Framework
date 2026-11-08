@@ -17,7 +17,7 @@
 >       - **🛡️🗄️ Sync Stiva Bunker.**
 > 
 >    - **🔄📊 Aggiornamento GUI DashBoard**
->       - **📜 File :** `app.js`
+>       - **📜 File :** `app.js, SDK.js`
 >
 > ***
 > - **🐺 Watchdog Anti-Incognito** ❌🕵️ Pre requisiti Install `PWA` & il timeout adattivo dopo `Xsec`, *Minimo / Massimo* personalizzato, ⏱️ Time-out per dichiarare lo stato **🕵️ Incognito del Browser! ✅**
