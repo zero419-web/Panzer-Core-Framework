@@ -122,7 +122,7 @@
 ***
 
 ## 🛠️ Caratteristiche :<br>( ⚙️🪖 v7.x+ )
-🔹💜 Il cuore del sistema è un **Service Worker** ( `sw.js` ) ad altissima specializzazione, operante come entità autonoma tramite i seguenti moduli nativi :
+🔹💜 Il cuore del sistema è un **Service Worker** ( `ServiceWorker.js` ) ad altissima specializzazione, operante come entità autonoma tramite i seguenti moduli nativi :
 
 - **🔐🌡️🛡️ Jittered Thermal Shield Race :** <br> Ispezione forense profonda sul modulo `deepVaultValidation()`. Implementa una gara asincrona tra l'interrogazione a IndexedDB e lo **🌡️🛡️ Scudo Termico Adattivo** ( `waitTillIdle` ).
 
