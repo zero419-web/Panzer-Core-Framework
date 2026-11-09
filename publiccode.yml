@@ -1,73 +1,101 @@
-publiccodeYmlVersion: "0.5"
-name: "Panzer-Core-Framework"
-applicationSuite: ""
-softwareVersion: "7.9.7.0"
-releaseDate: "2026-11-06"
-url: "https://zero419-web.github.io/Panzer-Core-Framework/"
-repository: "https://github.com/zero419-web/Panzer-Core-Framework"
-documentation: "https://github.com/zero419-web/Panzer-Core-Framework/wiki"
+publiccodeYmlVersion: 0.7.0
+name: Panzer-Core-Framework
+url: https://zero419-web.github.io/Panzer-Core-Framework/
+softwareVersion: 7.9.7.0
+releaseDate: 2026-11-06
 platforms:
   - web
-categories:
-  - security
-  - public-administration
-developmentStatus: "stable"
-softwareType: "standalone/web"
-intendedAudience:
-  - public-administration
-  - private-sector
+organisation:
+  name: zero419-web
+  uri: https://github.com/zero419-web/
+developmentStatus: development
+softwareType: standalone/web
 description:
   it:
-    shortDescription: "Engine PWA Zero-Trust & Zero-Dependency con SDK integrato e Dashboard PA per la consultazione protetta di atti."
-    longDescription: |
-      Proof of Concept ( PoC ) di un'architettura software sovrana per Progressive Web App ( PWA ) basata sul Core Panzer, progettata in modalità Zero-Trust.
-      Il sistema garantisce massima resilienza informatica, continuità operativa offline-first, consultazione protetta di atti e documenti PA tramite iframe anti-estrazione, e piena conformità alle linee guida tecniche AgID e al Codice dell'Amministrazione Digitale ( CAD ) per il riuso.
-      La sicurezza è blindata da validazione crittografica binaria, cifratura AES-GCM 256-bit e protocolli di protezione dell'integrità della stiva locale (IndexedDB / CacheStorage).
-      L'infrastruttura integra protocolli di Hardening Anti-Profiling ( sterilizzazione degli errori, iniezione di rumore temporale ) per prevenire attacchi di tipo side-channel.
-      Il framework include SDK modulare e Dashboard di sincronizzazione ( Sync Download ) e monitoraggio dello stato di cache per la Pubblica Amministrazione.
+    shortDescription: Engine PWA Zero-Trust & Zero-Dependency con SDK integrato e
+      Dashboard PA per la consultazione protetta di atti.
+    longDescription: >
+      Proof of Concept ( PoC ) di un'architettura software sovrana per
+      Progressive Web App ( PWA ) basata sul Core Panzer, progettata in modalità
+      Zero-Trust.
+
+      Il sistema garantisce massima resilienza informatica, continuità operativa
+      offline-first, consultazione protetta di atti e documenti PA tramite
+      iframe anti-estrazione, e piena conformità alle linee guida tecniche AgID
+      e al Codice dell'Amministrazione Digitale ( CAD ) per il riuso.
+
+      La sicurezza è blindata da validazione crittografica binaria, cifratura
+      AES-GCM 256-bit e protocolli di protezione dell'integrità della stiva
+      locale (IndexedDB / CacheStorage).
+
+      L'infrastruttura integra protocolli di Hardening Anti-Profiling (
+      sterilizzazione degli errori, iniezione di rumore temporale ) per
+      prevenire attacchi di tipo side-channel.
+
+      Il framework include SDK modulare e Dashboard di sincronizzazione ( Sync
+      Download ) e monitoraggio dello stato di cache per la Pubblica
+      Amministrazione.
     features:
-      - "Architettura Zero-Trust con cifratura AES-GCM 256-bit ( Web Crypto API )."
-      - "Motore Service Worker Panzer Core con logica di resilienza adattiva e gestione offline-first."
-      - "Dashboard PA per Sync Download, monitoraggio cache e viewer documentale protetto anti-estrazione."
-      - "Protocolli di auto-protezione, bonifica RAM e purga atomica della stiva locale."
-      - "Hardening operativo: Anti-Profiling, sterilizzazione stack trace e livellamento temporale."
+      - Architettura Zero-Trust con cifratura AES-GCM 256-bit ( Web Crypto API ).
+      - Motore Service Worker Panzer Core con logica di resilienza adattiva e
+        gestione offline-first.
+      - Dashboard PA per Sync Download, monitoraggio cache e viewer documentale
+        protetto anti-estrazione.
+      - Protocolli di auto-protezione, bonifica RAM e purga atomica della stiva
+        locale.
+      - "Hardening operativo: Anti-Profiling, sterilizzazione stack trace e
+        livellamento temporale."
   en:
-    shortDescription: "Zero-Trust & Zero-Dependency PWA Engine with integrated SDK and PA Dashboard for secure document consultation."
-    longDescription: |
-      Proof of Concept (PoC) of a sovereign software architecture for Progressive Web Apps (PWA) powered by the Panzer Core Engine under a Zero-Trust paradigm.
-      The system guarantees maximum cybersecurity resilience, offline-first operational continuity, secure consultation of PA documents via anti-extraction iframe viewers, and full compliance with AgID technical guidelines and the Digital Administration Code (CAD) for software reuse.
-      Security is enforced via binary cryptographic validation, AES-GCM 256-bit encryption, and local storage integrity protection protocols (IndexedDB / CacheStorage).
-      The infrastructure integrates Anti-Profiling Hardening protocols (error sanitization, temporal RTT noise injection) to mitigate side-channel attacks.
-      The framework includes a modular SDK and a Dashboard for Sync Download and cache status monitoring tailored for Public Administration.
+    shortDescription: Zero-Trust & Zero-Dependency PWA Engine with integrated SDK
+      and PA Dashboard for secure document consultation.
+    longDescription: >
+      Proof of Concept (PoC) of a sovereign software architecture for
+      Progressive Web Apps (PWA) powered by the Panzer Core Engine under a
+      Zero-Trust paradigm.
+
+      The system guarantees maximum cybersecurity resilience, offline-first
+      operational continuity, secure consultation of PA documents via
+      anti-extraction iframe viewers, and full compliance with AgID technical
+      guidelines and the Digital Administration Code (CAD) for software reuse.
+
+      Security is enforced via binary cryptographic validation, AES-GCM 256-bit
+      encryption, and local storage integrity protection protocols (IndexedDB /
+      CacheStorage).
+
+      The infrastructure integrates Anti-Profiling Hardening protocols (error
+      sanitization, temporal RTT noise injection) to mitigate side-channel
+      attacks.
+
+      The framework includes a modular SDK and a Dashboard for Sync Download and
+      cache status monitoring tailored for Public Administration.
     features:
-      - "Zero-Trust architecture with AES-GCM 256-bit encryption (Web Crypto API)."
-      - "Panzer Core Service Worker engine with adaptive resilience and offline-first routing."
-      - "PA Dashboard for Sync Download, cache monitoring, and anti-extraction secure document viewer."
-      - "Self-protection protocols, active RAM zeroization, and atomic local storage purge."
-      - "Operational hardening: Anti-Profiling, stack trace sterilization, and RTT jitter injection."
+      - Zero-Trust architecture with AES-GCM 256-bit encryption (Web Crypto API).
+      - Panzer Core Service Worker engine with adaptive resilience and
+        offline-first routing.
+      - PA Dashboard for Sync Download, cache monitoring, and anti-extraction
+        secure document viewer.
+      - Self-protection protocols, active RAM zeroization, and atomic local
+        storage purge.
+      - "Operational hardening: Anti-Profiling, stack trace sterilization, and
+        RTT jitter injection."
 legal:
-  license: "EUPL-1.2"
-  mainCopyrightOwner: "Valentino Aglianò"
-  repoOwner: "Valentino Aglianò"
+  license: EUPL-1.2
+  mainCopyrightOwner: Valentino Aglianò
+  repoOwner: Valentino Aglianò
 maintenance:
-  type: "internal"
+  type: internal
   contacts:
-    - name: "Valentino Aglianò"
-      affiliation: "Istruttore Informatico - Idoneo Concorso Nazionale ASMEL 2025"
-      email: "valentinoagliano@live.it"
-localization:
-  localizationReady: true
+    - name: Valentino Aglianò
+      email: valentinoagliano@live.it
+      affiliation: Istruttore Informatico - Idoneo Concorso Nazionale ASMEL 2025
+localisation:
+  localisationReady: false
   availableLanguages:
-    - it
-    - en
-it:
-  conformance:
-    agid:
-      - "linee-guida-design"
-      - "misure-minime-sicurezza"
-      - "linee-guida-acquisizione-riuso"
+    - it-IT
+IT:
   piattaforme:
-    pagoPa: false
     spid: false
     cie: false
     anpr: false
+    pagopa: false
+    io: false
