@@ -323,18 +323,34 @@ export class PanzerSDK {
     async purgeVault() {
         if (!('caches' in window)) return;
         try {
-            this.onLogMessage('warn', '🚨🗑️ SDK: Avvio purga diretta di tutti i bunker Cache Storage... 🗄️');
+            this.onLogMessage('warn', '🚨🗑️ SDK: Avvio purga forzata e rilascio stiva bunker... 🗄️');
             
-            // 🔄 Reset flag di sincronizzazione
+            // 🔄 Reset flag locali
             this._sessionSynced = false;
             localStorage.removeItem('panzer_vault_synced');
             
-            // 🗑️ Eliminazione di tutte le cache dal client.
+            // 🗑️ Eliminazione di tutte le Cache Storage
             const keys = await caches.keys();
             await Promise.all(keys.map(key => caches.delete(key)));
-            
-            this.onLogMessage('success', '✅🗑️ SDK: Purga totale della stiva 🗄️ completata con successo.');
+            this.onLogMessage('success', '🗑️ Cache Storage svuotato con successo.');
+
+            // ❌🪖 Disregistriamo il Service Worker.
+            if ('serviceWorker' in navigator) {
+                const registrations = await navigator.serviceWorker.getRegistrations();
+                for (let registration of registrations) {
+                    await registration.unregister();
+                    this.onLogMessage('info', '🛡❌🪖️ Service-Worker disregistrato.');
+                }
+            }
+
+            this.onLogMessage('success', '✅🗑️ SDK: Purga totale completata. Ricaricamento in corso...');
             this.onPurgeComplete();
+
+            // 🔄🪖 Forza il reload pulito dopo per ripartire da zero.
+            setTimeout(() => {
+                window.location.reload();
+            }, 9000);
+
         } catch (err) {
             this.onLogMessage('error', `❌🗑️ SDK: Errore durante la purga: ${err.message}`);
         }
