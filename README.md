@@ -4,11 +4,23 @@
 
 # 🏗️ **SDK** <br> ( ⚙️📦 *Software Development Kit* )
 > [!Important]
->   - 🔃 **Last Update :** `v2.3`
+>   - 🔃 **Last Update :** `v2.3.2`
 > 
 > - 🌀🧪 **E un PoC, `Proof of Concept`**
 > 
 > ⚙️ **SDK : NOVITÀ, BUG Fix & Altro...**
+> 
+> - **📣 NOVITÀ v2.3.2 :** <br> `➕🔄 Funzionalità & aggiornamenti...`
+> - ⚡ **Controllo del Ciclo di Vita Avanzato (`autoInit`, `init()`, `destroy()`) :**
+>   - ⚙️ Aggiunta dell'opzione `autoInit` (default `true`) nel costruttore per una gestione flessibile dell'istanza.
+>
+>   - 🛑 Introduzione del metodo pubblico `destroy()` per il rilascio sicuro e pulito delle risorse ( annullamento dei timer `setInterval` e rimozione puntuale di tutti i `window`/`navigator` event listener tramite riferimenti vincolati ).
+>
+> - 🧱 **Motore Grafico Modale Unificato :**
+>    - 🖼️ Centralizzazione del rendering dei modali (`_renderModalBlocker`) con gestione sicura e ripristino automatico dello scroll della pagina (`overflow`).
+>
+> - 📚 Integrazione di blocchi JSDoc dettagliati (`@typedef`, `@param`, `@returns`) su tutte le opzioni e i metodi per abilitare l'autocompletamento e l'IntelliSense nativo negli IDE moderni ( es. VS Code ).
+> ***
 > - **📣 NOVITÀ v2.3 :** <br> `➕🔄 Funzionalità & aggiornamenti...`
 >    - **🐺🗄️ Watchdog Integrità Stiva ( Cache Wipe ) :**
 >       - 🔎 **Monitoraggio periodico della cache con popup di ripristino personalizzabile in caso di cancellazione inaspettata dei dati.**
