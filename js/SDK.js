@@ -8,6 +8,7 @@
  */
 export class PanzerSDK {
     constructor(options = {}) {
+        this._sessionSynced = false;
         this.lastUiUpdate = 0;
         
         this.swPath = options.swPath || './ServiceWorker.js';
@@ -114,12 +115,13 @@ export class PanzerSDK {
     _initCacheWatchdog() {
         setInterval(async () => {
             if (!('caches' in window)) return;
-            const isSyncedBefore = localStorage.getItem('panzer_vault_synced');
-            if (!isSyncedBefore) return;
+            
+            const isSyncedLocalStorage = localStorage.getItem('panzer_vault_synced');
+            if (!this._sessionSynced && !isSyncedLocalStorage) return;
 
             try {
                 const keys = await caches.keys();
-                const hasPanzerCaches = keys.some(k => k.startsWith(this.cacheNamePrefix) || k.startsWith('PANZER'));
+                const hasPanzerCaches = keys.some(k => k.startsWith(this.cacheNamePrefix) || k.startsWith('PA_PANZER'));
                 
                 if (keys.length === 0 || !hasPanzerCaches) {
                     this.onLogMessage('error', '🚨🐺 SDK: Rilevata cancellazione inaspettata della stiva 🗄️ Cache Storage !');
@@ -128,8 +130,9 @@ export class PanzerSDK {
             } catch (e) {
                 this.onLogMessage('warn', `⚠️🐺 SDK: Errore lettura cache: ${e.message}`);
             }
-        }, 10000);
+        }, 5000);
     }
+
 
     _showCacheWipeBlocker() {
         const cfg = this.cacheWipeBlocker;
@@ -258,6 +261,7 @@ export class PanzerSDK {
                     break;
 
                 case 'SYNC_END':
+                    this._sessionSynced = true;
                     this.onLogMessage('success', '✅🗄️ Sincronizzazione e cifratura Bunker completate dal 🪖 Service-Worker !');
                     this.onComplete(data.details || {});
                     this.lastUiUpdate = 0;
@@ -320,6 +324,7 @@ export class PanzerSDK {
         if (!('caches' in window)) return;
         try {
             this.onLogMessage('warn', '🚨🗑 SDK:  Avvio purga diretta di tutti i bunker Cache Storage... 🗄️');
+            this._sessionSynced = false;
             localStorage.removeItem('panzer_vault_synced');
             const keys = await caches.keys();
             await Promise.all(keys.map(key => caches.delete(key)));
