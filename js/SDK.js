@@ -1,5 +1,5 @@
 /**
- * ⚙️🪖🛡️ PanzerSDK - v2.3.1
+ * ⚙️🪖🛡️ PanzerSDK - v2.3.2
  * 
  * * 👤 Autore: Valentino Aglianó
  * Perito Informatico / Idoneo ASMEL 2025
@@ -534,14 +534,14 @@ export class PanzerSDK {
             
             const keys = await caches.keys();
             await Promise.all(keys.map(key => caches.delete(key)));
-            
-            this.onLogMessage('success', '✅🗑️ SDK: Purga volontaria completata con successo.');
-            
-            this._showPurgeSuccessBlocker();
-            this.onPurgeComplete();
         } catch (err) {
             this.onLogMessage('error', `❌🗑️ SDK: Errore durante la purga: ${err.message}`);
+            return;
         }
+        this.onLogMessage('success', '✅🗑️ SDK: Purga volontaria completata con successo.');
+            
+        this._showPurgeSuccessBlocker();
+        this.onPurgeComplete();
     }
 
     /**
