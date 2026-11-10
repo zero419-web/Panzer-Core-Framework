@@ -326,6 +326,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         coreAssets: getDefinedCoreAssets(),
         cacheNamePrefix: getDefined_CacheNamePrefix,
         checkTimeout: 6660,
+    // 🛑 Config personalizzata dei popup.
         incognitoBlocker: {
             Icons: `⚠️ ❌🕵️`,
             ID: 'PA_popup_Incognite',
@@ -358,6 +359,23 @@ document.addEventListener('DOMContentLoaded', async () => {
             cardBg: "#1e293b",
             borderColor: "#475569",
             titleColor: "#f87171",
+            textColor: "#cbd5e1",
+            buttonBg: "#2563eb",
+            buttonTextCol: "#ffffff"
+        },
+        purgeSuccessBlocker: {
+            Icons: '✅🗑️',
+            blockerID: 'PA_popup_PurgeSuccess',
+            title: "Purga Volontaria Completata",
+            message: "Hai pulito manualmente la stiva 🗑️🗄️ e la cache protetta.<br><br>Il sistema è pronto: <strong>ricarica la pagina</strong> per rigenerare il 🪖 Service-Worker e ripartire con un'installazione pulita.",
+            buttonText: "🔄 Ricarica e Riavvia Stiva",
+            buttonAction: () => {
+                window.location.reload();
+            },
+            overlayBg: "rgba(15, 23, 42, 0.98)",
+            cardBg: "#1e293b",
+            borderColor: "#475569",
+            titleColor: "#38bdf8",
             textColor: "#cbd5e1",
             buttonBg: "#2563eb",
             buttonTextCol: "#ffffff"

@@ -44,7 +44,7 @@ export class PanzerSDK {
             buttonTextCol: options.incognitoBlocker?.buttonTextCol || "#ffffff"
         };
 
-        // 🛑 Configurazione blocker Watchdog Cache Wipe.
+        // 🛑 Config blocker Watchdog Cache Wipe.
         this.cacheWipeBlocker = {
             Icons: options.cacheWipeBlocker?.Icons || '🚨🗄️',
             ID: options.cacheWipeBlocker?.blockerID || 'panzer-cache-wipe-blocker',
@@ -62,6 +62,23 @@ export class PanzerSDK {
             textColor: options.cacheWipeBlocker?.textColor || "#94a3b8",
             buttonBg: options.cacheWipeBlocker?.buttonBg || "#2563eb",
             buttonTextCol: options.cacheWipeBlocker?.buttonTextCol || "#ffffff"
+        };
+        
+        // 🛑 Config blocker Purga Volontaria.
+        this.purgeSuccessBlocker = {
+            Icons: options.purgeSuccessBlocker?.Icons || '✅🗑️',
+            ID: options.purgeSuccessBlocker?.blockerID || 'panzer-purge-success-blocker',
+            title: options.purgeSuccessBlocker?.title || "Purga Volontaria Completata",
+            message: options.purgeSuccessBlocker?.message || "Hai eseguito con successo la pulizia volontaria della stiva e della cache protetta.<br><br>Il sistema è pronto per un nuovo avvio. <strong>Ricarica la pagina</strong> per rigenerare il Service Worker e ripartire da zero.",
+            buttonText: options.purgeSuccessBlocker?.buttonText || "🔄 Ricarica e Riavvia Stiva",
+            buttonAction: options.purgeSuccessBlocker?.buttonAction || (() => window.location.reload()),
+            overlayBg: options.purgeSuccessBlocker?.overlayBg || "rgba(15, 23, 42, 0.98)",
+            cardBg: options.purgeSuccessBlocker?.cardBg || "#1e293b",
+            borderColor: options.purgeSuccessBlocker?.borderColor || "#334155",
+            titleColor: options.purgeSuccessBlocker?.titleColor || "#38bdf8",
+            textColor: options.purgeSuccessBlocker?.textColor || "#cbd5e1",
+            buttonBg: options.purgeSuccessBlocker?.buttonBg || "#2563eb",
+            buttonTextCol: options.purgeSuccessBlocker?.buttonTextCol || "#ffffff"
         };
 
         // ⚙️ Hook di callback UI e Telemetria
@@ -136,6 +153,76 @@ export class PanzerSDK {
 
     _showCacheWipeBlocker() {
         const cfg = this.cacheWipeBlocker;
+        if (document.getElementById(cfg.ID)) return;
+
+        document.body.style.overflow = 'hidden';
+        if (document.documentElement) document.documentElement.style.overflow = 'hidden';
+
+        const blocker = document.createElement('div');
+        blocker.id = cfg.ID;
+        blocker.style.cssText = `
+            position: fixed !important;
+            inset: 0 !important;
+            z-index: 2147483647 !important;
+            width: 100vw !important;
+            height: 100vh !important;
+            background: ${cfg.overlayBg} !important;
+            display: flex !important;
+            align-items: center !important;
+            justify-content: center !important;
+            padding: 16px !important;
+            box-sizing: border-box !important;
+        `;
+
+        const card = document.createElement('div');
+        card.style.cssText = `
+            width: 100% !important;
+            max-width: 480px !important;
+            background: ${cfg.cardBg} !important;
+            border: 1px solid ${cfg.borderColor} !important;
+            border-radius: 12px !important;
+            padding: 24px !important;
+            box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.9) !important;
+            text-align: center !important;
+            box-sizing: border-box !important;
+        `;
+
+        card.innerHTML = `
+            <div style="font-size: 42px; margin-bottom: 12px;">${cfg.Icons}</div>
+            <h2 style="color: ${cfg.titleColor}; margin-bottom: 12px; font-size: 20px;">${cfg.title}</h2>
+            <p style="color: ${cfg.textColor}; font-size: 14px; line-height: 1.5; margin-bottom: 20px;">
+                ${cfg.message}
+            </p>
+        `;
+
+        const button = document.createElement('button');
+        button.textContent = cfg.buttonText;
+        button.style.cssText = `
+            width: 100% !important;
+            background: ${cfg.buttonBg} !important;
+            color: ${cfg.buttonTextCol} !important;
+            border: none !important;
+            padding: 12px 20px !important;
+            border-radius: 6px !important;
+            font-weight: 600 !important;
+            font-size: 15px !important;
+            cursor: pointer !important;
+        `;
+        button.onclick = () => {
+            if (typeof cfg.buttonAction === 'function') {
+                cfg.buttonAction();
+            } else {
+                window.location.reload();
+            }
+        };
+
+        card.appendChild(button);
+        blocker.appendChild(card);
+        (document.documentElement || document.body).appendChild(blocker);
+    }
+    
+    _showPurgeSuccessBlocker() {
+        const cfg = this.purgeSuccessBlocker;
         if (document.getElementById(cfg.ID)) return;
 
         document.body.style.overflow = 'hidden';
@@ -320,37 +407,24 @@ export class PanzerSDK {
         }
     }
 
-    async purgeVault() {
+        async purgeVault() {
         if (!('caches' in window)) return;
         try {
-            this.onLogMessage('warn', '🚨🗑️ SDK: Avvio purga forzata e rilascio stiva bunker... 🗄️');
+            this.onLogMessage('warn', '🚨🗑️ SDK: Avvio purga volontaria e pulizia Cache Storage... 🗄️');
             
-            // 🔄 Reset flag locali
+            // 🔄 Reset flag sessione e del localStorage.
             this._sessionSynced = false;
             localStorage.removeItem('panzer_vault_synced');
             
-            // 🗑️ Eliminazione di tutte le Cache Storage
+            // 🗑️ Eliminazione cache.
             const keys = await caches.keys();
             await Promise.all(keys.map(key => caches.delete(key)));
-            this.onLogMessage('success', '🗑️ Cache Storage svuotato con successo.');
-
-            // ❌🪖 Disregistriamo il Service Worker.
-            if ('serviceWorker' in navigator) {
-                const registrations = await navigator.serviceWorker.getRegistrations();
-                for (let registration of registrations) {
-                    await registration.unregister();
-                    this.onLogMessage('info', '🛡❌🪖️ Service-Worker disregistrato.');
-                }
-            }
-
-            this.onLogMessage('success', '✅🗑️ SDK: Purga totale completata. Ricaricamento in corso...');
+            
+            this.onLogMessage('success', '✅🗑️ SDK: Purga volontaria completata con successo.');
+            
+            // ✅ popup di successo per l'azione volontaria.
+            this._showPurgeSuccessBlocker();
             this.onPurgeComplete();
-
-            // 🔄🪖 Forza il reload pulito dopo per ripartire da zero.
-            setTimeout(() => {
-                window.location.reload();
-            }, 9000);
-
         } catch (err) {
             this.onLogMessage('error', `❌🗑️ SDK: Errore durante la purga: ${err.message}`);
         }
