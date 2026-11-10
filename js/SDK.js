@@ -154,6 +154,7 @@ export class PanzerSDK {
      */
     init() {
         this._registerSW();
+        this.cacheNamePrefix = this._detectActiveCacheVersion();
         this._setupMessageBridge();
         this._setupNetworkListeners();
         this.initPwaEnvironmentCheck(this.checkTimeout);
@@ -389,11 +390,11 @@ export class PanzerSDK {
      * @param {string} fallbackVersion - 📦 Versione di fallback
      * @returns {Promise<string>} - 🏷️ Nome completo della cache attiva
      */
-    async _detectActiveCacheVersion(namecache, fallbackVersion) {
+    async _detectActiveCacheVersion(namecache = this.cacheNamePrefix, fallbackVersion = '') {
         if (!('caches' in window)) return (namecache + fallbackVersion);
         try {
             const keys = await caches.keys();
-            const targetKey = keys.find(k => k.startsWith(this.cacheNamePrefix));
+            const targetKey = keys.find(k => k.startsWith(namecache));
             if (targetKey) {
                 const match = targetKey.match(/v(.+)$/);
                 if (match && match[1]) {
