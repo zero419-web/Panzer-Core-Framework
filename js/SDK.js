@@ -323,15 +323,20 @@ export class PanzerSDK {
     async purgeVault() {
         if (!('caches' in window)) return;
         try {
-            this.onLogMessage('warn', '🚨🗑 SDK:  Avvio purga diretta di tutti i bunker Cache Storage... 🗄️');
+            this.onLogMessage('warn', '🚨🗑️ SDK: Avvio purga diretta di tutti i bunker Cache Storage... 🗄️');
+            
+            // 🔄 Reset flag di sincronizzazione
             this._sessionSynced = false;
             localStorage.removeItem('panzer_vault_synced');
+            
+            // 🗑️ Eliminazione di tutte le cache dal client.
             const keys = await caches.keys();
             await Promise.all(keys.map(key => caches.delete(key)));
-            this.onLogMessage('success', '✅🗑 SDK: Purga totale della stiva 🗄️ completata con successo.');
+            
+            this.onLogMessage('success', '✅🗑️ SDK: Purga totale della stiva 🗄️ completata con successo.');
             this.onPurgeComplete();
         } catch (err) {
-            this.onLogMessage('error', `❌🗑️ SDK:  Errore durante la purga: ${err.message}`);
+            this.onLogMessage('error', `❌🗑️ SDK: Errore durante la purga: ${err.message}`);
         }
     }
 
