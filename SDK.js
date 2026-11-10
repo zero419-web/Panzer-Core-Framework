@@ -8,6 +8,7 @@
  */
 export class PanzerSDK {
     constructor(options = {}) {
+        this._sessionSynced = false;
         this.lastUiUpdate = 0;
         
         this.swPath = options.swPath || './ServiceWorker.js';
@@ -115,10 +116,8 @@ export class PanzerSDK {
         setInterval(async () => {
             if (!('caches' in window)) return;
             
-            const isSyncedBefore = localStorage.getItem('panzer_vault_synced');
-            const hasController = navigator.serviceWorker && navigator.serviceWorker.controller;
-            
-            if (!isSyncedBefore && !hasController) return;
+            const isSyncedLocalStorage = localStorage.getItem('panzer_vault_synced');
+            if (!this._sessionSynced && !isSyncedLocalStorage) return;
 
             try {
                 const keys = await caches.keys();
@@ -131,7 +130,7 @@ export class PanzerSDK {
             } catch (e) {
                 this.onLogMessage('warn', `⚠️🐺 SDK: Errore lettura cache: ${e.message}`);
             }
-        }, 10000);
+        }, 5000);
     }
 
 
