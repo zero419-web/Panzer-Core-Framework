@@ -9,7 +9,11 @@
 > - 🌀🧪 **E un PoC, `Proof of Concept`**
 > 
 > ⚙️ **SDK : NOVITÀ, BUG Fix & Altro...**
-> 
+>
+> - **🪳 Bug Fix 🔄📊 GUI DashBoard :**
+>   - **📜 File :** `app.js` *v2.3.3*
+>     - `renderStorageTable()`, ottimizzare le prestazioni visive da non rallentare il browser su dispositivi datati, tramite uso di **DocumentFragment**.
+>
 > - **📣 NOVITÀ v2.3.2 :** <br> `➕🔄 Funzionalità & aggiornamenti...`
 > - ⚡ **Controllo del Ciclo di Vita Avanzato (`autoInit`, `init()`, `destroy()`) :**
 >   - ⚙️ Aggiunta dell'opzione `autoInit` (default `true`) nel costruttore per una gestione flessibile dell'istanza.
