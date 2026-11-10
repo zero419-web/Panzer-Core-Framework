@@ -4,11 +4,25 @@
 
 # 🏗️ **SDK** <br> ( ⚙️📦 *Software Development Kit* )
 > [!Important]
->   - 🔃 **Last Update :** `v2.1`
+>   - 🔃 **Last Update :** `v2.3`
 > 
 > - 🌀🧪 **E un PoC, `Proof of Concept`**
 > 
 > ⚙️ **SDK : NOVITÀ, BUG Fix & Altro...**
+> - **📣 NOVITÀ v2.3 :** <br> `➕🔄 Funzionalità & aggiornamenti...`
+>    - **🐺🗄️ Watchdog Integrità Stiva ( Cache Wipe ) :**
+>       - 🔎 **Monitoraggio periodico della cache con popup di ripristino personalizzabile in caso di cancellazione inaspettata dei dati.**
+> 
+>    - **🕵️‍♂️ Rilevamento Incognito Selettivo :**
+>       - 🔎 **Controllo mirato esclusivamente sui motori Chromium/Blink** ( *escludendo nativamente iOS, Safari e Mac Safari* ).
+>
+>    - **🌐🔄 Gestione Rete Resiliente ( *On-line/Off-line & Auto-Sync* ) :**
+>       - ✅ **Sintonizzazione automatica dello stato di connessione con badge dinamico e auto-risincronizzazione della stiva al ritorno della rete.**
+>
+>    - **📌🗄️ Prefisso Cache Parametrico :**
+>       - Gestione centralizzata e parametrica della nomenclatura della stiva (`PA_PANZER_ENGINE_v`).
+>
+> ***
 > - **📣 NOVITÀ v2.1 :** <br> `🐛 BUG Fix`
 >    - **🪳 BUG Fix :**
 >       - 📜 **`SDK.js`**
