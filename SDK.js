@@ -261,6 +261,7 @@ export class PanzerSDK {
                     break;
 
                 case 'SYNC_END':
+                    this._sessionSynced = true;
                     this.onLogMessage('success', '✅🗄️ Sincronizzazione e cifratura Bunker completate dal 🪖 Service-Worker !');
                     this.onComplete(data.details || {});
                     this.lastUiUpdate = 0;
@@ -323,6 +324,7 @@ export class PanzerSDK {
         if (!('caches' in window)) return;
         try {
             this.onLogMessage('warn', '🚨🗑 SDK:  Avvio purga diretta di tutti i bunker Cache Storage... 🗄️');
+            this._sessionSynced = false;
             localStorage.removeItem('panzer_vault_synced');
             const keys = await caches.keys();
             await Promise.all(keys.map(key => caches.delete(key)));
