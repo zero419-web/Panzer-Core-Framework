@@ -1,7 +1,7 @@
 /**
  * ⚙️⚡ App Controller 
  * Dashboard PA & Gestione UI
- * v2.1.2.1
+ * v2.3.0
  *
  * * 👤 Autore: Valentino Aglianó
  * Perito Informatico / Idoneo ASMEL 2025
@@ -24,9 +24,14 @@ document.addEventListener('DOMContentLoaded', async () => {
         './icon.png',
         './Res-PA-manifest.json'
     ];
-    // 📜🛒 il file del manifesto delle risorse...
+    
+    // 🔎🏷️🗄️ Prefisso identificativo della cache scannerizzato dall'SDK
+    const getDefined_CacheNamePrefix = 'PA_PANZER_ENGINE_v';
+
+    // 📜🛒 Il file del manifesto delle risorse della 🏛️ PA.
     const getDefined_Manifest_Assets = './Res-PA-manifest.json';
-    // 🎯 definisci i percorsi per lo scope e il Service-Worker.
+    
+    // 🎯 Percorsi per lo scope e il Service-Worker
     const getDefined_scope = '/Panzer-Core-Framework/';
     const getDefined_swPath = './ServiceWorker.js';
     
@@ -85,7 +90,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         statusBadge.className = `badge-status ${badgeClass}`;
     };
 
-    // 🔍 Helper per MIME Type in assenza di header corretti.
+    // 🔍 Helper per MIME Type
     const detectMimeType = (url, headerType) => {
         if (headerType && headerType !== 'application/octet-stream' && headerType !== 'text/plain') {
             return headerType;
@@ -103,12 +108,10 @@ document.addEventListener('DOMContentLoaded', async () => {
         return mimeMap[ext] || headerType || 'application/octet-stream';
     };
 
-    // 🔍 Zoom dinamico universale.
+    // 🔭 Zoom dinamico universale
     const applyZoom = () => {
         try {
             const iframeDoc = sandboxFrame.contentDocument || sandboxFrame.contentWindow.document;
-            
-            // 1. Zoom Immagini
             const targetImg = iframeDoc.getElementById('target-img');
             if (targetImg) {
                 targetImg.style.transform = `scale(${currentZoom})`;
@@ -116,7 +119,6 @@ document.addEventListener('DOMContentLoaded', async () => {
                 return;
             }
 
-            // 2. Zoom Canvas PDF
             const canvases = iframeDoc.querySelectorAll('canvas');
             if (canvases.length > 0) {
                 canvases.forEach(canvas => {
@@ -134,7 +136,6 @@ document.addEventListener('DOMContentLoaded', async () => {
         }
     };
 
-    // Gestori eventi Zoom
     btnZoomIn.addEventListener('click', () => {
         currentZoom = Math.min(currentZoom + 0.25, 3.0);
         applyZoom();
@@ -145,10 +146,9 @@ document.addEventListener('DOMContentLoaded', async () => {
         applyZoom();
     });
 
-    // 🔒 Visore Sandbox Protetto.
+    // 🔒 Visore Sandbox Protetto
     const openInSandbox = async (url, fileName) => {
         try {
-            // 📱/💻 Rilevamento Responsivo: 50% su Mobile (<=768px), 100% su Desktop
             const isMobile = window.innerWidth <= 768;
             currentZoom = isMobile ? 0.5 : 1.0;
 
@@ -183,7 +183,6 @@ document.addEventListener('DOMContentLoaded', async () => {
             let renderedContentHtml = '';
 
             if (mimeType.startsWith('image/')) {
-                // 🖼️ IMMAGINE PROTETTA
                 renderedContentHtml = `
                     <!DOCTYPE html>
                     <html>
@@ -212,7 +211,6 @@ document.addEventListener('DOMContentLoaded', async () => {
                     </html>
                 `;
             } else if (mimeType.includes('pdf')) {
-                // 📄 PDF PROTETTO SU CANVAS
                 const baseUrl = window.location.href.substring(0, window.location.href.lastIndexOf('/') + 1);
                 const PDFlib = baseUrl + 'js/pdf_min.js';
                 const PDFworker = baseUrl + 'js/pdf_worker_min.js';
@@ -321,11 +319,12 @@ document.addEventListener('DOMContentLoaded', async () => {
 
     btnCloseSandbox.addEventListener('click', closeSandbox);
 
-    // 🚀 Inizializzazione SDK
+    // 🚀 Inizializzazione SDK con configurazione personalizzata dei blocker e trigger pulito su onOnline
     const sdk = new PanzerSDK({
         swPath: getDefined_swPath,
         scope: getDefined_scope,
         coreAssets: getDefinedCoreAssets(),
+        cacheNamePrefix: getDefined_CacheNamePrefix,
         checkTimeout: 6660,
         incognitoBlocker: {
             Icons: `⚠️ ❌🕵️`,
@@ -345,14 +344,44 @@ document.addEventListener('DOMContentLoaded', async () => {
             buttonBg: "#2563eb",
             buttonTextCol: "#ffffff"
         },
+        cacheWipeBlocker: {
+            Icons: `🚨 ❌🗄️`,
+            blockerID: 'PA_popup_CacheWipe',
+            title: "Stiva Locale Compromessa o Svuotata",
+            message: "Il 🐺 watchdog di sicurezza <strong>🪖 PANZER SDK</strong> ha rilevato la rimozione imprevista della ⚠️❌🗄️ cache protetta.<br><br>È necessario ricaricare e risincronizzare la stiva della Pubblica Amministrazione.",
+            buttonText: "🔄🗄️ Risincronizza e Ripristina Stiva",
+            buttonAction: () => {
+                localStorage.removeItem('panzer_vault_synced');
+                window.location.reload();
+            },
+            overlayBg: "rgba(15, 23, 42, 0.98)",
+            cardBg: "#1e293b",
+            borderColor: "#475569",
+            titleColor: "#f87171",
+            textColor: "#cbd5e1",
+            buttonBg: "#2563eb",
+            buttonTextCol: "#ffffff"
+        },
         onLogMessage: (level, msg) => logToTerminal(level, msg),
         
+        // 🌐 Evento di Ritorno On-line:
+        onOnline: () => {
+            setStatusBadge('🌐 Rete Online - Sincronizzazione...', 'badge-sync');
+            logToTerminal('sync', '🛡️ SDK: 🌐 Connessione on-line ripristinata. ✅🔄 Avvio automatico sincronizzazione stiva...');
+            btnSync.click();
+        },
+
+        // 📴 Evento Off-line
+        onOffline: () => {
+            setStatusBadge('📴 Off-line - Modalità Cache 🗄️', 'badge-warn');
+            logToTerminal('warn', '🛡️ SDK: 📴 Dispositivo offline. Operatività garantita in modalità 🗄️ Cache protetta.');
+        },
+
         onSyncStart: () => {
             setStatusBadge('📡📥⚡ Sincronizzazione...', 'badge-sync');
             const includeCore = toggleCoreAssets ? toggleCoreAssets.checked : true;
             const coreCount = includeCore ? getDefinedCoreAssets().length : 0;
-            const manifestCount = manifestCache && manifestCache.assets ? manifestCache.assets.length : 0;
-            const totalFiles = includeCore ? totalCombinedCount : manifestCount;
+            const totalFiles = includeCore ? totalCombinedCount : (manifestCache?.assets?.length || 0);
             
             metricTotal.textContent = totalFiles;
             metricCompleted.textContent = '0';
@@ -384,6 +413,8 @@ document.addEventListener('DOMContentLoaded', async () => {
             }
         },
         onComplete: (data) => {
+            localStorage.setItem('panzer_vault_synced', 'true');
+
             progressBar.value = 100;
             progressText.textContent = '100% ( Completato )';
             setStatusBadge('🛡️🗄️ Stiva Pronta', 'badge-ready');
@@ -401,7 +432,6 @@ document.addEventListener('DOMContentLoaded', async () => {
             progressBar.value = 0;
             progressText.textContent = '0% ( 0 / 0 )';
             metricCompleted.textContent = '0';
-            // metricTotal.textContent = '0';
             metricFailed.textContent = '0';
             metricRetries.textContent = '0';
             setStatusBadge('🗑️⚡ Purgato', 'badge-init');
@@ -412,7 +442,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         }
     });
 
-    // 📊🔎🗄️ Rendering Tabella Ispezione Stiva.
+    // 📊🔎🗄️ Rendering Tabella Ispezione Stiva
     const renderStorageTable = async () => {
         const showCore = toggleCoreAssets ? toggleCoreAssets.checked : true;
 
@@ -503,7 +533,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         logToTerminal('vault', `🔎🗄️ Ispezione stiva aggiornata: ${filteredAssets.length} risorse visualizzate.`);
     };
 
-    // 📥📜🛒 Scaricamento del Manifesto dele risorse...
+    // 📥📜🛒 Caricamento del Manifesto
     try {
         logToTerminal('info', `📥📜🛒 Recupero file [ ${getDefined_Manifest_Assets} ] ...`);
         const res = await fetch(getDefined_Manifest_Assets);
@@ -556,10 +586,9 @@ document.addEventListener('DOMContentLoaded', async () => {
         renderStorageTable();
     });
 
-        if (toggleCoreAssets) {
+    if (toggleCoreAssets) {
         toggleCoreAssets.addEventListener('change', () => {
             renderStorageTable();
-            // 📊🔄 Aggiorna metriche a schermo in base allo stato attuale
             if (manifestCache) {
                 const includeCore = toggleCoreAssets.checked;
                 const grandTotal = includeCore ? totalCombinedCount : (manifestCache.assets ? manifestCache.assets.length : 0);
@@ -570,11 +599,4 @@ document.addEventListener('DOMContentLoaded', async () => {
             }
         });
     }
-
-    // ⚙️ Sincronizazzazione automatica con ritardo di 2.5s Avvio della PWA
-    /*
-    setTimeout(() => {
-        btnSync.click();
-    }, 2500);
-    */
 });
