@@ -1,7 +1,7 @@
 /**
  * ⚙️⚡ App Controller 
  * Dashboard PA & Gestione UI
- * v2.3.2
+ * v2.3.3
  *
  * * 👤 Autore: Valentino Aglianó
  * Perito Informatico / Idoneo ASMEL 2025
@@ -460,7 +460,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         }
     });
 
-    // 📊🔎🗄️ Rendering Tabella Ispezione Stiva
+    // 📊🔎🗄️ Rendering Tabella Ispezione Stiva.
     const renderStorageTable = async () => {
         const showCore = toggleCoreAssets ? toggleCoreAssets.checked : true;
 
@@ -499,6 +499,9 @@ document.addEventListener('DOMContentLoaded', async () => {
             return url.includes(filterQuery) || type.includes(filterQuery) || category.includes(filterQuery);
         });
 
+    // 🗑️ Svuotamento contenitore precedente.
+        storageTbody.innerHTML = '';
+
         if (filteredAssets.length === 0) {
             storageTbody.innerHTML = `<tr><td colspan="5" style="text-align: center; color: var(--text-muted);">Nessuna risorsa trovata per il filtro applicato.</td></tr>`;
             return;
@@ -518,7 +521,8 @@ document.addEventListener('DOMContentLoaded', async () => {
             })
         );
 
-        storageTbody.innerHTML = '';
+    // 🏗️ Creazione contenitore virtuale.
+        const fragment = document.createDocumentFragment();
 
         for (const { asset, isCached } of assetsWithCacheState) {
             const tr = document.createElement('tr');
@@ -534,21 +538,26 @@ document.addEventListener('DOMContentLoaded', async () => {
                 <td>${cacheBadge}</td>
                 <td>
                     <div style="display: flex; gap: 6px; flex-wrap: wrap;">
-                        <button class="btn btn-sm btn-sandbox-trigger" data-url="${asset.url}" style="border-color: var(--accent-purple); color: var(--accent-purple);">🔒👁 Visore ❌💾</button>
+                        <button class="btn btn-sm btn-sandbox-trigger" data-url="${asset.url}" style="border-color: var(--accent-purple); color: var(--accent-purple); cursor: pointer;">🔒👁 Visore ❌💾</button>
                     </div>
                 </td>
             `;
-            storageTbody.appendChild(tr);
+
+        // 🪝 Aggancio listener sul tr Nel DOM.
+            const btnSandbox = tr.querySelector('.btn-sandbox-trigger');
+            if (btnSandbox) {
+                btnSandbox.addEventListener('click', (e) => {
+                    const targetUrl = e.currentTarget.getAttribute('data-url');
+                    openInSandbox(targetUrl, targetUrl.split('/').pop());
+                });
+            }
+            fragment.appendChild(tr);
         }
 
-        storageTbody.querySelectorAll('.btn-sandbox-trigger').forEach(btn => {
-            btn.addEventListener('click', (e) => {
-                const targetUrl = e.currentTarget.getAttribute('data-url');
-                openInSandbox(targetUrl, targetUrl.split('/').pop());
-            });
-        });
+        // 🚀 Singola operazione atomica sul DOM.
+        storageTbody.appendChild(fragment);
 
-        logToTerminal('vault', `🔎🗄️ Ispezione stiva aggiornata: ${filteredAssets.length} risorse visualizzate.`);
+        logToTerminal('vault', `🔎🗄️ Ispezione stiva aggiornata: ${filteredAssets.length} risorse visualizzate via DocumentFragment.`);
     };
 
     // 📥📜🛒 Caricamento del Manifesto
