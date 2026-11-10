@@ -12,7 +12,9 @@
 > - **📣 NOVITÀ v2.3 :** <br> `➕🔄 Funzionalità & aggiornamenti...`
 >    - **🐺🗄️ Watchdog Integrità Stiva ( Cache Wipe ) :**
 >       - 🔎 **Monitoraggio periodico della cache con popup di ripristino personalizzabile in caso di cancellazione inaspettata dei dati.**
-> 
+>
+>   - ℹ️ **Popup personalizzabile Se viene fatta la purga volontaria della cache 🗑️🗄️, e pulsante per ricaricare la PWA.**
+>
 >    - **🕵️‍♂️ Rilevamento Incognito Selettivo :**
 >       - 🔎 **Controllo mirato esclusivamente sui motori Chromium/Blink** ( *escludendo nativamente iOS, Safari e Mac Safari* ).
 >
