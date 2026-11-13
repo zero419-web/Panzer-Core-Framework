@@ -1,7 +1,7 @@
 /*
  * 📄 [ DISCIPLINARE TECNICO DI CONFORMITÀ ]
  *
- * ⚙️ CORE: 🪖 PANZER v7.9.7+ ( v2.x SDK ⛓️)
+ * ⚙️ CORE: 🪖 PANZER v7.9.8+ ( v2.x SDK ⛓️)
  *
  * 🛡️ REQUISITI OPERATIVI DI SISTEMA :
  *
@@ -70,8 +70,8 @@ const BASE_PATH = self.location.pathname.replace(/[^\/]+$/, "").replace(/\/+/g, 
 let globalAbortController = new AbortController();
 const CONFIG = {
     ROOT: BASE_PATH,
-        cacheName:      'PA_PANZER_ENGINE_v7.9.7',
-    userCacheName: 'user_PA_PANZER_ENGINE_v7.9.7',
+        cacheName:      'PA_PANZER_ENGINE_v7.9.8',
+    userCacheName: 'user_PA_PANZER_ENGINE_v7.9.8',
 	vaultCanaryText: 'KANARY_OK_PANZER_KEY',
 	MAX_PATH_LENGTH: 400,
     ALLOWED_SCHEMES: [
@@ -282,6 +282,77 @@ const deepFreeze = (obj) => {
 };
 Object.freeze(deepFreeze);
 deepFreeze(CONFIG);
+
+/**
+ * 🛡️ ZT-GUARD: Validatore e Sanitizzatore rigoroso per gli asset passati via IPC.
+ * @param {string} rawPath - Il percorso grezzo ricevuto dal client/SDK.
+ * @param {boolean} [isCore=false] - Se true, applica la whitelist severa delle estensioni di sistema.
+ * @returns {string|null} Il percorso normalizzato e sicuro, oppure null se la validazione fallisce.
+ */
+const validateAndSanitizeAssetPath = (rawPath, isCore = false) => {
+    if (!rawPath || typeof rawPath !== 'string') return null;
+    if (rawPath.length > (CONFIG.MAX_PATH_LENGTH || 400)) return null;
+    
+    // 🛑 Blocco tentativi di Path Traversal o injection
+    if (rawPath.includes('../') || rawPath.includes('..\\') || rawPath.includes('\0')) return null;
+
+    try {
+        // 🌐 Controllo Same-Origin rigoroso (previene SSRF verso domini esterni)
+        const resolved = new URL(rawPath, self.location.origin);
+        if (resolved.origin !== self.location.origin) return null;
+        
+        const cleanPath = resolved.pathname.replace(/\/+/g, '/');
+        const rootNormalized = CONFIG.ROOT.replace(/\/+/g, '/');
+        
+        // Il percorso deve tassativamente risiedere all'interno della root dello scope
+        if (!cleanPath.startsWith(rootNormalized)) return null;
+
+        // Se si tratta di un Core Asset critico, applichiamo una whitelist di estensioni sicure
+        if (isCore) {
+            const allowedCoreExts = ['.html', '.js', '.css', '.json', '.webmanifest', '.png', '.svg', '/'];
+            const lowerPath = cleanPath.toLowerCase();
+            const isRoot = lowerPath.endsWith('/') || lowerPath === rootNormalized || lowerPath === rootNormalized + '/';
+            const hasValidExt = allowedCoreExts.some(ext => ext.startsWith('.') ? lowerPath.endsWith(ext) : false);
+            if (!isRoot && !hasValidExt) return null;
+        }
+
+        return cleanPath;
+    } catch (e) {
+        return null;
+    }
+};
+Object.freeze(validateAndSanitizeAssetPath);
+
+/**
+ * 🛡📨️ Validatore e Sanitizzatore flessibile per gli asset passati via IPC.
+ * Permette qualsiasi estensione pur garantendo l'isolamento nella root e la protezione anti-traversal.
+ * @param {string} rawPath - Il percorso grezzo ricevuto dal client/SDK.
+ * @returns {string|null} Il percorso normalizzato e sicuro, oppure null se la validazione fallisce.
+ */
+const validateAndSanitizeAssetPath = (rawPath) => {
+    if (!rawPath || typeof rawPath !== 'string') return null;
+    if (rawPath.length > (CONFIG.MAX_PATH_LENGTH || 400)) return null;
+    
+    // 🛑 Blocco tassativo dei tentativi di Path Traversal o injection
+    if (rawPath.includes('../') || rawPath.includes('..\\') || rawPath.includes('\0')) return null;
+
+    try {
+        // 🌐 Controllo Same-Origin rigoroso (impedisce URL verso domini esterni / SSRF)
+        const resolved = new URL(rawPath, self.location.origin);
+        if (resolved.origin !== self.location.origin) return null;
+        
+        const cleanPath = resolved.pathname.replace(/\/+/g, '/');
+        const rootNormalized = CONFIG.ROOT.replace(/\/+/g, '/');
+        
+        // 🚧 Il percorso deve risiedere obbligatoriamente all'interno della root dello scope
+        if (!cleanPath.startsWith(rootNormalized)) return null;
+
+        return cleanPath;
+    } catch (e) {
+        return null;
+    }
+};
+Object.freeze(validateAndSanitizeAssetPath);
 
 /**
  * 🛡🏴‍☠️ ANTI-PROFILING: Generatore di oggetti Error sterili privi di stack trace esposto.
@@ -1304,10 +1375,23 @@ self.addEventListener('message', (event) => {
         isSyncing = true;
         const currentVersion = eventDataSnapshot?.version;
         isLogicEnabled = true;
-        const customCoreAssets = eventDataSnapshot?.overrideCoreAssets; // SDK wrapper
-        // Se l'SDK passa dei coreAssets personalizzati, li normalizziamo, altrimenti usiamo quelli di default del SW
-        activeCoreAssets = (customCoreAssets && Array.isArray(customCoreAssets) && customCoreAssets.length > 0) ? customCoreAssets.map(asset => normalize(asset)) : CONFIG.coreAssets;
-    CORE_ASSETS_SET = new Set(activeCoreAssets);
+        const customCoreAssets = eventDataSnapshot?.overrideCoreAssets; // SDK wrapper passa i coreAssets.
+        const MAX_ALLOWED_ASSETS = 500; // 🛑 Tetto massimo Anti-DoS
+        if (customCoreAssets && Array.isArray(customCoreAssets)) {
+    if (customCoreAssets.length > MAX_ALLOWED_ASSETS) {
+        throw new Error("CORE_ASSETS_LIMIT_EXCEEDED");
+    }
+    activeCoreAssets = customCoreAssets
+        .map(asset => validateAndSanitizeAssetPath(asset))
+        .filter(Boolean);
+        
+    if (activeCoreAssets.length === 0) {
+        activeCoreAssets = CONFIG.coreAssets;
+    }
+} else {
+    activeCoreAssets = CONFIG.coreAssets;
+}
+CORE_ASSETS_SET = new Set(activeCoreAssets);
 
         const performSync = async (event) => {
 			// ⏱️ Marcatore di rete.
@@ -1432,44 +1516,58 @@ if (jsonAssets.length > 0 && !isNewInstallation && !isCacheEmpty) {
 				console.info(`✅⚙️ SW: Core File Scaricati effettivi da rete: ${core_Down_OK}/${coreResults.length}`);
 
 				    console.info(`⚙️📜 SW: Estrazione Lista File dal Manifesto IPC...`);
-    const manifestList = [];
-    try {
-        broadcast({ type: 'SYNC_PROGRESS' });
-        
-        // 🎯 LETTURA: manifesto passato dall'SDK
-        const structured = eventDataSnapshot?.data;
-        
-        if (!structured) {
-            throw new Error("MANIFEST_DATA_MISSING");
-        }
-
-        // Supporto formato 1: Oggetto con array 'assets' (es. { assets: [{url: '...'}, ...] })
-        if (structured.assets && Array.isArray(structured.assets)) {
-            structured.assets.forEach(item => {
-                if (item && item.url) {
-                    const fullPath = normalize(CONFIG.ROOT + item.url.replace(/^\.\//, ''));
-                    manifestList.push(fullPath);
-                }
-            });
-        } 
-        // Supporto formato 2: Array di gruppi con directory e files (es. [{dir: '...', files: [...]}, ...])
-        else if (Array.isArray(structured)) {
-            structured.forEach(group => {
-                const directory = group.dir || "";
-                if (group.files && Array.isArray(group.files)) {
-                    group.files.forEach(f => {
-                        const fullPath = normalize(CONFIG.ROOT + directory + f);
-                        manifestList.push(fullPath);
-                    });
-                }
-            });
-        }
-
-        console.info(`✅📜 SW: Lista completata. File raccolti dal manifest: ${manifestList.length}`);
-    } catch (e) {
-        console.error("🚫⚠️ SW: Errore Critico durante l'elaborazione dell'Assets Manifest:", e.message);
-        throw new Error("ASSETS_MANIFEST_CORRUPTED");
+const manifestList = [];
+try {
+    broadcast({ type: 'SYNC_PROGRESS' });
+    
+    // 🎯 LETTURA: manifesto passato dall'SDK
+    const structured = eventDataSnapshot?.data;
+    
+    if (!structured) {
+        throw new Error("MANIFEST_DATA_MISSING");
     }
+
+
+    if (structured.assets && Array.isArray(structured.assets)) {
+        if (structured.assets.length > MAX_ALLOWED_ASSETS) {
+            throw new Error("MANIFEST_ASSETS_LIMIT_EXCEEDED");
+        }
+        structured.assets.forEach(item => {
+            if (item && item.url) {
+                const rawFullPath = CONFIG.ROOT + item.url.replace(/^\.\//, '');
+                const securePath = validateAndSanitizeAssetPath(rawFullPath);
+                if (securePath) {
+                    manifestList.push(securePath);
+                } else {
+                    console.warn(`⚠️ SW Security: Asset scartato dal manifesto -> ${item.url}`);
+                }
+            }
+        });
+    } 
+    // Eventuale supporto formato ( se strutturato come array di gruppi )
+    else if (Array.isArray(structured)) {
+        if (structured.length > MAX_ALLOWED_ASSETS) {
+            throw new Error("MANIFEST_GROUPS_LIMIT_EXCEEDED");
+        }
+        structured.assets.forEach(group => { // oppure la logica dei gruppi esistente
+            const directory = group.dir || "";
+            if (group.files && Array.isArray(group.files)) {
+                group.files.forEach(f => {
+                    const rawFullPath = CONFIG.ROOT + directory + f;
+                    const securePath = validateAndSanitizeAssetPath(rawFullPath);
+                    if (securePath) {
+                        manifestList.push(securePath);
+                    }
+                });
+            }
+        });
+    }
+
+    console.info(`✅📜 SW: Lista completata. File raccolti dal manifest: ${manifestList.length}`);
+} catch (e) {
+    console.error("🚫⚠️ SW: Errore Critico durante l'elaborazione dell'Assets Manifest:", e.message);
+    throw new Error("ASSETS_MANIFEST_CORRUPTED");
+}
 
                 const db = eventDataSnapshot?.data;
                 const scanSet = new Set();
