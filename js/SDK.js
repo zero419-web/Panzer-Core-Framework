@@ -401,16 +401,27 @@ export class PanzerSDK {
                 }
             }
         };
-
         // ℹ️ Controllo periodico ogni 5s.
         this._watchdogInterval = setInterval(() => runWatchdogCheck(false), 5000);
-
         //👁️‍🗨️ Controllo immediato al ritorno in primo piano.
         document.addEventListener('visibilitychange', () => {
             if (document.visibilityState === 'visible') {
                 this.onLogMessage('info', '👁️ SDK: App tornata in primo piano. Verifica immediata 🔎🗄️ stiva...');
                 runWatchdogCheck(true);
             }
+        });
+    }
+    // 3. 🛡️ TRAPPOLA ANTI-ZOMBIE PWA.
+        let lastInteractionCheck = 0;
+        ['click', 'touchstart', 'pointerdown'].forEach(eventType => {
+            document.addEventListener(eventType, () => {
+                const now = Date.now();
+                // Throttle di 3s.
+                if (now - lastInteractionCheck > 3000) {
+                    lastInteractionCheck = now;
+                    runWatchdogCheck(true);
+                }
+            }, { passive: true });
         });
     }
     
