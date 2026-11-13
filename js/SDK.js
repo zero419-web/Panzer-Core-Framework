@@ -346,7 +346,7 @@ export class PanzerSDK {
         }
     }
 
-    /** v2.3
+        /** v2.4
      * 🐺 Inizializza il watchdog per il controllo periodico dell'integrità della cache.
      * @private
      */
@@ -370,22 +370,22 @@ export class PanzerSDK {
                 if (targetCacheName) {
                     const cache = await caches.open(targetCacheName);
                     const cacheKeys = await cache.keys();
-                    // ℹ️ La stiva è integra se la cache esiste e contiene elementi
                     isStivaIntact = cacheKeys.length > 0;
                 }
 
                 // ❌ Se la cache principale è sparita o è vuota, scatta il blocker anti-wipe
                 if (!targetCacheName || !isStivaIntact) {
-                    this.onLogMessage('error', '🚨🐺 SDK: Rilevata cancellazione inaspettata della stiva 🗄️ Cache Storage !');
-                    
-                    localStorage.removeItem('panzer_vault_synced');
-                    this._sessionSynced = false;
-                    this._isSyncing = false; // Reset di sicurezza
-                    
-                    this._showCacheWipeBlocker();
+                    throw new Error("Stiva Cache Storage assente o svuotata inaspettatamente.");
                 }
             } catch (e) {
-                this.onLogMessage('warn', `⚠️🐺 SDK: Errore lettura cache: ${e.message}`);
+                // 🚨 QUALSIASI ERRORE FA SCATTARE IL BLOCCO DI SICUREZZA !
+                this.onLogMessage('error', `🚨🐺 SDK: Rilevata cancellazione o compromissione della stiva 🗄️ -> [${e.message}]`);
+                
+                localStorage.removeItem('panzer_vault_synced');
+                this._sessionSynced = false;
+                this._isSyncing = false;
+                
+                this._showCacheWipeBlocker();
             }
         }, 5000);
     }
