@@ -4,12 +4,22 @@
 
 # 🏗️ **SDK** <br> ( ⚙️📦 *Software Development Kit* )
 > [!Important]
->   - 🔃 **Last Update :** `v2.3.4`
+>   - 🔃 **Last Update :** `v2.3.6`
 > 
 > - 🌀🧪 **E un PoC, `Proof of Concept`**
 > 
 > ⚙️ **SDK : NOVITÀ, BUG Fix & Altro...**
 >
+> - **📣 NOVITÀ v2.3.6 :** <br> `➕🔄 Funzionalità & aggiornamenti...`
+>
+>   - **NEW, 🐺🗄️ Watchdog Integrità Stiva Anti-Wipe :**
+>
+>      - 🛡️ **Protezione Intelligente:** Un sistema di controllo che vigilia costantemente sui dati della PWA per impedire che l'interfaccia rimanga "attiva" se la memoria viene svuotata inaspettatamente dal browser o dal sistema operativo.
+>
+>     - 🔄 **Resilienza a Prova di Riavvio :** Riconosce con precisione se la PWA è stata appena installata per la prima volta o se i suoi dati sono stati cancellati da terzi...
+>
+>     - 🚨 **Ripristino Guidato :** Nel rari casi in cui la stiva viene compromessa, il sistema interviene all'istante bloccando la navigazione e mostrando un comodo popup di avviso che guida l'utente a ripristinare e ricaricare la PWA con un solo click.
+> ***
 > - **📣 NOVITÀ v2.3.4 :** <br> `🪨 Hardening`
 >
 >   - 🔒 **Immutabilità Totale tramite `❄️ Object.freeze` :**
