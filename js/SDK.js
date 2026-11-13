@@ -1,5 +1,5 @@
 /**
- * ⚙️🪖🛡️ PanzerSDK - v2.3.4.2
+ * ⚙️🪖🛡️ PanzerSDK - v2.3.5.0
  * 
  * * 👤 Autore: Valentino Aglianó
  * Perito Informatico / Idoneo ASMEL 2025
@@ -329,12 +329,12 @@ export class PanzerSDK {
      */
     _setupNetworkListeners() {
         this._boundOnline = () => {
-            this.onLogMessage('success', '🌐 SDK: Connessione di rete ripristinata ( ON-LINE ! ).');
+            //this.onLogMessage('success', '🌐 SDK: Connessione di rete ripristinata ( ON-LINE ! ).');
             this.onOnline();
         };
 
         this._boundOffline = () => {
-            this.onLogMessage('warn', '📴 SDK: Connessione di rete assente ( OFF-LINE ! ). Operatività in modalità Cache. 🗄️');
+            //this.onLogMessage('warn', '📴 SDK: Connessione di rete assente ( OFF-LINE ! ). Operatività in modalità Cache. 🗄️');
             this.onOffline();
         };
 
@@ -346,14 +346,14 @@ export class PanzerSDK {
         }
     }
 
-    /** v2.5
-     * 🐺 Inizializza il watchdog per il controllo periodico dell'integrità della cache.
+    /** v2.6
+     * 🐺 Inizializza il watchdog per il controllo periodico e reattivo dell'integrità della cache.
      * @private
      */
     _initCacheWatchdog() {
         this._watchdogFailures = 0;
 
-        this._watchdogInterval = setInterval(async () => {
+        const runWatchdogCheck = async (isImmediate = false) => {
             if (!('caches' in window) || this._isSyncing) return;
             
             const isSyncedLocalStorage = localStorage.getItem('panzer_vault_synced');
@@ -388,9 +388,9 @@ export class PanzerSDK {
                 this._watchdogFailures++;
                 this.onLogMessage('warn', `⚠️🐺 SDK: Anomalie rilevate nel controllo stiva (Tentativo ${this._watchdogFailures}/3) -> [${e.message}]`);
 
-                // 🚨 Solo dopo 3 riscontri negativi consecutivi confermiamo la compromissione
-                if (this._watchdogFailures >= 3) {
-                    this.onLogMessage('error', `🚨🐺 SDK: Rilevata cancellazione o compromissione della stiva 🗄️ dopo 3 conferme -> [${e.message}]`);
+                // 🚨 Se è un controllo...
+                if (isImmediate || this._watchdogFailures >= 3) {
+                    this.onLogMessage('error', `🚨🐺 SDK: Rilevata cancellazione o compromissione della stiva 🗄️ -> [${e.message}]`);
                     
                     localStorage.removeItem('panzer_vault_synced');
                     this._sessionSynced = false;
@@ -400,7 +400,18 @@ export class PanzerSDK {
                     this._showCacheWipeBlocker();
                 }
             }
-        }, 5000);
+        };
+
+        // ℹ️ Controllo periodico ogni 5s.
+        this._watchdogInterval = setInterval(() => runWatchdogCheck(false), 5000);
+
+        //👁️‍🗨️ Controllo immediato al ritorno in primo piano.
+        document.addEventListener('visibilitychange', () => {
+            if (document.visibilityState === 'visible') {
+                this.onLogMessage('info', '👁️ SDK: App tornata in primo piano. Verifica immediata 🔎🗄️ stiva...');
+                runWatchdogCheck(true);
+            }
+        });
     }
     
     /**
