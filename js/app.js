@@ -1,7 +1,7 @@
 /**
  * ⚙️⚡ App Controller 
  * Dashboard PA & Gestione UI
- * v2.3.4
+ * v2.3.4.1
  *
  * * 👤 Autore: Valentino Aglianó
  * Perito Informatico / Idoneo ASMEL 2025
@@ -332,7 +332,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     // 🛑 Config personalizzata dei popup.
         incognitoBlocker: {
             Icons: `⚠️ ❌🕵️`,
-            ID: 'PA_popup_Incognite',
+            blockerID: 'PA_popup_Incognite',
             title: "Modalità Protetta Richiesta",
             message: "Il sistema di sicurezza <strong>🪖 PANZER SDK</strong> richiede una sessione di navigazione standard per garantire la persistenza dei documenti della Pubblica Amministrazione.<br><br>Ti invitiamo ad aprire l'applicazione in una <strong>finestra di navigazione normale</strong>.",
             buttonText: "🔄 Ricarica in modalità normale",

@@ -1,5 +1,5 @@
 /**
- * ⚙️🪖🛡️ PanzerSDK - v2.3.4.1
+ * ⚙️🪖🛡️ PanzerSDK - v2.3.4.2
  * 
  * * 👤 Autore: Valentino Aglianó
  * Perito Informatico / Idoneo ASMEL 2025
@@ -71,7 +71,7 @@ export class PanzerSDK {
             './',
             './index.html',
             './Res-PA-manifest.json',
-            './PWA.webmanifest',
+            './PA_PWA.webmanifest',
             './ServiceWorker.js',
             './js/SDK.js',
             './js/app.js'
