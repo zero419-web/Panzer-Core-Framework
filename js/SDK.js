@@ -1,5 +1,5 @@
 /**
- * ⚙️🪖🛡️ PanzerSDK - v2.3.5.0
+ * ⚙️🪖🛡️ PanzerSDK - v2.3.6
  * 
  * * 👤 Autore: Valentino Aglianó
  * Perito Informatico / Idoneo ASMEL 2025
@@ -106,6 +106,7 @@ export class PanzerSDK {
             buttonText: "🔄 Ripristina e Ricarica Stiva",
             buttonAction: () => {
                 sessionStorage.removeItem('panzer_active_session');
+                localStorage.removeItem('panzer_has_ever_synced');
                 window.location.reload();
             },
             overlayBg: "rgba(15, 23, 42, 0.98)",
@@ -356,9 +357,10 @@ export class PanzerSDK {
         const runWatchdogCheck = async (isImmediate = false) => {
             if (!('caches' in window) || this._isSyncing) return;
             
-            // 🛡️ SYNC / PRIMA INSTALLAZIONE
+            // 🛡️ SYNC / PRIMA INSTALLAZIONE.
             const isSessionActive = sessionStorage.getItem('panzer_active_session');
-            if (!this._sessionSynced && !isSessionActive) return;
+            const hasEverSynced = localStorage.getItem('panzer_has_ever_synced');
+            if (!this._sessionSynced && !isSessionActive && !hasEverSynced) return;
 
             try {
                 // 🔎🗄️ Cerca cache attiva nel browser.
@@ -520,6 +522,7 @@ export class PanzerSDK {
                     if (this._syncTimeoutTimer) clearTimeout(this._syncTimeoutTimer);
                     this._sessionSynced = true;
                     sessionStorage.setItem('panzer_active_session', 'true');
+                    localStorage.setItem('panzer_has_ever_synced', 'true');
                     this._isSyncing = false;
                     this.onLogMessage('success', '✅🗄️ Sincronizzazione e cifratura Bunker completate dal 🪖 Service-Worker !');
                     this.onComplete(data.details || {});
@@ -606,6 +609,7 @@ export class PanzerSDK {
             
             this._sessionSynced = false;
             sessionStorage.removeItem('panzer_active_session');
+            localStorage.removeItem('panzer_has_ever_synced');
             
             const keys = await caches.keys();
             await Promise.all(keys.map(key => caches.delete(key)));
