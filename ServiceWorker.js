@@ -283,7 +283,7 @@ const deepFreeze = (obj) => {
 Object.freeze(deepFreeze);
 deepFreeze(CONFIG);
 
-/**
+/** v2.0
  * 🛡📨️ Validatore e Sanitizzatore flessibile per gli asset passati via IPC.
  * Permette qualsiasi estensione pur garantendo l'isolamento nella root e la protezione anti-traversal.
  * @param {string} rawPath - Il percorso grezzo ricevuto dal client/SDK.
@@ -297,8 +297,9 @@ const validateAndSanitizeAssetPath = (rawPath) => {
     if (rawPath.includes('../') || rawPath.includes('..\\') || rawPath.includes('\0')) return null;
 
     try {
-        // 🌐 Controllo Same-Origin rigoroso (impedisce URL verso domini esterni / SSRF)
-        const resolved = new URL(rawPath, self.location.origin);
+        // 🌐 Controllo Same-Origin rigoroso e risoluzione basata su CONFIG.ROOT (previene errori sui path relativi)
+        const baseSafe = new URL(CONFIG.ROOT, self.location.origin).href;
+        const resolved = new URL(rawPath, baseSafe);
         if (resolved.origin !== self.location.origin) return null;
         
         const cleanPath = resolved.pathname.replace(/\/+/g, '/');
