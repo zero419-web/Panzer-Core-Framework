@@ -105,7 +105,7 @@ export class PanzerSDK {
             message: "Il watchdog di sicurezza <strong>PANZER SDK</strong> ha rilevato che la cache protetta o la stiva è stata eliminata o svuotata inaspettatamente.<br><br>Per ripristinare l'integrità dei dati della Pubblica Amministrazione, <strong>è necessario ricaricare e risincronizzare la stiva</strong>.",
             buttonText: "🔄 Ripristina e Ricarica Stiva",
             buttonAction: () => {
-                localStorage.removeItem('panzer_vault_synced');
+                sessionStorage.removeItem('panzer_active_session');
                 window.location.reload();
             },
             overlayBg: "rgba(15, 23, 42, 0.98)",
@@ -346,8 +346,8 @@ export class PanzerSDK {
         }
     }
 
-    /** v3.7
-     * 🐺 Watchdog: Controllo PWA integrità.
+    /** v4.0
+     * 🐺 Watchdog Wipe Cache.
      * @private
      */
     _initCacheWatchdog() {
@@ -356,19 +356,19 @@ export class PanzerSDK {
         const runWatchdogCheck = async (isImmediate = false) => {
             if (!('caches' in window) || this._isSyncing) return;
             
-            // 🛡️ CONTROLLO MARCATORE DI INSTALLAZIONE:
-            const isAppInstalled = localStorage.getItem('panzer_app_installed');
-            if (!isAppInstalled) return;
+            // 🛡️ SYNC / PRIMA INSTALLAZIONE
+            const isSessionActive = sessionStorage.getItem('panzer_active_session');
+            if (!this._sessionSynced && !isSessionActive) return;
 
             try {
-                // 🔎🗄️ Cerca la cache attiva nel browser
+                // 🔎🗄️ Cerca cache attiva nel browser.
                 const keys = await caches.keys();
                 let targetCacheName = keys.find(k => k.startsWith(this.cacheNamePrefix));
                 if (!targetCacheName) {
                     targetCacheName = keys.find(k => k.startsWith('PA_PANZER_ENGINE_v'));
                 }
 
-                // 🚧 Se la cache non c'è...
+                // 🚧 Se la cache è svanita...
                 if (!targetCacheName) {
                     throw new Error("Stiva Cache rimossa dal browser.");
                 }
@@ -376,9 +376,9 @@ export class PanzerSDK {
                 const cache = await caches.open(targetCacheName);
                 const cacheKeys = await cache.keys();
 
-                // 🛑 Se la cache ha 0 elementi.
+                // 🛑 Cache ha 0 elementi.
                 if (cacheKeys.length === 0) {
-                    throw new Error("Stiva vuota.");
+                    throw new Error("Stiva_vuota.");
                 }
 
                 // ✅ Tutto ok, azzera i fallimenti
@@ -386,12 +386,13 @@ export class PanzerSDK {
 
             } catch (e) {
                 this._watchdogFailures++;
-                this.onLogMessage('warn', `⚠️🐺 SDK: ⚠️🗄️ ( Tentativo ${this._watchdogFailures} / 3 ) -> [${e.message}]`);
+                this.onLogMessage('warn', `⚠️🐺 SDK: Anomalia ⚠️🗄 ️Retry (${this._watchdogFailures}/3) -> [${e.message}]`);
 
-                // 🚨 Se è un controllo immediato oppure raggiungiamo i 3 fallimenti...
+                // 🚨 Se è un controllo immediato oppure raggiungiamo i 3 fallimenti consecutivi
                 if (isImmediate || this._watchdogFailures >= 3) {
                     this.onLogMessage('error', `🚨🐺 SDK: Cancellazione stiva confermata -> [${e.message}]`);
-                    localStorage.removeItem('panzer_vault_synced');
+                    
+                    sessionStorage.removeItem('panzer_active_session');
                     this._sessionSynced = false;
                     this._isSyncing = false;
                     this._watchdogFailures = 0;
@@ -400,14 +401,13 @@ export class PanzerSDK {
                 }
             }
         };
-
         // ⏱️ 1. Controllo ogni 5s.
         this._watchdogInterval = setInterval(() => runWatchdogCheck(false), 5000);
 
-        // 👁️ 2. Risveglio al ritorno in primo piano
+        // 👁️ 2. Risveglio al ritorno in primo piano.
         document.addEventListener('visibilitychange', () => {
             if (document.visibilityState === 'visible') {
-                this.onLogMessage('info', '👁️ SDK: PWA attiva Verifica immediata 🗄️ stiva...');
+                this.onLogMessage('info', '👁️ SDK: PWA attiva. Verifica stiva...');
                 runWatchdogCheck(true);
             }
         });
@@ -519,8 +519,7 @@ export class PanzerSDK {
                 case 'SYNC_END':
                     if (this._syncTimeoutTimer) clearTimeout(this._syncTimeoutTimer);
                     this._sessionSynced = true;
-                    localStorage.setItem('panzer_vault_synced', 'true');
-                    localStorage.setItem('panzer_app_installed', 'true');
+                    sessionStorage.setItem('panzer_active_session', 'true');
                     this._isSyncing = false;
                     this.onLogMessage('success', '✅🗄️ Sincronizzazione e cifratura Bunker completate dal 🪖 Service-Worker !');
                     this.onComplete(data.details || {});
@@ -606,8 +605,7 @@ export class PanzerSDK {
             this.onLogMessage('warn', '🚨🗑️ SDK: Avvio purga volontaria e pulizia Cache Storage... 🗄️');
             
             this._sessionSynced = false;
-            localStorage.removeItem('panzer_vault_synced');
-            localStorage.removeItem('panzer_app_installed');
+            sessionStorage.removeItem('panzer_active_session');
             
             const keys = await caches.keys();
             await Promise.all(keys.map(key => caches.delete(key)));
