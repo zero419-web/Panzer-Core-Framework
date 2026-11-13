@@ -343,7 +343,7 @@ export class PanzerSDK {
         }
     }
 
-    /**
+    /** v2.0
      * 🐺 Inizializza il watchdog per il controllo periodico dell'integrità della cache.
      * @private
      */
@@ -356,10 +356,25 @@ export class PanzerSDK {
 
             try {
                 const keys = await caches.keys();
-                const hasPanzerCaches = keys.some(k => k.startsWith(this.cacheNamePrefix) || k.startsWith('PA_PANZER'));
                 
-                if (keys.length === 0 || !hasPanzerCaches) {
+                // 🛡️ Cerchiamo in modo specifico la cache principale del framework basata sul prefisso
+                const targetCacheName = keys.find(k => k.startsWith(this.cacheNamePrefix));
+                
+                let isStivaIntact = false;
+                if (targetCacheName) {
+                    const cache = await caches.open(targetCacheName);
+                    const cacheKeys = await cache.keys();
+                    // ℹ️ La stiva è davvero integra se la cache esiste e contiene almeno i file core essenziali (> 0)
+                    isStivaIntact = cacheKeys.length > 0;
+                }
+
+                // ❌ Se non esiste la cache principale o risulta completamente vuota/compromessa
+                if (!targetCacheName || !isStivaIntact) {
                     this.onLogMessage('error', '🚨🐺 SDK: Rilevata cancellazione inaspettata della stiva 🗄️ Cache Storage !');
+                    
+                    localStorage.removeItem('panzer_vault_synced');
+                    this._sessionSynced = false;
+                    
                     this._showCacheWipeBlocker();
                 }
             } catch (e) {
