@@ -53,6 +53,7 @@ export class PanzerSDK {
      */
     constructor(options = {}) {
         this._sessionSynced = false;
+        this._isSyncing = false;
         this.lastUiUpdate = 0;
         this._watchdogInterval = null;
 
@@ -343,13 +344,13 @@ export class PanzerSDK {
         }
     }
 
-    /** v2.0
+    /** v2.1
      * 🐺 Inizializza il watchdog per il controllo periodico dell'integrità della cache.
      * @private
      */
     _initCacheWatchdog() {
         this._watchdogInterval = setInterval(async () => {
-            if (!('caches' in window)) return;
+            if (!('caches' in window) || this._isSyncing) return;
             
             const isSyncedLocalStorage = localStorage.getItem('panzer_vault_synced');
             if (!this._sessionSynced && !isSyncedLocalStorage) return;
@@ -471,12 +472,15 @@ export class PanzerSDK {
 
                 case 'SYNC_END':
                     this._sessionSynced = true;
+                    localStorage.setItem('panzer_vault_synced', 'true');
+                    this._isSyncing = false;
                     this.onLogMessage('success', '✅🗄️ Sincronizzazione e cifratura Bunker completate dal 🪖 Service-Worker !');
                     this.onComplete(data.details || {});
                     this.lastUiUpdate = 0;
                     break;
 
                 case 'SYNC_RETRY':
+                    this._isSyncing = false;
                     this.onSyncRetry(data);
                     this.onLogMessage('warn', '⚠️🌐 SW: Rete assente o instabile. In attesa di riconnessione... 🔄');
                     this.lastUiUpdate = 0;
