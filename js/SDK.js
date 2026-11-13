@@ -53,6 +53,7 @@ export class PanzerSDK {
      */
     constructor(options = {}) {
         this._sessionSynced = false;
+        this._isVaultArmed = localStorage.getItem('panzer_has_ever_synced') === 'true';
         this._isSyncing = false;
         this.lastUiUpdate = 0;
         this._watchdogInterval = null;
@@ -107,6 +108,7 @@ export class PanzerSDK {
             buttonAction: () => {
                 sessionStorage.removeItem('panzer_active_session');
                 localStorage.removeItem('panzer_has_ever_synced');
+                this._isVaultArmed = false;
                 window.location.reload();
             },
             overlayBg: "rgba(15, 23, 42, 0.98)",
@@ -125,7 +127,10 @@ export class PanzerSDK {
             title: "Purga Volontaria Completata",
             message: "Hai eseguito con successo la pulizia volontaria della stiva e della cache protetta.<br><br>Il sistema è pronto per un nuovo avvio. <strong>Ricarica la pagina</strong> per rigenerare il Service Worker e ripartire da zero.",
             buttonText: "🔄 Ricarica e Riavvia Stiva",
-            buttonAction: () => window.location.reload(),
+            buttonAction: () => {
+                this._isVaultArmed = false;
+                window.location.reload();
+            },
             overlayBg: "rgba(15, 23, 42, 0.98)",
             cardBg: "#1e293b",
             borderColor: "#334155",
@@ -360,7 +365,7 @@ export class PanzerSDK {
             // 🛡️ SYNC / PRIMA INSTALLAZIONE.
             const isSessionActive = sessionStorage.getItem('panzer_active_session');
             const hasEverSynced = localStorage.getItem('panzer_has_ever_synced');
-            if (!this._sessionSynced && !isSessionActive && !hasEverSynced) return;
+            if (!this._sessionSynced && !this._isVaultArmed && !isSessionActive && !hasEverSynced) return;
 
             try {
                 // 🔎🗄️ Cerca cache attiva nel browser.
@@ -521,6 +526,7 @@ export class PanzerSDK {
                 case 'SYNC_END':
                     if (this._syncTimeoutTimer) clearTimeout(this._syncTimeoutTimer);
                     this._sessionSynced = true;
+                    this._isVaultArmed = true;
                     sessionStorage.setItem('panzer_active_session', 'true');
                     localStorage.setItem('panzer_has_ever_synced', 'true');
                     this._isSyncing = false;
@@ -600,14 +606,15 @@ export class PanzerSDK {
     }
 
     /**
-     * 🗑️ Esegue la purga volontaria della stiva e pulisce il Cache Storage.
+     * 🗑️ Esegue la purga volontaria della stiva.
      */
     async purgeVault() {
         if (!('caches' in window)) return;
         try {
-            this.onLogMessage('warn', '🚨🗑️ SDK: Avvio purga volontaria e pulizia Cache Storage... 🗄️');
+            this.onLogMessage('warn', '🚨🗑️ SDK: Avvio purga volontaria e pulizia Cache... 🗄️');
             
             this._sessionSynced = false;
+            this._isVaultArmed = false;
             sessionStorage.removeItem('panzer_active_session');
             localStorage.removeItem('panzer_has_ever_synced');
             
