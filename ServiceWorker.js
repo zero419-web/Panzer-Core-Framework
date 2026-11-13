@@ -2320,12 +2320,12 @@ self.addEventListener('fetch', (event) => {
 			            if (isImageRequest && !isHTML && !isExcluded && globalPlaceholderBlob ) {
 			                console.info(`🖼️🩹 SW Placeholder: Emergenza -> ${finalPath}`);
 			                return new Response(globalPlaceholderBlob, {
-								status: 200,
+			                    status: 200,
 			                    headers: {
 			                        'Content-Type': placeholder.headers.get('Content-Type') || 'image/png',
-			                        'Content-Length': exactBufferP.byteLength.toString(),
+			                        'Content-Length': globalPlaceholderBlob.size.toString(),
 			                        'X-PWA-Source': 'Bunker-Placeholder'
-			                    }
+                    }
 			                });
 			            }
 			        } catch (err) { // 🔇
