@@ -4,12 +4,17 @@
 
 # 🏗️ **SDK** <br> ( ⚙️📦 *Software Development Kit* )
 > [!Important]
->   - 🔃 **Last Update :** `v2.3.2`
+>   - 🔃 **Last Update :** `v2.3.4`
 > 
 > - 🌀🧪 **E un PoC, `Proof of Concept`**
 > 
 > ⚙️ **SDK : NOVITÀ, BUG Fix & Altro...**
 >
+> - **📣 NOVITÀ v2.3.4 :** <br> `🪨 Hardening`
+>   - 🔒 **Immutabilità Totale tramite `❄️ Object.freeze` :**
+>     - 🛑 Sigillatura completa delle configurazioni dei modali di blocco (`incognitoBlocker`, `cacheWipeBlocker`, `purgeSuccessBlocker`) per prevenire manomissioni a runtime da script terzi o potenziali iniezioni.
+>     - 📦 Immutabilità dell'array dei Core Assets (`this.coreAssets`) e del payload IPC in uscita (`safePayload` nel metodo `initDB`).
+> ***
 > - **🪳 Bug Fix 🔄📊 GUI DashBoard :**
 >   - **📜 File :** `app.js` *v2.3.3*
 >     - `renderStorageTable()`, ottimizzare le prestazioni visive da non rallentare il browser su dispositivi datati, tramite uso di **DocumentFragment**.
@@ -101,6 +106,19 @@
 > 
 ---
 ## 📣⚙️🪖 NOVITÀ & BUG Fix & Altro...
+- **🪖 NOVITÀ v7.9.8+ :** <br> `🪨 Hardening`
+    - 🛡️ **Validazione Ingressi IPC rigorosa (`validateAndSanitizeAssetPath`) :**
+       - 🌐 **Same-Origin Check:** Controllo stringente per azzerare qualsiasi rischio di Server-Side Request Forgery ( *SSRF* ) verso domini esterni.
+       - 🛑 **Anti-Path Traversal:** Blocco tassativo e preventivo di sequenze di risalita directory (`../`, `..\`, `\0`).
+
+    - 🛑 **Protezione Anti-DoS & Memory Exhaustion :**
+       - Introduzione di un tetto massimo rigoroso (`MAX_ALLOWED_ASSETS = 500`) sul numero di risorse accettate dal manifesto e dai core assets.
+
+    - 💻 **Dashboard Client Hardening (`app.js`) :**
+       - 🧹 **Sanitizzazione Input di Ricerca:** Pulizia attiva della stringa `filterQuery` mediante rimozione di caratteri di controllo ASCII invisibili (`[\u0000-\u001F\u007F-\u009F]`).
+
+       - 🔒 **Rendering Tabella Sicuro (`renderStorageTable`):** Sostituzione dell'interpolazione `innerHTML` con elementi DOM nativi (`document.createElement`) e `textContent` per eliminare alla radice ogni rischio di DOM-based XSS, mantenendo inalterate le performance del `DocumentFragment`.
+
 - **🪖 NOVITÀ v7.9.7+ :** <br> `🐛 BUG Fix`
     - 🪳 **Bug Fixed : `Evento Fetch` Del SW ( ⚙️🪖 ),**
        - 🌐 **NetWorkFirst**
