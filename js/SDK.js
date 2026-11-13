@@ -155,7 +155,9 @@ export class PanzerSDK {
      */
     init() {
         this._registerSW();
-        this.cacheNamePrefix = this._detectActiveCacheVersion();
+        this._detectActiveCacheVersion().then(detected => {
+            if (detected) this.cacheNamePrefix = detected;
+        });
         this._setupMessageBridge();
         this._setupNetworkListeners();
         this.initPwaEnvironmentCheck(this.checkTimeout);
@@ -455,6 +457,7 @@ export class PanzerSDK {
 
             switch (data.type) {
                 case 'SYNC_START':
+                    this._isSyncing = true;
                     this.onSyncStart({ total: data.total || 0 });
                     this.onLogMessage('sync', '🚀 SW: Sincronizzazione e cifratura Bunker avviate...');
                     break;
