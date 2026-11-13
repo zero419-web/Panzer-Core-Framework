@@ -1,5 +1,5 @@
 /**
- * ⚙️🪖🛡️ PanzerSDK - v2.3.4
+ * ⚙️🪖🛡️ PanzerSDK - v2.3.4.1
  * 
  * * 👤 Autore: Valentino Aglianó
  * Perito Informatico / Idoneo ASMEL 2025
@@ -346,11 +346,13 @@ export class PanzerSDK {
         }
     }
 
-        /** v2.4
+    /** v2.5
      * 🐺 Inizializza il watchdog per il controllo periodico dell'integrità della cache.
      * @private
      */
     _initCacheWatchdog() {
+        this._watchdogFailures = 0;
+
         this._watchdogInterval = setInterval(async () => {
             if (!('caches' in window) || this._isSyncing) return;
             
@@ -373,23 +375,34 @@ export class PanzerSDK {
                     isStivaIntact = cacheKeys.length > 0;
                 }
 
-                // ❌ Se la cache principale è sparita o è vuota, scatta il blocker anti-wipe
+                // ❌ Se la cache principale è sparita o è vuota, lancia l'eccezione
                 if (!targetCacheName || !isStivaIntact) {
                     throw new Error("Stiva Cache Storage assente o svuotata inaspettatamente.");
                 }
+
+                // ✅ Se il controllo va a buon fine, azzeriamo i fallimenti consecutivi
+                this._watchdogFailures = 0;
+
             } catch (e) {
-                // 🚨 QUALSIASI ERRORE FA SCATTARE IL BLOCCO DI SICUREZZA !
-                this.onLogMessage('error', `🚨🐺 SDK: Rilevata cancellazione o compromissione della stiva 🗄️ -> [${e.message}]`);
-                
-                localStorage.removeItem('panzer_vault_synced');
-                this._sessionSynced = false;
-                this._isSyncing = false;
-                
-                this._showCacheWipeBlocker();
+                // 🛡️ Incrementiamo il contatore dei fallimenti consecutivi per evitare falsi positivi da sovraccarico browser
+                this._watchdogFailures++;
+                this.onLogMessage('warn', `⚠️🐺 SDK: Anomalie rilevate nel controllo stiva (Tentativo ${this._watchdogFailures}/3) -> [${e.message}]`);
+
+                // 🚨 Solo dopo 3 riscontri negativi consecutivi confermiamo la compromissione
+                if (this._watchdogFailures >= 3) {
+                    this.onLogMessage('error', `🚨🐺 SDK: Rilevata cancellazione o compromissione della stiva 🗄️ dopo 3 conferme -> [${e.message}]`);
+                    
+                    localStorage.removeItem('panzer_vault_synced');
+                    this._sessionSynced = false;
+                    this._isSyncing = false;
+                    this._watchdogFailures = 0;
+                    
+                    this._showCacheWipeBlocker();
+                }
             }
         }, 5000);
     }
-
+    
     /**
      * 🚨 Mostra il blocker in caso di azzeramento anomalo della cache.
      * @private
