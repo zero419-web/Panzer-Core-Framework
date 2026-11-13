@@ -284,46 +284,6 @@ Object.freeze(deepFreeze);
 deepFreeze(CONFIG);
 
 /**
- * 🛡️ ZT-GUARD: Validatore e Sanitizzatore rigoroso per gli asset passati via IPC.
- * @param {string} rawPath - Il percorso grezzo ricevuto dal client/SDK.
- * @param {boolean} [isCore=false] - Se true, applica la whitelist severa delle estensioni di sistema.
- * @returns {string|null} Il percorso normalizzato e sicuro, oppure null se la validazione fallisce.
- */
-const validateAndSanitizeAssetPath = (rawPath, isCore = false) => {
-    if (!rawPath || typeof rawPath !== 'string') return null;
-    if (rawPath.length > (CONFIG.MAX_PATH_LENGTH || 400)) return null;
-    
-    // 🛑 Blocco tentativi di Path Traversal o injection
-    if (rawPath.includes('../') || rawPath.includes('..\\') || rawPath.includes('\0')) return null;
-
-    try {
-        // 🌐 Controllo Same-Origin rigoroso (previene SSRF verso domini esterni)
-        const resolved = new URL(rawPath, self.location.origin);
-        if (resolved.origin !== self.location.origin) return null;
-        
-        const cleanPath = resolved.pathname.replace(/\/+/g, '/');
-        const rootNormalized = CONFIG.ROOT.replace(/\/+/g, '/');
-        
-        // Il percorso deve tassativamente risiedere all'interno della root dello scope
-        if (!cleanPath.startsWith(rootNormalized)) return null;
-
-        // Se si tratta di un Core Asset critico, applichiamo una whitelist di estensioni sicure
-        if (isCore) {
-            const allowedCoreExts = ['.html', '.js', '.css', '.json', '.webmanifest', '.png', '.svg', '/'];
-            const lowerPath = cleanPath.toLowerCase();
-            const isRoot = lowerPath.endsWith('/') || lowerPath === rootNormalized || lowerPath === rootNormalized + '/';
-            const hasValidExt = allowedCoreExts.some(ext => ext.startsWith('.') ? lowerPath.endsWith(ext) : false);
-            if (!isRoot && !hasValidExt) return null;
-        }
-
-        return cleanPath;
-    } catch (e) {
-        return null;
-    }
-};
-Object.freeze(validateAndSanitizeAssetPath);
-
-/**
  * 🛡📨️ Validatore e Sanitizzatore flessibile per gli asset passati via IPC.
  * Permette qualsiasi estensione pur garantendo l'isolamento nella root e la protezione anti-traversal.
  * @param {string} rawPath - Il percorso grezzo ricevuto dal client/SDK.
