@@ -11,8 +11,11 @@
 > ⚙️ **SDK : NOVITÀ, BUG Fix & Altro...**
 >
 > - **📣 NOVITÀ v2.3.4 :** <br> `🪨 Hardening`
+>
 >   - 🔒 **Immutabilità Totale tramite `❄️ Object.freeze` :**
+>
 >     - 🛑 Sigillatura completa delle configurazioni dei modali di blocco (`incognitoBlocker`, `cacheWipeBlocker`, `purgeSuccessBlocker`) per prevenire manomissioni a runtime da script terzi o potenziali iniezioni.
+>
 >     - 📦 Immutabilità dell'array dei Core Assets (`this.coreAssets`) e del payload IPC in uscita (`safePayload` nel metodo `initDB`).
 > ***
 > - **🪳 Bug Fix 🔄📊 GUI DashBoard :**
