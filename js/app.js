@@ -1,7 +1,7 @@
 /**
  * ⚙️⚡ App Controller 
  * Dashboard PA & Gestione UI
- * v2.3.3
+ * v2.3.4
  *
  * * 👤 Autore: Valentino Aglianó
  * Perito Informatico / Idoneo ASMEL 2025
@@ -11,8 +11,8 @@
 import { PanzerSDK } from './SDK.js';
 
 document.addEventListener('DOMContentLoaded', async () => {
-    // ⚙️📄 Funzione per definire i Core Assets
-    const getDefinedCoreAssets = () => [
+        // ⚙️📄 Funzione per definire i Core Assets (Sigillata con Object.freeze)
+    const getDefinedCoreAssets = () => Object.freeze([
         './',
         './index.html',
         './js/pdf_min.js',
@@ -23,9 +23,9 @@ document.addEventListener('DOMContentLoaded', async () => {
         './PA_PWA.webmanifest',
         './icon.png',
         './Res-PA-manifest.json'
-    ];
+    ]);
     
-    // 🔎🏷️🗄️ Prefisso identificativo della cache scannerizzato dall'SDK
+    // 🔎🏷️🗄️ Prefisso identificativo della cache scannerizzato dall'SDK (Immutabile)
     const getDefined_CacheNamePrefix = 'PA_PANZER_ENGINE_v';
 
     // 📜🛒 Il file del manifesto delle risorse della 🏛️ PA.
@@ -34,7 +34,10 @@ document.addEventListener('DOMContentLoaded', async () => {
     // 🎯 Percorsi per lo scope e il Service-Worker
     const getDefined_scope = '/Panzer-Core-Framework/';
     const getDefined_swPath = './ServiceWorker.js';
-    
+
+    // ❄️ Sigilliamo l'intero perimetro di configurazione globale del client
+    Object.freeze(getDefinedCoreAssets());
+
     // 🎯 DOM UI Elements
     const statusBadge = document.getElementById('PA-status-badge');
     const btnSync = document.getElementById('PA-btn-sync');
@@ -491,13 +494,17 @@ document.addEventListener('DOMContentLoaded', async () => {
 
         const allAssets = Array.from(assetMap.values());
 
-        const filterQuery = storageSearch.value.toLowerCase().trim();
-        const filteredAssets = allAssets.filter(asset => {
-            const url = (asset.url || '').toLowerCase();
-            const type = (asset.type || '').toLowerCase();
-            const category = (asset.category || '').toLowerCase();
-            return url.includes(filterQuery) || type.includes(filterQuery) || category.includes(filterQuery);
-        });
+    // 🛡️ Hardening: Catturiamo il valore grezzo e ripuliamolo dai caratteri di controllo o potenziali injection
+    const rawQuery = storageSearch.value || '';
+    const filterQuery = rawQuery.toLowerCase().replace(/[\u0000-\u001F\u007F-\u009F]/g, "").trim();
+
+    const filteredAssets = allAssets.filter(asset => {
+        const url = (asset.url || '').toLowerCase();
+        const type = (asset.type || '').toLowerCase();
+        const category = (asset.category || '').toLowerCase();
+        return url.includes(filterQuery) || type.includes(filterQuery) || category.includes(filterQuery);
+    });
+    
 
     // 🗑️ Svuotamento contenitore precedente.
         storageTbody.innerHTML = '';
@@ -522,37 +529,68 @@ document.addEventListener('DOMContentLoaded', async () => {
         );
 
     // 🏗️ Creazione contenitore virtuale.
-        const fragment = document.createDocumentFragment();
+const fragment = document.createDocumentFragment();
 
-        for (const { asset, isCached } of assetsWithCacheState) {
-            const tr = document.createElement('tr');
-            const sizeFormatted = asset.size ? (asset.size / 1024).toFixed(1) + ' KB' : 'N/A ( Core ⚙️📄 )';
-            const cacheBadge = isCached
-                ? `<span style="color: var(--accent-green); font-weight: bold;">🟢🗄️ Cifrato</span>`
-                : `<span style="color: var(--text-muted);">🔴🗄️ Non Presente</span>`;
+for (const { asset, isCached } of assetsWithCacheState) {
+    const tr = document.createElement('tr');
+    const sizeFormatted = asset.size ? (asset.size / 1024).toFixed(1) + ' KB' : 'N/A ( Core ⚙️📄 )';
+    
+    const cacheBadge = isCached
+        ? `<span style="color: var(--accent-green); font-weight: bold;">🟢🗄️ Cifrato</span>`
+        : `<span style="color: var(--text-muted);">🔴🗄️ Non Presente</span>`;
 
-            tr.innerHTML = `
-                <td><strong>${asset.url}</strong> <br><small style="color: var(--text-muted);">Cat: ${asset.category || 'N/A'}</small></td>
-                <td><code>${asset.type || 'unknown'}</code></td>
-                <td>${sizeFormatted}</td>
-                <td>${cacheBadge}</td>
-                <td>
-                    <div style="display: flex; gap: 6px; flex-wrap: wrap;">
-                        <button class="btn btn-sm btn-sandbox-trigger" data-url="${asset.url}" style="border-color: var(--accent-purple); color: var(--accent-purple); cursor: pointer;">🔒👁 Visore ❌💾</button>
-                    </div>
-                </td>
-            `;
+    const tdInfo = document.createElement('td');
+    const strongUrl = document.createElement('strong');
+    strongUrl.textContent = asset.url || '';
+    const br = document.createElement('br');
+    const smallCat = document.createElement('small');
+    smallCat.style.color = 'var(--text-muted)';
+    smallCat.textContent = `Cat: ${asset.category || 'N/A'}`;
+    tdInfo.appendChild(strongUrl);
+    tdInfo.appendChild(br);
+    tdInfo.appendChild(smallCat);
 
-        // 🪝 Aggancio listener sul tr Nel DOM.
-            const btnSandbox = tr.querySelector('.btn-sandbox-trigger');
-            if (btnSandbox) {
-                btnSandbox.addEventListener('click', (e) => {
-                    const targetUrl = e.currentTarget.getAttribute('data-url');
-                    openInSandbox(targetUrl, targetUrl.split('/').pop());
-                });
-            }
-            fragment.appendChild(tr);
-        }
+    const tdType = document.createElement('td');
+    const codeType = document.createElement('code');
+    codeType.textContent = asset.type || 'unknown';
+    tdType.appendChild(codeType);
+
+    const tdSize = document.createElement('td');
+    tdSize.textContent = sizeFormatted;
+
+    const tdCache = document.createElement('td');
+    tdCache.innerHTML = cacheBadge; // I badge di stato interni rimangono sicuri
+
+    const tdAction = document.createElement('td');
+    const actionDiv = document.createElement('div');
+    actionDiv.style.cssText = 'display: flex; gap: 6px; flex-wrap: wrap;';
+
+    const btnSandbox = document.createElement('button');
+    btnSandbox.className = 'btn btn-sm btn-sandbox-trigger';
+    btnSandbox.setAttribute('data-url', asset.url || '');
+    btnSandbox.style.cssText = 'border-color: var(--accent-purple); color: var(--accent-purple); cursor: pointer;';
+    btnSandbox.textContent = '🔒👁 Visore ❌💾';
+    
+    actionDiv.appendChild(btnSandbox);
+    tdAction.appendChild(actionDiv);
+
+    // Assemblaggio della riga
+    tr.appendChild(tdInfo);
+    tr.appendChild(tdType);
+    tr.appendChild(tdSize);
+    tr.appendChild(tdCache);
+    tr.appendChild(tdAction);
+
+// 🪝 Aggancio listener sul tr Nel DOM.
+    const attachedBtn = tr.querySelector('.btn-sandbox-trigger');
+    if (attachedBtn) {
+        attachedBtn.addEventListener('click', (e) => {
+            const targetUrl = e.currentTarget.getAttribute('data-url');
+            openInSandbox(targetUrl, targetUrl.split('/').pop());
+        });
+    }
+    fragment.appendChild(tr);
+}
 
         // 🚀 Singola operazione atomica sul DOM.
         storageTbody.appendChild(fragment);

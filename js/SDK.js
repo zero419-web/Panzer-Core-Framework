@@ -1,5 +1,5 @@
 /**
- * ⚙️🪖🛡️ PanzerSDK - v2.3.2
+ * ⚙️🪖🛡️ PanzerSDK - v2.3.4
  * 
  * * 👤 Autore: Valentino Aglianó
  * Perito Informatico / Idoneo ASMEL 2025
@@ -66,7 +66,7 @@ export class PanzerSDK {
         this.scope = options.scope || '/';
         this.cacheNamePrefix = options.cacheNamePrefix || 'PA_PANZER_ENGINE_v';
 
-        this.coreAssets = options.coreAssets || [
+        this.coreAssets = Object.freeze(options.coreAssets || [
             './',
             './index.html',
             './Res-PA-manifest.json',
@@ -74,13 +74,13 @@ export class PanzerSDK {
             './ServiceWorker.js',
             './js/SDK.js',
             './js/app.js'
-        ];
+        ]);
 
         this.checkTimeout = Math.max(options.checkTimeout || 7000, 7000);
         this.autoInit = options.autoInit !== undefined ? options.autoInit : true;
 
-        // 🛑 Configurazione blocker Anti-Incognito
-        this.incognitoBlocker = this._buildBlockerConfig(options.incognitoBlocker, {
+        // 🛑 Configurazione blocker Anti-Incognito sigillata
+        this.incognitoBlocker = Object.freeze(this._buildBlockerConfig(options.incognitoBlocker, {
             Icons: '🕵️⚠️',
             ID: 'panzer-incognito-blocker',
             title: "Modalità Incognito Rilevata",
@@ -94,10 +94,10 @@ export class PanzerSDK {
             textColor: "#94a3b8",
             buttonBg: "#3b82f6",
             buttonTextCol: "#ffffff"
-        });
+        }));
 
-        // 🛑 Config blocker Watchdog Cache Wipe.
-        this.cacheWipeBlocker = this._buildBlockerConfig(options.cacheWipeBlocker, {
+        // 🛑 Config blocker Watchdog Cache Wipe sigillata
+        this.cacheWipeBlocker = Object.freeze(this._buildBlockerConfig(options.cacheWipeBlocker, {
             Icons: '🚨🗄️',
             ID: 'panzer-cache-wipe-blocker',
             title: "Stiva Locale Cancellata o Compromessa",
@@ -114,10 +114,10 @@ export class PanzerSDK {
             textColor: "#94a3b8",
             buttonBg: "#2563eb",
             buttonTextCol: "#ffffff"
-        });
+        }));
         
-        // 🛑 Config blocker Purga Volontaria.
-        this.purgeSuccessBlocker = this._buildBlockerConfig(options.purgeSuccessBlocker, {
+        // 🛑 Config blocker Purga Volontaria sigillata
+        this.purgeSuccessBlocker = Object.freeze(this._buildBlockerConfig(options.purgeSuccessBlocker, {
             Icons: '✅🗑️',
             ID: 'panzer-purge-success-blocker',
             title: "Purga Volontaria Completata",
@@ -131,7 +131,7 @@ export class PanzerSDK {
             textColor: "#cbd5e1",
             buttonBg: "#2563eb",
             buttonTextCol: "#ffffff"
-        });
+        }));
 
         // ⚙️ Hook di callback UI e Telemetria
         this.onProgress = options.onProgress || (() => {});
@@ -201,14 +201,14 @@ export class PanzerSDK {
     }
 
     /**
-     * 🧱 Unifica le configurazioni personalizzate con quelle predefinite per i blocker (DRY).
+     * 🧱 Unifica le configurazioni personalizzate con quelle predefinite per i blocker (DRY) e le sigilla.
      * @private
      * @param {BlockerConfig} [userCfg={}] - 👤 Config utente
      * @param {BlockerConfig} defaultCfg - ⚙️ Config di default
-     * @returns {BlockerConfig} - 📦 Configurazione unificata
+     * @returns {Readonly<BlockerConfig>} - 📦 Configurazione unificata e immutabile
      */
     _buildBlockerConfig(userCfg = {}, defaultCfg) {
-        return {
+        return Object.freeze({
             Icons: userCfg.Icons || defaultCfg.Icons,
             ID: userCfg.blockerID || defaultCfg.ID,
             title: userCfg.title || defaultCfg.title,
@@ -222,7 +222,7 @@ export class PanzerSDK {
             textColor: userCfg.textColor || defaultCfg.textColor,
             buttonBg: userCfg.buttonBg || defaultCfg.buttonBg,
             buttonTextCol: userCfg.buttonTextCol || defaultCfg.buttonTextCol
-        };
+        });
     }
 
     /**
@@ -509,12 +509,15 @@ export class PanzerSDK {
                 return;
             }
 
-            navigator.serviceWorker.controller.postMessage({
+             // 🛡️ Payload IPC sigillato e strutturato
+            const safePayload = Object.freeze({
                 type: 'INIT_DB',
-                version: version,
+                version: String(version),
                 data: manifestData,
                 overrideCoreAssets: overrideCoreAssets || this.coreAssets
             });
+
+            navigator.serviceWorker.controller.postMessage(safePayload);
 
         } catch (err) {
             this.onLogMessage('error', `❌ 📨 Errore di comunicazione IPC con il 🪖 Service-Worker: ${err.message}`);
