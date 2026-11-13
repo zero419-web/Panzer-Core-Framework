@@ -346,8 +346,8 @@ export class PanzerSDK {
         }
     }
 
-    /** v3.0
-     * 🐺 Watchdog Controllo Integrità PWA.
+    /** v3.5
+     * 🐺 Watchdog: se la cache è vuota o assente, scatta il blocco della PWA.
      * @private
      */
     _initCacheWatchdog() {
@@ -360,42 +360,36 @@ export class PanzerSDK {
             if (!this._sessionSynced && !isSyncedLocalStorage) return;
 
             try {
-                // 🔎 trova la cache...
+                // 🔎🗄️ Cerca la cache attiva nel browser
                 const keys = await caches.keys();
                 let targetCacheName = keys.find(k => k.startsWith(this.cacheNamePrefix));
                 if (!targetCacheName) {
                     targetCacheName = keys.find(k => k.startsWith('PA_PANZER_ENGINE_v'));
                 }
 
+                // 🚧 Se il nome della cache è svanito del tutto
                 if (!targetCacheName) {
-                    throw new Error("Nessuna stiva cache trovata.");
+                    throw new Error("Stiva Cache Storage rimossa dal browser.");
                 }
 
                 const cache = await caches.open(targetCacheName);
+                const cacheKeys = await cache.keys();
 
-                // 🛡️ Chech assets...
-                let missingAssetsCount = 0;
-                for (const asset of this.coreAssets) {
-                    const match = await cache.match(asset);
-                    if (!match) {
-                        missingAssetsCount++;
-                    }
+                // 🛑 Se la cache ha 0 elementi, è stata piallata!
+                if (cacheKeys.length === 0) {
+                    throw new Error("Stiva_vuota.");
                 }
 
-                // 🚧 Se mancano troppi assets...
-                if (missingAssetsCount > 2) {
-                    throw new Error(`Pwa corrotta: ❌⚙️ File: ${missingAssetsCount}`);
-                }
-
-                // ✅ Tutto integro.
+                // ✅ Tutto ok, azzera i fallimenti
                 this._watchdogFailures = 0;
+
             } catch (e) {
                 this._watchdogFailures++;
-                this.onLogMessage('warn', `⚠️🐺 SDK: Anomalie rilevate nel controllo stiva (Tentativo ${this._watchdogFailures}/3) -> [${e.message}]`);
+                this.onLogMessage('warn', `⚠️🐺 SDK: Anomalia stiva ( Tentativo ${this._watchdogFailures} / 3 ) -> [${e.message}]`);
 
-                // 🚨 Conferma dopo 3 tentativi consecutivi...
+                // 🚨 Conferma dopo 3 tentativi consecutivi ed esegue il wipe blocker
                 if (this._watchdogFailures >= 3) {
-                    this.onLogMessage('error', `🚨🐺 SDK: Compromissione o svuotamento stiva confermato -> [${e.message}]`);
+                    this.onLogMessage('error', `🚨🐺 SDK: Cancellazione stiva confermata -> [${e.message}]`);
                     
                     localStorage.removeItem('panzer_vault_synced');
                     this._sessionSynced = false;
@@ -409,7 +403,7 @@ export class PanzerSDK {
         // ⏱️ Controllo periodico ogni 5s.
         this._watchdogInterval = setInterval(runWatchdogCheck, 5000);
     }
-    
+
     /**
      * 🚨 Mostra il blocker in caso di azzeramento anomalo della cache.
      * @private
