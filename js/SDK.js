@@ -346,8 +346,8 @@ export class PanzerSDK {
         }
     }
 
-    /** v2.6
-     * 🐺 Inizializza il watchdog per il controllo periodico e reattivo dell'integrità della cache.
+    /** v2.6.2
+     * 🐺 Inizializza il watchdog per il controllo periodico, reattivo e anti-zombie dell'integrità della cache.
      * @private
      */
     _initCacheWatchdog() {
@@ -384,11 +384,11 @@ export class PanzerSDK {
                 this._watchdogFailures = 0;
 
             } catch (e) {
-                // 🛡️ Incrementiamo il contatore dei fallimenti consecutivi per evitare falsi positivi da sovraccarico browser
+                // 🛡️ evitare falsi positivi da sovraccarico browser.
                 this._watchdogFailures++;
                 this.onLogMessage('warn', `⚠️🐺 SDK: Anomalie rilevate nel controllo stiva (Tentativo ${this._watchdogFailures}/3) -> [${e.message}]`);
 
-                // 🚨 Se è un controllo...
+                // 🚨 Se è un controllo immediato o si raggiungono i 3 tentativi
                 if (isImmediate || this._watchdogFailures >= 3) {
                     this.onLogMessage('error', `🚨🐺 SDK: Rilevata cancellazione o compromissione della stiva 🗄️ -> [${e.message}]`);
                     
@@ -401,17 +401,16 @@ export class PanzerSDK {
                 }
             }
         };
-        // ℹ️ Controllo periodico ogni 5s.
+        // ℹ️ 1. Controllo periodico ogni 5s.
         this._watchdogInterval = setInterval(() => runWatchdogCheck(false), 5000);
-        //👁️‍🗨️ Controllo immediato al ritorno in primo piano.
+        // 👁️‍🗨️ 2. Controllo immediato al ritorno in primo piano.
         document.addEventListener('visibilitychange', () => {
             if (document.visibilityState === 'visible') {
                 this.onLogMessage('info', '👁️ SDK: App tornata in primo piano. Verifica immediata 🔎🗄️ stiva...');
                 runWatchdogCheck(true);
             }
         });
-    }
-    // 3. 🛡️ TRAPPOLA ANTI-ZOMBIE PWA.
+        // 🛡️ 3. Trappola Anti-Zombie PWA.
         let lastInteractionCheck = 0;
         ['click', 'touchstart', 'pointerdown'].forEach(eventType => {
             document.addEventListener(eventType, () => {
