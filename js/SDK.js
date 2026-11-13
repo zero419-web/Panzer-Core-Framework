@@ -346,7 +346,7 @@ export class PanzerSDK {
         }
     }
 
-    /** v2.1
+    /** v2.3
      * 🐺 Inizializza il watchdog per il controllo periodico dell'integrità della cache.
      * @private
      */
@@ -360,23 +360,27 @@ export class PanzerSDK {
             try {
                 const keys = await caches.keys();
                 
-                // 🛡️ Cerchiamo in modo specifico la cache principale del framework basata sul prefisso
-                const targetCacheName = keys.find(k => k.startsWith(this.cacheNamePrefix));
+                // 🛡️ Ricerca della versione esatta con fallback.
+                let targetCacheName = keys.find(k => k.startsWith(this.cacheNamePrefix));
+                if (!targetCacheName) {
+                    targetCacheName = keys.find(k => k.startsWith('PA_PANZER_ENGINE_v'));
+                }
                 
                 let isStivaIntact = false;
                 if (targetCacheName) {
                     const cache = await caches.open(targetCacheName);
                     const cacheKeys = await cache.keys();
-                    // ℹ️ La stiva è davvero integra se la cache esiste e contiene almeno i file core essenziali (> 0)
+                    // ℹ️ La stiva è integra se la cache esiste e contiene elementi
                     isStivaIntact = cacheKeys.length > 0;
                 }
 
-                // ❌ Se non esiste la cache principale o risulta completamente vuota/compromessa
+                // ❌ Se la cache principale è sparita o è vuota, scatta il blocker anti-wipe
                 if (!targetCacheName || !isStivaIntact) {
                     this.onLogMessage('error', '🚨🐺 SDK: Rilevata cancellazione inaspettata della stiva 🗄️ Cache Storage !');
                     
                     localStorage.removeItem('panzer_vault_synced');
                     this._sessionSynced = false;
+                    this._isSyncing = false; // Reset di sicurezza
                     
                     this._showCacheWipeBlocker();
                 }
@@ -458,11 +462,27 @@ export class PanzerSDK {
             switch (data.type) {
                 case 'SYNC_START':
                     this._isSyncing = true;
+                    // ⏱️ Timeout.
+                    if (this._syncTimeoutTimer) clearTimeout(this._syncTimeoutTimer);
+                    this._syncTimeoutTimer = setTimeout(() => {
+                        this._isSyncing = false;
+                        this.onLogMessage('warn', '⚠️ SDK: Timeout di sicurezza sincronizzazione scaduto. Watchdog Wipecache riattivato.');
+                    }, 180000); // 3 minuti
+                    
                     this.onSyncStart({ total: data.total || 0 });
                     this.onLogMessage('sync', '🚀 SW: Sincronizzazione e cifratura Bunker avviate...');
                     break;
 
                 case 'SYNC_PROGRESS':
+                    // 🔄 HEARTBEAT.
+                    if (this._syncTimeoutTimer) {
+                        clearTimeout(this._syncTimeoutTimer);
+                        this._syncTimeoutTimer = setTimeout(() => {
+                            this._isSyncing = false;
+                            this.onLogMessage('warn', '⚠️ SDK: Timeout di sicurezza sincronizzazione scaduto. Watchdog Wipecache riattivato.');
+                        }, 180000); // +3m
+                    }
+
                     if (data.details) {
                         const percent = data.details.percent || 0;
                         const now = performance.now();
@@ -474,6 +494,7 @@ export class PanzerSDK {
                     break;
 
                 case 'SYNC_END':
+                    if (this._syncTimeoutTimer) clearTimeout(this._syncTimeoutTimer);
                     this._sessionSynced = true;
                     localStorage.setItem('panzer_vault_synced', 'true');
                     this._isSyncing = false;
@@ -483,6 +504,7 @@ export class PanzerSDK {
                     break;
 
                 case 'SYNC_RETRY':
+                    if (this._syncTimeoutTimer) clearTimeout(this._syncTimeoutTimer);
                     this._isSyncing = false;
                     this.onSyncRetry(data);
                     this.onLogMessage('warn', '⚠️🌐 SW: Rete assente o instabile. In attesa di riconnessione... 🔄');
