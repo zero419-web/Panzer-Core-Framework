@@ -11,6 +11,7 @@
 import { PanzerSDK } from './SDK.js';
 
 document.addEventListener('DOMContentLoaded', async () => {
+    'use strict';
         // ⚙️📄 Funzione per definire i Core Assets (Sigillata con Object.freeze)
     const getDefinedCoreAssets = () => Object.freeze([
         './',
@@ -94,23 +95,25 @@ document.addEventListener('DOMContentLoaded', async () => {
         statusBadge.className = `badge-status ${badgeClass}`;
     };
 
-    // 🔍 Helper per MIME Type
-    const detectMimeType = (url, headerType) => {
-        if (headerType && headerType !== 'application/octet-stream' && headerType !== 'text/plain') {
-            return headerType;
+    // 🔍❄️ Helper per MIME Type
+    const CoreUtils = Object.freeze({
+        detectMimeType(url, headerType) {
+            if (headerType && headerType !== 'application/octet-stream' && headerType !== 'text/plain') {
+                return headerType;
+            }
+            const ext = (url || '').split('.').pop().toLowerCase();
+            const mimeMap = Object.freeze({
+                'png': 'image/png',
+                'jpg': 'image/jpeg',
+                'jpeg': 'image/jpeg',
+                'webp': 'image/webp',
+                'gif': 'image/gif',
+                'svg': 'image/svg+xml',
+                'pdf': 'application/pdf'
+            });
+            return mimeMap[ext] || headerType || 'application/octet-stream';
         }
-        const ext = url.split('.').pop().toLowerCase();
-        const mimeMap = {
-            'png': 'image/png',
-            'jpg': 'image/jpeg',
-            'jpeg': 'image/jpeg',
-            'webp': 'image/webp',
-            'gif': 'image/gif',
-            'svg': 'image/svg+xml',
-            'pdf': 'application/pdf'
-        };
-        return mimeMap[ext] || headerType || 'application/octet-stream';
-    };
+    });
 
     // 🔭 Zoom dinamico universale
     const applyZoom = () => {
@@ -163,7 +166,7 @@ document.addEventListener('DOMContentLoaded', async () => {
             
             activeRawBuffer = await response.arrayBuffer();
             const rawMime = response.headers.get('Content-Type') || 'application/octet-stream';
-            const mimeType = detectMimeType(url, rawMime);
+            const mimeType = CoreUtils.detectMimeType(url, rawMime);
             const typedBlob = new Blob([activeRawBuffer], { type: mimeType });
 activeObjectUrl = URL.createObjectURL(typedBlob);
 
@@ -183,7 +186,7 @@ activeObjectUrl = URL.createObjectURL(typedBlob);
             const typedBlob = new Blob([blob], { type: mimeType });
             activeObjectUrl = URL.createObjectURL(typedBlob);
 
-            sandboxFrame.removeAttribute('sandbox');
+            sandboxFrame.setAttribute('sandbox', 'allow-scripts');
             sandboxFrame.src = 'about:blank';
 
             let renderedContentHtml = '';
@@ -336,7 +339,7 @@ activeObjectUrl = URL.createObjectURL(typedBlob);
     btnCloseSandbox.addEventListener('click', closeSandbox);
 
     // 🚀 Inizializzazione SDK con configurazione personalizzata dei blocker e trigger pulito su onOnline
-    const sdk = new PanzerSDK({
+    const sdk = new PanzerSDK(Object.freeze({
         swPath: getDefined_swPath,
         scope: getDefined_scope,
         coreAssets: getDefinedCoreAssets(),
@@ -474,7 +477,7 @@ activeObjectUrl = URL.createObjectURL(typedBlob);
         onError: (err) => {
             setStatusBadge('🚨📡📥 Errore Sync', 'badge-error');
         }
-    });
+    }));
 
     // 📊🔎🗄️ Rendering Tabella Ispezione Stiva.
     const renderStorageTable = async () => {
@@ -617,7 +620,16 @@ for (const { asset, isCached } of assetsWithCacheState) {
         const res = await fetch(getDefined_Manifest_Assets);
         if (!res.ok) throw new Error(`HTTP ${res.status}`);
 
-        manifestCache = await res.json();
+        // ❄️ Congelamento Manifest assets.
+        const deepFreeze = (obj) => {
+            Object.getOwnPropertyNames(obj).forEach(name => {
+                const prop = obj[name];
+                if (prop && typeof prop === 'object') deepFreeze(prop);
+            });
+            return Object.freeze(obj);
+        };
+        manifestCache = deepFreeze(await res.json());
+
         logToTerminal('success', `✅📜🛒 Manifesto caricato: ${manifestCache.ente} (v${manifestCache.version})`);
         
         totalCombinedCount = new Set([...getDefinedCoreAssets(), ...manifestCache.assets.map(a => a.url)]).size;
