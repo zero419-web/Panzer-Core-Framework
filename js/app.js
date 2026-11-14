@@ -116,7 +116,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         }
     });
 
-    // 🔭 Zoom dinamico universale...
+        // 🔭 Zoom dinamico universale...
     const applyZoom = () => {
         if (sandboxFrame && sandboxFrame.contentWindow) {
             sandboxFrame.contentWindow.postMessage({
@@ -148,9 +148,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     // 🔒 Visore Sandbox Protetto.
     const openInSandbox = async (url, fileName) => {
         try {
-            const isMobile = window.innerWidth <= 768;
-            currentZoom = isMobile ? 0.5 : 1.0;
-
+            currentZoom = 1.0;
             logToTerminal('vault', `🫙🔒 Apertura visore protetto per: ${fileName || url} ( Zoom: ${Math.round(currentZoom * 100)}% )`);
             
             // 🌐 Fetch della risorsa protetta
@@ -199,9 +197,9 @@ document.addEventListener('DOMContentLoaded', async () => {
                         <meta name="viewport" content="width=device-width, initial-scale=1.0">
                         <style>
                             * { margin:0; padding:0; box-sizing:border-box; user-select:none; -webkit-user-select:none; }
-                            body, html { width:100%; height:100%; background:#000; overflow:auto; display:flex; justify-content:center; align-items:center; }
-                            .container { width:100%; height:100%; display:flex; justify-content:center; align-items:center; padding:20px; }
-                            img { width: ${currentZoom * 100}%; max-width: none; height: auto; object-fit: contain; pointer-events: none; -webkit-user-drag: none; transition: width 0.15s ease; }
+                            body, html { width:100%; height:100%; background:#000; overflow:auto; }
+                            .container { min-width:100%; min-height:100%; display:flex; justify-content:center; align-items:center; padding:12px; }
+                            img { width:${currentZoom * 100}%; max-width:none; height:auto; object-fit:contain; pointer-events:none; -webkit-user-drag:none; display:block; transition: width 0.15s ease; }
                         </style>
                     </head>
                     <body oncontextmenu="return false;" ondragstart="return false;" onselectstart="return false;">
@@ -214,7 +212,7 @@ document.addEventListener('DOMContentLoaded', async () => {
                                     if (img) img.style.width = newWidth;
                                 }
                             });
-                        <\/script>
+                        </script>
                     </body>
                     </html>
                 `;
@@ -287,27 +285,28 @@ document.addEventListener('DOMContentLoaded', async () => {
                             * { margin:0; padding:0; box-sizing:border-box; user-select:none; -webkit-user-select:none; }
                             body, html { width:100%; height:100%; background:#0f172a; overflow:auto; -webkit-overflow-scrolling:touch; }
                             #pdf-wrapper { display:flex; flex-direction:column; align-items:center; width:100%; padding:8px; gap:6px; }
-                            img { width:${currentZoom * 100}%; height:auto; background:#fff; pointer-events:none; -webkit-user-drag:none; display:block; }
+                            .pdf-page { width:${currentZoom * 100}%; height:auto; background:#fff; pointer-events:none; -webkit-user-drag:none; display:block; transition: width 0.15s ease; }
                         </style>
                     </head>
                     <body oncontextmenu="return false;" ondragstart="return false;" onselectstart="return false;">
                         <div id="pdf-wrapper">
-                            ${imagesHtmlList}
+                            ${imagesHtmlList.replace(/<img /g, '<img class="pdf-page" ')}
                         </div>
                         <script>
                             window.addEventListener('message', (e) => {
                                 if (e.data && e.data.type === 'PANZER_ZOOM') {
                                     const newWidth = (e.data.zoom * 100) + '%';
-                                    document.querySelectorAll('img').forEach(img => {
+                                    document.querySelectorAll('.pdf-page').forEach(img => {
                                         img.style.width = newWidth;
                                     });
                                 }
                             });
-                        <\/script>
+                        </script>
                     </body>
                     </html>
                 `;
             } else {
+                // 🛡️ Fallback other typefile...
                 const bytes = new Uint8Array(activeRawBuffer);
                 let binary = '';
                 const chunkSize = 8192;
@@ -317,7 +316,35 @@ document.addEventListener('DOMContentLoaded', async () => {
                 }
                 const base64Data = btoa(binary);
                 const dataUrl = `data:${mimeType};base64,${base64Data}`;
-                renderedContentHtml = `<!DOCTYPE html><html><body style="margin:0; background:#111; display:flex; justify-content:center; align-items:center; height:100vh;"><object data="${dataUrl}" type="${mimeType}" width="100%" height="100%"></object></body></html>`;
+                
+                renderedContentHtml = `
+                    <!DOCTYPE html>
+                    <html>
+                    <head>
+                        <meta charset="UTF-8">
+                        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+                        <style>
+                            * { margin:0; padding:0; box-sizing:border-box; }
+                            body, html { width:100%; height:100%; background:#111; display:flex; justify-content:center; align-items:center; overflow:auto; }
+                            object { width:100%; height:100%; transition: transform 0.15s ease; transform: scale(${currentZoom}); }
+                        </style>
+                    </head>
+                    <body>
+                        <object data="${dataUrl}" type="${mimeType}" width="100%" height="100%"></object>
+                        <script>
+                            window.addEventListener('message', (e) => {
+                                if (e.data && e.data.type === 'PANZER_ZOOM') {
+                                    const obj = document.querySelector('object');
+                                    if (obj) {
+                                        obj.style.transform = 'scale(' + e.data.zoom + ')';
+                                        obj.style.transformOrigin = 'center center';
+                                    }
+                                }
+                            });
+                        </script>
+                    </body>
+                    </html>
+                `;
             }
 
             // 🫙 Incapsulamento pulito.
