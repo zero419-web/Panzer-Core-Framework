@@ -1,7 +1,7 @@
 /**
  * ⚙️⚡ App Controller 
  * Dashboard PA & Gestione UI
- * v2.3.6.5
+ * v2.3.6.6
  *
  * * 👤 Autore: Valentino Aglianó
  * Perito Informatico / Idoneo ASMEL 2025
@@ -154,13 +154,15 @@ document.addEventListener('DOMContentLoaded', async () => {
     });
 
     // 🔒 Visore Sandbox Protetto.
+    let activeViewerBlobUrl = null;
     const openInSandbox = async (url, fileName) => {
         try {
             const isMobile = window.innerWidth <= 768;
             currentZoom = isMobile ? 0.5 : 1.0;
 
-            logToTerminal('vault', `🫙🔒 Apertura visore protetto per: ${fileName || url} (Zoom iniziale: ${Math.round(currentZoom * 100)}%)`);
+            logToTerminal('vault', `🫙🔒 Apertura visore protetto per: ${fileName || url} (Zoom: ${Math.round(currentZoom * 100)}%)`);
             
+            // Fetch parallelo.
             const [response, pdfLibRes] = await Promise.all([
                 fetch(url),
                 fetch('js/pdf_min.js')
@@ -169,7 +171,7 @@ document.addEventListener('DOMContentLoaded', async () => {
             if (!response || !response.ok) throw new Error(`HTTP ${response?.status || 'Risorsa irreperibile'}`);
             if (!pdfLibRes || !pdfLibRes.ok) throw new Error(`Impossibile prelevare la libreria pdf_min.js`);
 
-            const pdfLibCode = await pdfLibRes.text();
+            const pdfLibText = await pdfLibRes.text();
             activeRawBuffer = await response.arrayBuffer();
             const rawMime = response.headers.get('Content-Type') || 'application/octet-stream';
             const mimeType = CoreUtils.detectMimeType(url, rawMime);
@@ -187,6 +189,10 @@ document.addEventListener('DOMContentLoaded', async () => {
                 URL.revokeObjectURL(activeObjectUrl);
                 activeObjectUrl = null;
             }
+            if (activeViewerBlobUrl) {
+                URL.revokeObjectURL(activeViewerBlobUrl);
+                activeViewerBlobUrl = null;
+            }
 
             // 🛡️ Conversione Base64 a blocchi
             const bytes = new Uint8Array(activeRawBuffer);
@@ -198,32 +204,23 @@ document.addEventListener('DOMContentLoaded', async () => {
             }
             const base64Data = btoa(binary);
 
-            // 🔒 Sandbox Isolata.
-            sandboxFrame.setAttribute('sandbox', 'allow-scripts');
-            sandboxFrame.src = 'about:blank';
+            const pdfLibBlob = new Blob([pdfLibText], { type: 'application/javascript' });
+            const pdfLibBlobUrl = URL.createObjectURL(pdfLibBlob);
 
-            let renderedContentHtml = '';
+            let viewerHtml = '';
 
             if (mimeType.startsWith('image/')) {
                 const dataUrl = `data:${mimeType};base64,${base64Data}`;
-                renderedContentHtml = `
+                viewerHtml = `
                     <!DOCTYPE html>
                     <html>
                     <head>
                         <meta charset="UTF-8">
                         <style>
-                            * { margin:0; padding:0; box-sizing:border-box; user-select:none; -webkit-user-select:none; -webkit-touch-callout:none; }
-                            body, html { width:100%; height:100%; background:#000; overflow:auto; -webkit-overflow-scrolling:touch; display:flex; justify-content:center; align-items:center; }
+                            * { margin:0; padding:0; box-sizing:border-box; user-select:none; -webkit-user-select:none; }
+                            body, html { width:100%; height:100%; background:#000; overflow:auto; display:flex; justify-content:center; align-items:center; }
                             .container { width:100%; height:100%; display:flex; justify-content:center; align-items:center; padding:20px; }
-                            img { 
-                                max-width: 100%; 
-                                height: auto; 
-                                object-fit: contain; 
-                                pointer-events: none;
-                                -webkit-user-drag: none; 
-                                transform: scale(${currentZoom});
-                                transition: transform 0.15s ease;
-                            }
+                            img { max-width: 100%; height: auto; object-fit: contain; pointer-events: none; -webkit-user-drag: none; transform: scale(${currentZoom}); transition: transform 0.15s ease; }
                         </style>
                     </head>
                     <body oncontextmenu="return false;" ondragstart="return false;" onselectstart="return false;">
@@ -234,49 +231,29 @@ document.addEventListener('DOMContentLoaded', async () => {
                     </html>
                 `;
             } else if (mimeType.includes('pdf')) {
-                renderedContentHtml = `
+                viewerHtml = `
                     <!DOCTYPE html>
                     <html>
                     <head>
                         <meta charset="UTF-8">
                         <meta name="viewport" content="width=device-width, initial-scale=1.0">
                         <style>
-                            * { margin:0; padding:0; box-sizing:border-box; user-select:none; -webkit-user-select:none; -webkit-touch-callout:none; }
+                            * { margin:0; padding:0; box-sizing:border-box; user-select:none; -webkit-user-select:none; }
                             body, html { width:100%; height:100%; background:#0f172a; overflow:auto; -webkit-overflow-scrolling:touch; }
                             #pdf-wrapper { display:flex; flex-direction:column; align-items:center; padding:20px 10px; min-width:100%; width:max-content; margin:0 auto; gap:15px; }
-                            canvas { max-width:100%; height:auto; box-shadow:0 4px 20px rgba(0,0,0,0.6); background:#fff; border-radius:6px; pointer-events:none; display:block; transition: width 0.15s ease, height 0.15s ease; }
-                            .loading { color:#f8fafc; display:flex; flex-direction:column; justify-content:center; align-items:center; height:100vh; font-family:sans-serif; gap:12px; padding: 20px; text-align: center; }
-                            .log-box { width: 100%; max-width: 450px; height: 180px; background: #020617; border: 1px solid #334155; border-radius: 6px; padding: 10px; font-family: monospace; font-size: 11px; color: #38bdf8; text-align: left; overflow-y: auto; }
+                            canvas { max-width:100%; height:auto; box-shadow:0 4px 20px rgba(0,0,0,0.6); background:#fff; border-radius:6px; pointer-events:none; display:block; }
+                            .loading { color:#f8fafc; display:flex; flex-direction:column; justify-content:center; align-items:center; height:100vh; font-family:sans-serif; gap:10px; }
                         </style>
-                        <script>
-                            ${pdfLibCode}
-                        </script>
+                        <script src="${pdfLibBlobUrl}"><\/script>
                     </head>
                     <body oncontextmenu="return false;" ondragstart="return false;" onselectstart="return false;">
-                        <div id="loading" class="loading">
-                            <div style="font-size: 16px; font-weight: bold;">⏳📄 Inizializzazione Visore PDF Protetto...</div>
-                            <div id="status-log" class="log-box">[0.0s] Sandbox creata, attesa esecuzione script...</div>
-                        </div>
+                        <div id="loading" class="loading"><div>⏳📄 PDF Loading...</div></div>
                         <div id="pdf-wrapper"></div>
                         <script>
-                            const statusLog = document.getElementById('status-log');
-                            function logStep(msg) {
-                                const timeStr = new Date().toLocaleTimeString();
-                                const line = document.createElement('div');
-                                line.textContent = '[' + timeStr + '] ' + msg;
-                                statusLog.appendChild(line);
-                                statusLog.scrollTop = statusLog.scrollHeight;
-                            }
-
                             async function renderSecurePDF() {
                                 try {
-                                    logStep("Controllo disponibilità oggetto pdfjsLib...");
-                                    if (typeof pdfjsLib === 'undefined') {
-                                        throw new Error("pdfjsLib non definito (Iniezione codice fallita).");
-                                    }
-                                    logStep("Libreria PDF.js caricata con successo.");
-
-                                    logStep("Inizio decodifica stringa Base64 in Array binario...");
+                                    if (typeof pdfjsLib === 'undefined') throw new Error("Libreria PDF.js non disponibile.");
+                                    
                                     const base64Str = "${base64Data}";
                                     const binaryString = atob(base64Str);
                                     const len = binaryString.length;
@@ -284,9 +261,7 @@ document.addEventListener('DOMContentLoaded', async () => {
                                     for (let i = 0; i < len; i++) {
                                         rawData[i] = binaryString.charCodeAt(i);
                                     }
-                                    logStep("Decodifica completata. Byte totali: " + rawData.length);
 
-                                    logStep("Avvio parser documento PDF (pdfjsLib.getDocument)...");
                                     const loadingTask = pdfjsLib.getDocument({
                                         data: rawData,
                                         disableWorker: true,
@@ -294,14 +269,11 @@ document.addEventListener('DOMContentLoaded', async () => {
                                     });
 
                                     const pdfDoc = await loadingTask.promise;
-                                    logStep("PDF analizzato! Pagine totali: " + pdfDoc.numPages);
-
                                     document.getElementById('loading').style.display = 'none';
                                     const container = document.getElementById('pdf-wrapper');
                                     const initialZoom = ${currentZoom};
 
                                     for (let pageNum = 1; pageNum <= pdfDoc.numPages; pageNum++) {
-                                        logStep("Rendering pagina " + pageNum + " di " + pdfDoc.numPages + "...");
                                         const page = await pdfDoc.getPage(pageNum);
                                         const viewport = page.getViewport({ scale: 1.5 });
                                         
@@ -321,16 +293,11 @@ document.addEventListener('DOMContentLoaded', async () => {
                                             canvasContext: context,
                                             viewport: viewport
                                         }).promise;
-                                        logStep("Pagina " + pageNum + " renderizzata con successo.");
                                     }
-                                    logStep("✅ Rendering completato!");
                                 } catch (err) {
-                                    console.error(err);
-                                    logStep("❌ ERRORE: " + err.message);
-                                    document.getElementById('loading').innerHTML = '<div style="color:#f87171; font-weight:bold;">❌ Errore critico nel rendering PDF:</div><div style="color:#cbd5e1; font-size:12px; margin-top:8px;">' + err.message + '</div>';
+                                    document.getElementById('loading').innerHTML = '<div style="color:#f87171; text-align:center; padding:20px;">❌ Errore rendering: ' + err.message + '</div>';
                                 }
                             }
-
                             window.addEventListener('DOMContentLoaded', renderSecurePDF);
                         <\/script>
                     </body>
@@ -338,7 +305,7 @@ document.addEventListener('DOMContentLoaded', async () => {
                 `;
             } else {
                 const dataUrl = `data:${mimeType};base64,${base64Data}`;
-                renderedContentHtml = `
+                viewerHtml = `
                     <!DOCTYPE html>
                     <html>
                     <head><meta charset="UTF-8"></head>
@@ -349,39 +316,44 @@ document.addEventListener('DOMContentLoaded', async () => {
                 `;
             }
 
-            setTimeout(() => {
-                sandboxFrame.srcdoc = renderedContentHtml;
-            }, 50);
+            // 🫙 Incapsulamento del viewer.
+            const viewerBlob = new Blob([viewerHtml], { type: 'text/html' });
+            activeViewerBlobUrl = URL.createObjectURL(viewerBlob);
+
+            sandboxFrame.setAttribute('sandbox', 'allow-scripts');
+            sandboxFrame.src = activeViewerBlobUrl;
 
             sandboxTitle.textContent = `🔎🔒 ${fileName || url}`;
             sandboxModal.classList.add('active');
 
-            logToTerminal('success', `🛡📦️ Documento Cifrato inviato al visore.`);
+            logToTerminal('success', `🛡📦️ Documento aperto nel visore protetto anti-download.`);
         } catch (err) {
             logToTerminal('error', `❌ 👁️‍🗨️Errore apertura visore: ${err.message}`);
         }
     };
 
     const closeSandbox = () => {
-    sandboxModal.classList.remove('active');
-    sandboxFrame.src = 'about:blank';
+        sandboxModal.classList.remove('active');
+        sandboxFrame.src = 'about:blank';
 
-    // 🛡️ RAM ZEROIZATION
-    if (activeRawBuffer) {
-        try {
-            const secureView = new Uint8Array(activeRawBuffer);
-            secureView.fill(0);
-            logToTerminal('vault', '🧹📄 Risorsa Distrutta dalla RAM !');
-        } catch (_) {}
-        activeRawBuffer = null;
-    }
-    if (activeObjectUrl) {
-        URL.revokeObjectURL(activeObjectUrl);
-        activeObjectUrl = null;
-    }
-    logToTerminal('info', '🔎🔒 Visore chiuso !');
-};
-
+        if (activeViewerBlobUrl) {
+            URL.revokeObjectURL(activeViewerBlobUrl);
+            activeViewerBlobUrl = null;
+        }
+        if (activeRawBuffer) {
+            try {
+                const secureView = new Uint8Array(activeRawBuffer);
+                secureView.fill(0);
+                logToTerminal('vault', '🧹📄 Risorsa Distrutta dalla RAM !');
+            } catch (_) {}
+            activeRawBuffer = null;
+        }
+        if (activeObjectUrl) {
+            URL.revokeObjectURL(activeObjectUrl);
+            activeObjectUrl = null;
+        }
+        logToTerminal('info', '🔎🔒 Visore chiuso !');
+    };
 
     btnCloseSandbox.addEventListener('click', closeSandbox);
 
