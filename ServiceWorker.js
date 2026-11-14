@@ -1,7 +1,7 @@
 /*
  * 📄 [ DISCIPLINARE TECNICO DI CONFORMITÀ ]
  *
- * ⚙️ CORE: 🪖 PANZER v7.11+ ( v2.x SDK ⛓️)
+ * ⚙️ CORE: 🪖 PANZER v7.9.11+ ( v2.x SDK ⛓️)
  *
  * 🛡️ REQUISITI OPERATIVI DI SISTEMA :
  *
@@ -70,8 +70,8 @@ const BASE_PATH = self.location.pathname.replace(/[^\/]+$/, "").replace(/\/+/g, 
 let globalAbortController = new AbortController();
 const CONFIG = {
     ROOT: BASE_PATH,
-        cacheName:      'PA_PANZER_ENGINE_v7.9.8',
-    userCacheName: 'user_PA_PANZER_ENGINE_v7.9.8',
+        cacheName:      'PA_PANZER_ENGINE_v7.9.11',
+    userCacheName: 'user_PA_PANZER_ENGINE_v7.9.11',
 	vaultCanaryText: 'KANARY_OK_PANZER_KEY',
 	MAX_PATH_LENGTH: 400,
     ALLOWED_SCHEMES: [
