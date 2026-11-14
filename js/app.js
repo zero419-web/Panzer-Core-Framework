@@ -1,7 +1,7 @@
 /**
  * ⚙️⚡ App Controller 
  * Dashboard PA & Gestione UI
- * v2.3.6.30
+ * v2.3.6.36
  *
  * * 👤 Autore: Valentino Aglianó
  * Perito Informatico / Idoneo ASMEL 2025
@@ -221,8 +221,8 @@ document.addEventListener('DOMContentLoaded', async () => {
                 // 🖼️📄 Rasterizzazione PDF con diagnostica passo-passo
                 logToTerminal('vault', '🔄 Conversione PDF in immagini...');
                 
-                if (typeof pdfjsLib === 'undefined') {
-                    logToTerminal('vault', '📥 Load async lib. pdf_min.js...');
+                                if (typeof pdfjsLib === 'undefined') {
+                    logToTerminal('vault', '📥 Caricamento asincrono libreria PDF.js...');
                     await new Promise((resolve, reject) => {
                         const scriptEl = document.createElement('script');
                         scriptEl.src = 'js/pdf_min.js';
@@ -233,15 +233,17 @@ document.addEventListener('DOMContentLoaded', async () => {
                 }
 
                 if (typeof pdfjsLib === 'undefined') {
-                    throw new Error("Lib pdf_min.js non caricata nel contesto principale.");
+                    throw new Error("Lib PDF_min.js non caricata nel contesto principale.");
                 }
 
-                logToTerminal('vault', '📥 Preparazione buffer binario...');
+                pdfjsLib.GlobalWorkerOptions.workerSrc = 'js/pdf_worker_min.js';
+
+                logToTerminal('vault', '📥 Preparazione buffer binario (Uint8Array)...');
                 const pdfDataBytes = new Uint8Array(activeRawBuffer);
 
                 const loadingTask = pdfjsLib.getDocument({
                     data: pdfDataBytes,
-                    disableWorker: true,
+                    disableWorker: false,
                     isEvalSupported: false
                 });
 
