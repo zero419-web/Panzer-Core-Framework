@@ -246,7 +246,9 @@ document.addEventListener('DOMContentLoaded', async () => {
                 for (let pageNum = 1; pageNum <= pdfDoc.numPages; pageNum++) {
                     //logToTerminal('vault', `📄 Elaborazione pagina ${pageNum} di ${pdfDoc.numPages}...`);
                     const page = await pdfDoc.getPage(pageNum);
-                    const viewport = page.getViewport({ scale: 1.5 });
+                    
+                    const scale = window.devicePixelRatio > 1 ? 1.5 : 1.2;
+                    const viewport = page.getViewport({ scale: scale });
                     
                     const canvas = document.createElement('canvas');
                     const context = canvas.getContext('2d');
@@ -276,7 +278,7 @@ document.addEventListener('DOMContentLoaded', async () => {
                             * { margin:0; padding:0; box-sizing:border-box; user-select:none; -webkit-user-select:none; }
                             body, html { width:100%; height:100%; background:#0f172a; overflow:auto; -webkit-overflow-scrolling:touch; }
                             #pdf-wrapper { display:flex; flex-direction:column; align-items:center; padding:10px 5px; min-width:100%; width:max-content; margin:0 auto; gap:6px; }
-                            img { max-width:100%; height:auto; box-shadow:0 4px 20px rgba(0,0,0,0.6); background:#fff; border-radius:4px; pointer-events:none; -webkit-user-drag:none; display:block; transition: transform 0.15s ease; transform: scale(${currentZoom}); }
+                            img { max-width:100%; height:auto; background:#fff; border-radius:0; box-shadow:none; pointer-events:none; -webkit-user-drag:none; display:block; transition: transform 0.15s ease; transform: scale(${currentZoom}); }
                         </style>
                     </head>
                     <body oncontextmenu="return false;" ondragstart="return false;" onselectstart="return false;">
@@ -313,7 +315,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         }
     };
 
-    // 🔒 Chiusura Visore.
+        // ️🔎🔒 Chiusura Visore.
     const closeSandbox = () => {
         sandboxModal.classList.remove('active');
         sandboxFrame.src = 'about:blank';
@@ -326,19 +328,23 @@ document.addEventListener('DOMContentLoaded', async () => {
             URL.revokeObjectURL(activeObjectUrl);
             activeObjectUrl = null;
         }
+
         if (activeRawBuffer) {
             try {
                 const secureView = new Uint8Array(activeRawBuffer);
                 secureView.fill(0);
-                logToTerminal('vault', '🧹📄 Buffer Eliminato dalla RAM.');
+                logToTerminal('vault', '🧹📄 Buffer Eliminato dalla RAM. ✅');
             } catch (err) {
-                console.error("Errore pulizia RAM:", err);
+                logToTerminal('error', `❌ 🧹 Errore pulizia RAM: ${err.message}`);
             }
             activeRawBuffer = null;
+        } else {
+            logToTerminal('vault', '⚠️ Visore: nessun buffer attivo trovato in RAM.');
         }
 
         logToTerminal('info', '🔎🔒 Visore protetto chiuso. ✅');
     };
+
 
     btnCloseSandbox.addEventListener('click', closeSandbox);
 
