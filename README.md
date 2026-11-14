@@ -137,7 +137,7 @@ Il sistema si compone di due livelli perfettamente integrati: il **Service Worke
 ## 📜 Changelog & Storico Versioni
 
 <details>
-<summary><strong>⚙️🪖 Espandi Changelog CORE PANZER ( v7.6+ → v7.9.11+ )</strong></summary>
+<summary><strong>⚙️🪖 Espandi Changelog <br> CORE PANZER ( v7.6+ → v7.9.11+ )</strong></summary>
 
 <br>
 
@@ -231,7 +231,13 @@ Il sistema si compone di due livelli perfettamente integrati: il **Service Worke
 <br>
 
 <details>
-<summary><strong>⚙️📦 Espandi Changelog SDK & DASHBOARD (v2.1 → v2.3.8)</strong></summary>
+<summary><strong>⚙️📦 Espandi Changelog <br> SDK & DASHBOARD ( v2.1 → v2.4.0 )</strong></summary>
+
+<br>
+
+### 📣 NOVITÀ v2.4.0 (`🔄📊 GUI DashBoard`)
+
+- 🔒 **Visore Sandbox Protetto (`openInSandbox`):** *Fix, apertura immediata del visore con loader di attesa del caricamento del PDF rasterizato.*
 
 <br>
 
