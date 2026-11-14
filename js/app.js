@@ -153,18 +153,18 @@ document.addEventListener('DOMContentLoaded', async () => {
         applyZoom();
     });
 
-    // 🔒 Visore Sandbox Protetto
+        // 🔒 Visore Sandbox Protetto.
     const openInSandbox = async (url, fileName) => {
         try {
             const isMobile = window.innerWidth <= 768;
             currentZoom = isMobile ? 0.5 : 1.0;
 
-            logToTerminal('vault', `🫙🔒 Apertura visore protetto per: ${fileName || url} (Zoom iniziale: ${Math.round(currentZoom * 100)}%)`);
+            logToTerminal('vault', `🫙🔒 Apertura visore protetto per: ${fileName || url} ( Zoom: ${Math.round(currentZoom * 100)}%)`);
             
             const response = await fetch(url);
             if (!response || !response.ok) throw new Error(`HTTP ${response?.status || 'Risorsa irreperibile'}`);
             
-            // 🛡️ Acquisizione del buffer grezzo in RAM per la bonifica successiva
+            // 🛡 ️Buffer grezzo in RAM.
             activeRawBuffer = await response.arrayBuffer();
             const rawMime = response.headers.get('Content-Type') || 'application/octet-stream';
             const mimeType = CoreUtils.detectMimeType(url, rawMime);
@@ -180,18 +180,26 @@ document.addEventListener('DOMContentLoaded', async () => {
 
             if (activeObjectUrl) {
                 URL.revokeObjectURL(activeObjectUrl);
+                activeObjectUrl = null;
             }
 
-            // 🛡️📦 Creazione sicura del Blob dal buffer raw e generazione Object URL
-            const typedBlob = new Blob([activeRawBuffer], { type: mimeType });
-            activeObjectUrl = URL.createObjectURL(typedBlob);
+            // 🛡️ Conversione in Base64.
+            const bytes = new Uint8Array(activeRawBuffer);
+            let binary = '';
+            const len = bytes.byteLength;
+            for (let i = 0; i < len; i++) {
+                binary += String.fromCharCode(bytes[i]);
+            }
+            const base64Data = btoa(binary);
 
+            // 🔒 Sandbox blindata.
             sandboxFrame.setAttribute('sandbox', 'allow-scripts');
             sandboxFrame.src = 'about:blank';
 
             let renderedContentHtml = '';
 
             if (mimeType.startsWith('image/')) {
+                const dataUrl = `data:${mimeType};base64,${base64Data}`;
                 renderedContentHtml = `
                     <!DOCTYPE html>
                     <html>
@@ -214,7 +222,7 @@ document.addEventListener('DOMContentLoaded', async () => {
                     </head>
                     <body oncontextmenu="return false;" ondragstart="return false;" onselectstart="return false;">
                         <div class="container">
-                            <img id="target-img" src="${activeObjectUrl}" alt="Immagine protetta" />
+                            <img id="target-img" src="${dataUrl}" alt="Immagine protetta" />
                         </div>
                     </body>
                     </html>
@@ -223,9 +231,6 @@ document.addEventListener('DOMContentLoaded', async () => {
                 const baseUrl = window.location.href.substring(0, window.location.href.lastIndexOf('/') + 1);
                 const PDFlib = baseUrl + 'js/pdf_min.js';
                 const PDFworker = baseUrl + 'js/pdf_worker_min.js';
-
-                // 🛡️ Convet ArrayBuffer...
-                const byteArray = Array.from(new Uint8Array(activeRawBuffer));
 
                 renderedContentHtml = `
                     <!DOCTYPE html>
@@ -252,8 +257,14 @@ document.addEventListener('DOMContentLoaded', async () => {
                                     
                                     pdfjsLib.GlobalWorkerOptions.workerSrc = '${PDFworker}';
 
-                                    // 🛡️ Ricostruiamo il TypedArray direttamente in memoria locale all'iframe
-                                    const rawData = new Uint8Array([${byteArray.toString()}]);
+                                    // Decodifica Base64 efficiente in Uint8Array all'interno dell'iframe
+                                    const base64Str = "${base64Data}";
+                                    const binaryString = atob(base64Str);
+                                    const len = binaryString.length;
+                                    const rawData = new Uint8Array(len);
+                                    for (let i = 0; i < len; i++) {
+                                        rawData[i] = binaryString.charCodeAt(i);
+                                    }
 
                                     const loadingTask = pdfjsLib.getDocument({
                                         data: rawData,
@@ -297,12 +308,13 @@ document.addEventListener('DOMContentLoaded', async () => {
                     </html>
                 `;
             } else {
+                const dataUrl = `data:${mimeType};base64,${base64Data}`;
                 renderedContentHtml = `
                     <!DOCTYPE html>
                     <html>
                     <head><meta charset="UTF-8"></head>
                     <body style="margin:0; background:#111; display:flex; justify-content:center; align-items:center; height:100vh;">
-                        <object data="${activeObjectUrl}" type="${mimeType}" width="100%" height="100%"></object>
+                        <object data="${dataUrl}" type="${mimeType}" width="100%" height="100%"></object>
                     </body>
                     </html>
                 `;
