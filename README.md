@@ -19,6 +19,10 @@
 >     - 🔄 **Resilienza a Prova di Riavvio :** Riconosce con precisione se la PWA è stata appena installata per la prima volta o se i suoi dati sono stati cancellati da terzi...
 >
 >     - 🚨 **Ripristino Guidato :** Nel rari casi in cui la stiva viene compromessa, il sistema interviene all'istante bloccando la navigazione e mostrando un comodo popup di avviso che guida l'utente a ripristinare e ricaricare la PWA con un solo click.
+>
+>   - **🪨 Hardening 🔄📊 GUI DashBoard :** </br> **📜 File :** `app.js` *v2.3.6*
+>
+>     - 👁️‍🗨️🔒 **Zero Tracce in Memoria :** Nel `visore protetto della Dashboard`, non appena `l'utente chiude l'anteprima` di un `documento o di un'immagine`, la **memoria temporanea utilizzata viene sovrascritta e azzerata fisicamente** all'istante ( `RAM Zeroization` 🧹 ), **impedendo che residui dei file sensibili rimangano leggibili sul dispositivo.**
 > ***
 > - **📣 NOVITÀ v2.3.4 :** <br> `🪨 Hardening`
 >
