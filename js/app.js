@@ -1,7 +1,7 @@
 /**
  * ⚙️⚡ App Controller 
  * Dashboard PA & Gestione UI
- * v2.3.9
+ * v2.4.0
  *
  * * 👤 Autore: Valentino Aglianó
  * Perito Informatico / Idoneo ASMEL 2025
@@ -218,13 +218,53 @@ document.addEventListener('DOMContentLoaded', async () => {
         sandboxFrame.src = activeViewerBlobUrl;
     };
     
-    // 🔒 Visore Sandbox Protetto
+    // 🔒 Visore Sandbox Protetto.
     const openInSandbox = async (url, fileName) => {
         try {
             currentZoom = 1.0;
             logToTerminal('vault', `🫙🔒 Apertura visore protetto per: ${fileName || url} ( Zoom: ${Math.round(currentZoom * 100)}% )`);
             
-            // 🌐 Fetch della risorsa protetta
+            // 🚀 APERTURA DEL MODALE...
+            sandboxTitle.textContent = `🔎🔒 ${fileName || url}`;
+            
+            if (btnZoomIn && btnZoomOut) {
+                btnZoomIn.disabled = true;
+                btnZoomOut.disabled = true;
+                btnZoomIn.style.opacity = '0.5';
+                btnZoomIn.style.cursor = 'not-allowed';
+                btnZoomOut.style.opacity = '0.5';
+                btnZoomOut.style.cursor = 'not-allowed';
+            }
+
+            if (activeObjectUrl) { URL.revokeObjectURL(activeObjectUrl); activeObjectUrl = null; }
+            if (activeViewerBlobUrl) { URL.revokeObjectURL(activeViewerBlobUrl); activeViewerBlobUrl = null; }
+
+            // ⏳ Schermata di caricamento...
+            const loadingHtml = `
+                <!DOCTYPE html>
+                <html>
+                <head>
+                    <meta charset="UTF-8">
+                    <style>
+                        body { background: #0f172a; color: #38bdf8; font-family: system-ui, -apple-system, sans-serif; display: flex; flex-direction: column; justify-content: center; align-items: center; height: 100vh; margin: 0; user-select: none; }
+                        .spinner { width: 44px; height: 44px; border: 4px solid rgba(56, 189, 248, 0.2); border-top-color: #38bdf8; border-radius: 50%; animation: spin 0.8s linear infinite; margin-bottom: 16px; }
+                        @keyframes spin { to { transform: rotate(360deg); } }
+                        p { font-size: 14px; letter-spacing: 0.5px; font-weight: 500; }
+                    </style>
+                </head>
+                <body>
+                    <div class="spinner"></div>
+                    <p>⏳📄 Loading...</p>
+                </body>
+                </html>
+            `;
+            
+            activeViewerBlobUrl = URL.createObjectURL(new Blob([loadingHtml], { type: 'text/html' }));
+            sandboxFrame.setAttribute('sandbox', 'allow-scripts');
+            sandboxFrame.src = activeViewerBlobUrl;
+            sandboxModal.classList.add('active');
+
+            // 🌐 FETCH DELLA RISORSA IN BACKGROUND
             const response = await fetch(url);
             if (!response || !response.ok) throw new Error(`HTTP ${response?.status || 'Risorsa irreperibile'}`);
 
@@ -232,23 +272,7 @@ document.addEventListener('DOMContentLoaded', async () => {
             const rawMime = response.headers.get('Content-Type') || 'application/octet-stream';
             activeMimeType = CoreUtils.detectMimeType(url, rawMime);
 
-            if (btnZoomIn && btnZoomOut) {
-                btnZoomIn.disabled = false;
-                btnZoomOut.disabled = false;
-                btnZoomIn.style.opacity = '1';
-                btnZoomIn.style.cursor = 'pointer';
-                btnZoomOut.style.opacity = '1';
-                btnZoomOut.style.cursor = 'pointer';
-            }
-
-            if (activeObjectUrl) { URL.revokeObjectURL(activeObjectUrl); activeObjectUrl = null; }
-            if (activeViewerBlobUrl) { URL.revokeObjectURL(activeViewerBlobUrl); activeViewerBlobUrl = null; }
-
-            // 🔒 Sandbox isolata
-            sandboxFrame.setAttribute('sandbox', 'allow-scripts');
-            sandboxFrame.src = 'about:blank';
-
-            // ℹ️ Dati in base al tipo di file
+            // ℹ️ ELABORAZIONE DEL CONTENUTO...
             if (activeMimeType.startsWith('image/')) {
                 const bytes = new Uint8Array(activeRawBuffer);
                 let binary = '';
@@ -324,14 +348,23 @@ document.addEventListener('DOMContentLoaded', async () => {
                 activeImagesHtmlList = null;
             }
 
-            // ⚙️ Montaggio del visore
+            // ✨  Montaggio Finale.
             renderAndMountSandbox();
 
             sandboxTitle.textContent = `🔎🔒 ${fileName || url}`;
-            sandboxModal.classList.add('active');
+
+            if (btnZoomIn && btnZoomOut) {
+                btnZoomIn.disabled = false;
+                btnZoomOut.disabled = false;
+                btnZoomIn.style.opacity = '1';
+                btnZoomIn.style.cursor = 'pointer';
+                btnZoomOut.style.opacity = '1';
+                btnZoomOut.style.cursor = 'pointer';
+            }
 
             logToTerminal('success', `🛡📦️ Documento Aperto nel visore protetto.`);
         } catch (err) {
+            sandboxModal.classList.remove('active');
             logToTerminal('error', `❌ 👁️‍🗨️Errore apertura visore: ${err.message}`);
         }
     };
