@@ -1,7 +1,7 @@
 /**
  * ⚙️⚡ App Controller 
  * Dashboard PA & Gestione UI
- * v2.3.4.1
+ * v2.3.6
  *
  * * 👤 Autore: Valentino Aglianó
  * Perito Informatico / Idoneo ASMEL 2025
@@ -68,6 +68,7 @@ document.addEventListener('DOMContentLoaded', async () => {
 
     let manifestCache = null;
     let activeObjectUrl = null;
+    let activeRawBuffer = null;
     let currentZoom = 1.0;
     let totalCombinedCount = 0;
 
@@ -159,10 +160,12 @@ document.addEventListener('DOMContentLoaded', async () => {
             
             const response = await fetch(url);
             if (!response || !response.ok) throw new Error(`HTTP ${response?.status || 'Risorsa irreperibile'}`);
-
-            const blob = await response.blob();
-            const rawMime = response.headers.get('Content-Type') || blob.type;
+            
+            activeRawBuffer = await response.arrayBuffer();
+            const rawMime = response.headers.get('Content-Type') || 'application/octet-stream';
             const mimeType = detectMimeType(url, rawMime);
+            const typedBlob = new Blob([activeRawBuffer], { type: mimeType });
+activeObjectUrl = URL.createObjectURL(typedBlob);
 
             if (btnZoomIn && btnZoomOut) {
                 btnZoomIn.disabled = false;
@@ -310,15 +313,25 @@ document.addEventListener('DOMContentLoaded', async () => {
     };
 
     const closeSandbox = () => {
-        sandboxModal.classList.remove('active');
-        sandboxFrame.src = 'about:blank';
+    sandboxModal.classList.remove('active');
+    sandboxFrame.src = 'about:blank';
 
-        if (activeObjectUrl) {
-            URL.revokeObjectURL(activeObjectUrl);
-            activeObjectUrl = null;
-        }
-        logToTerminal('info', '🔎🔒 Visore chiuso.');
-    };
+    // 🛡️ RAM ZEROIZATION
+    if (activeRawBuffer) {
+        try {
+            const secureView = new Uint8Array(activeRawBuffer);
+            secureView.fill(0);
+            logToTerminal('vault', '🧹📄 Risorsa Distrutta dalla RAM !');
+        } catch (_) {}
+        activeRawBuffer = null;
+    }
+    if (activeObjectUrl) {
+        URL.revokeObjectURL(activeObjectUrl);
+        activeObjectUrl = null;
+    }
+    logToTerminal('info', '🔎🔒 Visore chiuso !');
+};
+
 
     btnCloseSandbox.addEventListener('click', closeSandbox);
 
