@@ -222,7 +222,13 @@ document.addEventListener('DOMContentLoaded', async () => {
                 logToTerminal('vault', '🔄 Conversione PDF in immagini...');
                 
                 if (typeof pdfjsLib === 'undefined') {
-                    throw new Error("Lib PDF_min.js non caricata nel contesto principale.");
+                    logToTerminal('vault', '📥 Caricamento lib. pdf_min.js dalla stiva...');
+                    const libRes = await fetch('js/pdf_min.js');
+                    if (!libRes.ok) throw new Error("Impossibile prelevare la libreria pdf_min.js");
+                    const libText = await libRes.text();
+                    const scriptEl = document.createElement('script');
+                    scriptEl.textContent = libText;
+                    document.head.appendChild(scriptEl);
                 }
 
                 const loadingTask = pdfjsLib.getDocument({
