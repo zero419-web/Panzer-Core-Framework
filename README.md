@@ -141,6 +141,19 @@ Il sistema si compone di due livelli perfettamente integrati: il **Service Worke
 
 <br>
 
+### 🪖 NOVITÀ v7.9.9+ (`🪨 Hardening`)
+
+- 🛡️ **Validazione Forense Estesa al Magazzino (`userCache`) :**
+  - Il controllo rigoroso tramite `isValidBlob` è stato esteso simmetricamente anche alle risorse non cifrate estratte dal Magazzino, con eliminazione automatica (`cache.delete`) e rilascio di risposta `404` in caso di file corrotti o manomessi sul disco.
+
+- 🧹 **Bonifica RAM :**
+  - Rafforzato l'azzeramento aggressivo con zeri (`fill(0)`) su tutti i buffer binari e sulle copie `.slice()` dedicate alla compatibilità con 🧭 **Safari**, gestito in modo sicuro sia nei flussi di successo che nei blocchi d'errore (`catch`).
+
+- 🧠 **Mitigazione Heap per Stringhe (`TextDecoder`):**
+  - Introdotta la nullificazione immediata (`= null`) di tutte le stringhe temporanee generate durante le ispezioni forensi e all'interno dei blocchi `finally`, forzando il rilascio tempestivo dei riferimenti da parte del Garbage Collector di V8.
+
+<br>
+
 ### 🪖 NOVITÀ v7.9.8+ (`🪨 Hardening`)
 
 - 🛡️ **Validazione Ingressi IPC rigorosa 🚧 (`validateAndSanitizeAssetPath`):**
