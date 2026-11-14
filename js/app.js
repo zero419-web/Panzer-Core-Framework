@@ -1,7 +1,7 @@
 /**
  * ⚙️⚡ App Controller 
  * Dashboard PA & Gestione UI
- * v2.3.6.15
+ * v2.3.6.20
  *
  * * 👤 Autore: Valentino Aglianó
  * Perito Informatico / Idoneo ASMEL 2025
@@ -222,13 +222,18 @@ document.addEventListener('DOMContentLoaded', async () => {
                 logToTerminal('vault', '🔄 Conversione PDF in immagini...');
                 
                 if (typeof pdfjsLib === 'undefined') {
-                    logToTerminal('vault', '📥 Caricamento lib. pdf_min.js dalla stiva...');
-                    const libRes = await fetch('js/pdf_min.js');
-                    if (!libRes.ok) throw new Error("Impossibile prelevare la libreria pdf_min.js");
-                    const libText = await libRes.text();
-                    const scriptEl = document.createElement('script');
-                    scriptEl.textContent = libText;
-                    document.head.appendChild(scriptEl);
+                    logToTerminal('vault', '📥 Caricamento asincrono libreria PDF.js...');
+                    await new Promise((resolve, reject) => {
+                        const scriptEl = document.createElement('script');
+                        scriptEl.src = 'js/pdf_min.js';
+                        scriptEl.onload = resolve;
+                        scriptEl.onerror = () => reject(new Error("Impossibile caricare js/pdf_min.js"));
+                        document.head.appendChild(scriptEl);
+                    });
+                }
+
+                if (typeof pdfjsLib === 'undefined') {
+                    throw new Error("Lib PDF_min.js non caricata nel contesto principale.");
                 }
 
                 const loadingTask = pdfjsLib.getDocument({
