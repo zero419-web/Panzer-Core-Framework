@@ -1,7 +1,7 @@
 /**
  * ⚙️⚡ App Controller 
  * Dashboard PA & Gestione UI
- * v2.3.6.36
+ * v2.3.7
  *
  * * 👤 Autore: Valentino Aglianó
  * Perito Informatico / Idoneo ASMEL 2025
@@ -120,10 +120,12 @@ document.addEventListener('DOMContentLoaded', async () => {
     const applyZoom = () => {
         try {
             const iframeDoc = sandboxFrame.contentDocument || sandboxFrame.contentWindow.document;
-            const targetImg = iframeDoc.getElementById('target-img');
-            if (targetImg) {
-                targetImg.style.transform = `scale(${currentZoom})`;
-                logToTerminal('vault', `🔍🖼️ Zoom immagine: ${Math.round(currentZoom * 100)}%`);
+            const images = iframeDoc.querySelectorAll('img');
+            if (images.length > 0) {
+                images.forEach(img => {
+                    img.style.transform = `scale(${currentZoom})`;
+                });
+                logToTerminal('vault', `🔍📄 Zoom: ${Math.round(currentZoom * 100)}%`);
                 return;
             }
 
@@ -143,22 +145,11 @@ document.addEventListener('DOMContentLoaded', async () => {
             console.warn("❌🔎 Zoom non applicabile.", e);
         }
     };
-
-    btnZoomIn.addEventListener('click', () => {
-        currentZoom = Math.min(currentZoom + 0.25, 3.0);
-        applyZoom();
-    });
-
-    btnZoomOut.addEventListener('click', () => {
-        currentZoom = Math.max(currentZoom - 0.25, 0.25);
-        applyZoom();
-    });
     
     // 🔒 Visore Sandbox Protetto.
     const openInSandbox = async (url, fileName) => {
         try {
-            const isMobile = window.innerWidth <= 768;
-            currentZoom = isMobile ? 0.5 : 1.0;
+            currentZoom = 1.0;
 
             logToTerminal('vault', `🫙🔒 Apertura visore protetto per: ${fileName || url} ( Zoom: ${Math.round(currentZoom * 100)}% )`);
             
@@ -275,7 +266,7 @@ document.addEventListener('DOMContentLoaded', async () => {
                 }
 
                 logToTerminal('vault', '✅ Tutte le pagine convertite con successo.');
-
+                
                 renderedContentHtml = `
                     <!DOCTYPE html>
                     <html>
@@ -285,8 +276,8 @@ document.addEventListener('DOMContentLoaded', async () => {
                         <style>
                             * { margin:0; padding:0; box-sizing:border-box; user-select:none; -webkit-user-select:none; }
                             body, html { width:100%; height:100%; background:#0f172a; overflow:auto; -webkit-overflow-scrolling:touch; }
-                            #pdf-wrapper { display:flex; flex-direction:column; align-items:center; padding:20px 10px; min-width:100%; width:max-content; margin:0 auto; gap:15px; }
-                            img { max-width:100%; height:auto; box-shadow:0 4px 20px rgba(0,0,0,0.6); background:#fff; border-radius:6px; pointer-events:none; -webkit-user-drag:none; display:block; transition: transform 0.15s ease; transform: scale(${currentZoom}); }
+                            #pdf-wrapper { display:flex; flex-direction:column; align-items:center; padding:10px 5px; min-width:100%; width:max-content; margin:0 auto; gap:6px; }
+                            img { max-width:100%; height:auto; box-shadow:0 4px 20px rgba(0,0,0,0.6); background:#fff; border-radius:4px; pointer-events:none; -webkit-user-drag:none; display:block; transition: transform 0.15s ease; transform: scale(${currentZoom}); }
                         </style>
                     </head>
                     <body oncontextmenu="return false;" ondragstart="return false;" onselectstart="return false;">
