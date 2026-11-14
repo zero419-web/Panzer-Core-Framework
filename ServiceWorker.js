@@ -1,7 +1,7 @@
 /*
  * 📄 [ DISCIPLINARE TECNICO DI CONFORMITÀ ]
  *
- * ⚙️ CORE: 🪖 PANZER v7.9.8+ ( v2.x SDK ⛓️)
+ * ⚙️ CORE: 🪖 PANZER v7.9.9+ ( v2.x SDK ⛓️)
  *
  * 🛡️ REQUISITI OPERATIVI DI SISTEMA :
  *
@@ -415,8 +415,8 @@ const waitTillIdle = (minPauseMs = 50, timeoutMs = 8000) => {
 Object.freeze(waitTillIdle);
 
 /**
- * 🔬🧬 SW Forensics & DNA Check - v4.6
- *       ( 🪨 Hardened 🪖 v7.9.x+ ).
+ * 🔬🧬 SW Forensics & DNA Check - v4.8
+ *       ( 🪨 Hardened 🪖 v7.9.8+ ).
  *
  * @param {Response|Blob} input - Il flusso dati grezzo intercettato dal network o dal cache layer.
  * @param {string} contentType - Intestazione MIME-Type ufficiale dichiarata dal server.
@@ -473,7 +473,7 @@ const isValidBlob = async (input, contentType, expectedSize = 0, isEncrypted = f
         const timingNoiseMs = section?.timingNoiseMs || universal?.timingNoiseMs || 50;
 
         if (input instanceof Response) {
-            if (signal?.aborted) return result;
+            if (signal?.aborted || input.bodyUsed) return result;
             originalResponse = input;
             isResponseInput = true;
             encoding = input.headers.get('Content-Encoding');
@@ -527,7 +527,7 @@ const isValidBlob = async (input, contentType, expectedSize = 0, isEncrypted = f
             activeBuffers.push(headerBuffer);
 
             const headerBytes = new Uint8Array(headerBuffer);
-            const headerText = new TextDecoder('iso-8859-1', { fatal: false }).decode(headerBytes);
+            let headerText = new TextDecoder('iso-8859-1', { fatal: false }).decode(headerBytes);
             const headerHex = Array.from(headerBytes)
                 .map(b => b.toString(16).padStart(2, '0'))
                 .join('').toUpperCase();
@@ -539,14 +539,14 @@ const isValidBlob = async (input, contentType, expectedSize = 0, isEncrypted = f
 
             const activeSection = isPdfContext ? pdfConfig : section;
             const isSvg = subType === 'svg' || finalContentType.includes('svg');
-            const isRasterImage = ['image/png', 'image/webp', 'image/jpeg'].some(t => finalContentType.includes(t)) || ['png', 'webp', 'jpg', 'jpeg'].includes(subType);
+            const isRasterImage = ['image/png', 'image/webp', 'image/jpeg', 'image/avif'].some(t => finalContentType.includes(t)) || ['png', 'webp', 'jpg', 'jpeg', 'avif'].includes(subType);
 
             if (isSvg) {
                 const svgSliceSize = Math.min(blob.size, activeSection?.maxSvgBytes || 65536);
                 const svgBuffer = await blob.slice(0, svgSliceSize).arrayBuffer();
                 activeBuffers.push(svgBuffer);
                 const svgArray = new Uint8Array(svgBuffer);
-                const svgText = new TextDecoder('utf-8', { fatal: false }).decode(svgArray).toLowerCase();
+                let svgText = new TextDecoder('utf-8', { fatal: false }).decode(svgArray).toLowerCase();
 
                 const svgPats = activeSection?.svgPatterns || {};
                 const forbiddenTags = svgPats.forbiddenTags || /<(script|foreignobject|embed|object|iframe)[\s>]/i;
@@ -554,10 +554,12 @@ const isValidBlob = async (input, contentType, expectedSize = 0, isEncrypted = f
                 const forbiddenUri = svgPats.forbiddenUri || /(href|xlink:href)\s*=\s*["']?\s*(javascript:|data:text\/html)/i;
 
                 if (forbiddenTags.test(svgText) || forbiddenEvents.test(svgText) || forbiddenUri.test(svgText)) {
+                    svgText = null;
                     await injectTimingNoise(startForensicTime, timingNoiseMs);
                     console.warn("⚠️ SW Security: Blocco SVG con elementi/handler non sicuri", createCleanError("SvgMalwareDetected", "Tag o evento ostile rilevato nell'SVG"));
                     return result;
                 }
+                svgText = null;
             }
 
             if (isRasterImage) {
@@ -565,15 +567,15 @@ const isValidBlob = async (input, contentType, expectedSize = 0, isEncrypted = f
                 const sampleBuffer = await blob.slice(0, sampleSize).arrayBuffer();
                 activeBuffers.push(sampleBuffer);
                 const sampleArray = new Uint8Array(sampleBuffer);
-                const bodyText = new TextDecoder('utf-8').decode(sampleArray);
+                let bodyText = new TextDecoder('utf-8', { fatal: false }).decode(sampleArray).toLowerCase();
 
-                const rasterPats = activeSection?.rasterPatterns || {};
-                const executableSignatures = rasterPats.executableSignatures || /<script|javascript:|eval\(|function\s*\(/i;
-                if (executableSignatures.test(bodyText)) {
+                if (bodyText.includes('<script') || bodyText.includes('javascript:') || bodyText.includes('data:text/html')) {
+                    bodyText = null;
                     await injectTimingNoise(startForensicTime, timingNoiseMs);
                     console.warn("⚠️ SW Security: Blocco file poliglotta", createCleanError("PolyglotDetected", "Signature di codice eseguibile nei dati immagine"));
                     return result;
                 }
+                bodyText = null;
             }
 
             // 🐛️ File di testo, codice o senza magic numbers espliciti non devono mai essere controllati con le firme binarie o i PDF
@@ -588,7 +590,10 @@ const isValidBlob = async (input, contentType, expectedSize = 0, isEncrypted = f
             const supportedSignatures = isTextOrCode ? [] : (activeSection?.supportedSignatures || []);
 
             if (activeSection && (magicSource?.header?.length > 0 || supportedSignatures.length > 0)) {
-                if (signal?.aborted) return result;
+                if (signal?.aborted) {
+                    headerText = null;
+                    return result;
+                }
 
                 let hasValidSig = magicSource?.header?.some(sig => {
                     const cleanSig = sig.toUpperCase();
@@ -613,11 +618,13 @@ const isValidBlob = async (input, contentType, expectedSize = 0, isEncrypted = f
                 }
 
                 if (!hasValidSig && !isPdfContext && (magicSource?.header?.length > 0 || supportedSignatures.length > 0)) {
+                    headerText = null;
                     await injectTimingNoise(startForensicTime, timingNoiseMs);
                     console.warn("⚠️ SW Security: Firma header non valida", createCleanError("HeaderCheckFailed", "Mismatch firma binaria di testa"));
                     return result;
                 }
             }
+            headerText = null;
         }
 
         // 🛡️ FASE 2: ANALISI MARCATORI DI CODA...
@@ -635,7 +642,7 @@ const isValidBlob = async (input, contentType, expectedSize = 0, isEncrypted = f
             const tailHex = Array.from(tailBytes)
                 .map(b => b.toString(16).padStart(2, '0'))
                 .join('').toUpperCase();
-            const tailText = new TextDecoder('iso-8859-1', { fatal: false }).decode(tailBytes);
+            let tailText = new TextDecoder('iso-8859-1', { fatal: false }).decode(tailBytes);
 
             let hasValidFooter = false;
             if (magicSourceFooter?.footer?.length > 0) {
@@ -656,9 +663,12 @@ const isValidBlob = async (input, contentType, expectedSize = 0, isEncrypted = f
             }
 
             const headerBytesCheck = headerBuffer ? new Uint8Array(headerBuffer) : new Uint8Array(0);
-            const headerTextCheck = new TextDecoder('iso-8859-1', { fatal: false }).decode(headerBytesCheck);
+            let headerTextCheck = new TextDecoder('iso-8859-1', { fatal: false }).decode(headerBytesCheck);
             const headerHexCheck = Array.from(headerBytesCheck).map(b => b.toString(16).padStart(2, '0')).join('').toUpperCase();
             const isCadesWrapper = headerTextCheck.includes('smime.p7m') || headerHexCheck.startsWith('3082') || headerHexCheck.startsWith('3081');
+
+            headerTextCheck = null;
+            tailText = null;
 
             if (!hasValidFooter && !isCadesWrapper) {
                 await injectTimingNoise(startForensicTime, timingNoiseMs);
@@ -690,15 +700,16 @@ const isValidBlob = async (input, contentType, expectedSize = 0, isEncrypted = f
 
                 let chunkBuffer = null;
                 const chunkBuffersToClean = [];
+                let rawChunkText = null;
+                let pdfStructureOnly = "";
 
                 try {
                     const end = Math.min(offset + CHUNK_SIZE, blob.size);
                     chunkBuffer = await blob.slice(offset, end).arrayBuffer();
                     const chunkArray = new Uint8Array(chunkBuffer);
 
-                    const rawChunkText = new TextDecoder('iso-8859-1', { fatal: false }).decode(chunkArray);
+                    rawChunkText = new TextDecoder('iso-8859-1', { fatal: false }).decode(chunkArray);
 
-                    let pdfStructureOnly = "";
                     let searchPos = 0;
 
                     while (searchPos < rawChunkText.length) {
@@ -736,6 +747,8 @@ const isValidBlob = async (input, contentType, expectedSize = 0, isEncrypted = f
 
                     for (const pattern of configPdfPatterns) {
                         if (pdfStructureOnly.includes(pattern)) {
+                            rawChunkText = null;
+                            pdfStructureOnly = null;
                             await injectTimingNoise(startForensicTime, timingNoiseMs);
                             console.warn("⚠️ SW Security: Pattern ostile nella struttura del PDF", createCleanError("PdfPatternDetected", `Pattern: ${pattern}`));
                             return result;
@@ -774,6 +787,7 @@ const isValidBlob = async (input, contentType, expectedSize = 0, isEncrypted = f
                             streamContext.includes('/flatedecode');
 
                         if (isCompressedStream && typeof DecompressionStream !== 'undefined' && streamEndByte > streamStartByte) {
+                            let decompText = null;
                             try {
                                 const streamBytes = chunkArray.subarray(streamStartByte, streamEndByte);
                                 if (streamBytes.length > 0) {
@@ -782,19 +796,25 @@ const isValidBlob = async (input, contentType, expectedSize = 0, isEncrypted = f
                                     const decompressedBuffer = await new Response(decompressedStream).arrayBuffer();
                                     chunkBuffersToClean.push(decompressedBuffer);
 
-                                    let decompText = new TextDecoder('iso-8859-1', { fatal: false }).decode(new Uint8Array(decompressedBuffer)).toLowerCase();
+                                    decompText = new TextDecoder('iso-8859-1', { fatal: false }).decode(new Uint8Array(decompressedBuffer)).toLowerCase();
                                     decompText = decompText.replace(/#([0-9a-f]{2})/g, (_, hex) => String.fromCharCode(parseInt(hex, 16)).toLowerCase());
                                     decompText = decompText.replace(/\s+/g, ' ');
 
                                     for (const pattern of configPdfPatterns) {
                                         if (decompText.includes(pattern)) {
+                                            decompText = null;
+                                            rawChunkText = null;
+                                            pdfStructureOnly = null;
                                             await injectTimingNoise(startForensicTime, timingNoiseMs);
                                             console.warn("⚠️ SW Security: Payload malevolo in stream decompresso", createCleanError("PdfPatternDetected", `Pattern: ${pattern}`));
                                             return result;
                                         }
                                     }
                                 }
-                            } catch (_) {}
+                            } catch (_) {
+                            } finally {
+                                decompText = null;
+                            }
                         }
                         pos = endStreamIdx + 9;
                     }
@@ -803,6 +823,8 @@ const isValidBlob = async (input, contentType, expectedSize = 0, isEncrypted = f
                     offset = end - OVERLAP_SIZE;
 
                 } finally {
+                    rawChunkText = null;
+                    pdfStructureOnly = null;
                     if (chunkBuffer) {
                         try { new Uint8Array(chunkBuffer).fill(0); } catch (_) {}
                     }
@@ -1011,12 +1033,14 @@ const smartDownload = async (url, cache, isCore = false, version = '', probeSize
                     mode: 'cors',
                     signal: fetchSignal
                 });
+                clearTimeout(timeoutId);
                 const serverLastMod = head.headers.get('Last-Modified');
                 const localLastMod = existing.headers.get('X-PWA-LastMod');
                 if (serverLastMod && localLastMod && serverLastMod === localLastMod) {
                     return "ALREADY_OK";
                 }
             } catch (e) {
+                clearTimeout(timeoutId);
                 // 🛡️⏱️ INNESTO: 🪝
                 await injectTimingNoise(startNetworkTime, 50);
                 return "ALREADY_OK";
@@ -1117,9 +1141,6 @@ const smartDownload = async (url, cache, isCore = false, version = '', probeSize
 							newHeaders.set('X-PWA-Encrypted', 'true');
 						}
 
-						// Riferimento per la pulizia della Ram...
-						let bufferToClear = (finalBlob instanceof Uint8Array) ? finalBlob : null;
-
 						try {
 							await cache.put(cleanKey, new Response(finalBlob, { status: 200, headers: newHeaders }));
 							console.info(`📦🛡️ SW: Risorsa validata e salvata: ${targetUrl}`);
@@ -1149,11 +1170,8 @@ const smartDownload = async (url, cache, isCore = false, version = '', probeSize
 								throw cacheError;
 							}
 						} finally {
-							if (bufferToClear) {
-								bufferToClear.fill(0);
-								// 🪝🛡️⏱️ INNESTO:
+							// 🪝🛡️⏱️ INNESTO:
 								await injectTimingNoise(startNetworkTime, 50);
-								console.log(`🛡🧹️ SW: Bonifica RAM eseguita per: ${targetUrl}`);
 							}
 						}
 
@@ -1855,7 +1873,7 @@ const assegnaFlussoPolimorfo = (hasCache, nav = self.navigator) => {
         profiles[key].timeout === netProfile.timeout
     ) || 'Medium';
 
-	const isDegradedNetwork = ( profileName !== 'Ultrafast' || profileName !== 'Fast' );
+	const isDegradedNetwork = (profileName !== 'Ultrafast' && profileName !== 'Fast');
 
     switch (profileName) {
         case 'Ultrafast':
@@ -2000,6 +2018,9 @@ self.addEventListener('fetch', (event) => {
         // 🛡️ BLOCCO CONDIVISO: Elaborazione, validazione forense, cifratura e salvataggio nel bunker/magazzino
         const processAndStore = async (responseToProcess, controllerSignal) => {
             //await waitTillIdle(50);
+            if (event.request.method.toUpperCase() !== 'GET') {
+                return;
+            }
 			try {
                 const isOk = await verifyVaultIntegrity();
                 if (!isOk || !encryptionKey) throw new Error("VAULT_LOCKED_NO_KEY");
@@ -2121,6 +2142,7 @@ self.addEventListener('fetch', (event) => {
 					return injectSecurityHeaders(networkResponse);
 					}
 				} catch (_) { // 🔇
+				        clearTimeout(tId);
 						return null;
 				}
 			}
@@ -2181,6 +2203,7 @@ self.addEventListener('fetch', (event) => {
 	
 	                    const outResponse = new Response(exactBuffer, { status: 200, headers: secureHeaders });
 						new Uint8Array(buffer).fill(0);
+						new Uint8Array(exactBuffer).fill(0);
 	                    if (decrypted instanceof ArrayBuffer) new Uint8Array(decrypted).fill(0);
 	                    decrypted = null;
 						console.info(`💾🛡️ SW: Risorsa estratta dal, ${targetCache}\nURL : ${finalPath}\n🛡️🧹 SW: Bonifica RAM eseguita.`);
@@ -2190,6 +2213,9 @@ self.addEventListener('fetch', (event) => {
                     	// 🪝🛡️⏱️ INNESTO TEMPORALE SU FALLIMENTO DECRITTAZIONE (PREVIENE TIMING ATTACKS SULLE CHIAVI)
 					if (typeof injectTimingNoise === 'function') await injectTimingNoise(startFetchTime, 40);
 					 // 🧼 BONIFICA DI EMERGENZA RAM:
+					 if (typeof exactBuffer !== 'undefined' && exactBuffer instanceof ArrayBuffer) {
+					     new Uint8Array(exactBuffer).fill(0);
+}
                     if (typeof buffer !== 'undefined' && buffer instanceof ArrayBuffer) {
                         new Uint8Array(buffer).fill(0);
                     }
@@ -2223,7 +2249,15 @@ self.addEventListener('fetch', (event) => {
                     throw cleanDecryptErr; // Rilancia l'errore sterilizzato
                 }
             } else {
-				console.info(`💾🛡️ SW: Risorsa estratta dal, ${targetCache}\nURL : ${finalPath}`);
+                try {
+                    const blob = await cached.clone().blob();
+                    const check = await isValidBlob(blob, cached.headers.get('Content-Type'), 0, false, globalAbortController?.signal);
+                    if (!check.valid) {
+                        await userCache.delete(finalPath, { ignoreSearch: true });
+                        return new Response(null, { status: 404, statusText: "Resource Corrupted & Deleted" });
+                    }
+                } catch (_) {}
+                console.info(`💾🛡️ SW: Risorsa estratta dal, ${targetCache}\nURL : ${finalPath}`);
                 return cached.clone();
             }
 		} else {
@@ -2275,6 +2309,7 @@ self.addEventListener('fetch', (event) => {
                         
                                         const variantResponse = new Response(exactBufferIMG, { status: 200, headers: secureHeaders });
                                         new Uint8Array(buffer).fill(0);
+                                        new Uint8Array(exactBufferIMG).fill(0);
                                         if (decrypted instanceof ArrayBuffer) new Uint8Array(decrypted).fill(0);
                                         decrypted = null;
                                        return variantResponse;
@@ -2284,6 +2319,17 @@ self.addEventListener('fetch', (event) => {
                             }
                         }
                     } catch (decryptErr) { // 🔇
+                    	// 🧼 BONIFICA DI EMERGENZA RAM:
+                    	if (typeof exactBufferIMG !== 'undefined' && exactBufferIMG instanceof ArrayBuffer) {
+                    	    new Uint8Array(exactBufferIMG).fill(0);
+                    	}
+                    	if (typeof buffer !== 'undefined' && buffer instanceof ArrayBuffer) {
+                    	    new Uint8Array(buffer).fill(0);
+                    	}
+                    	if (typeof decrypted !== 'undefined' && decrypted instanceof ArrayBuffer) {
+                    	    new Uint8Array(decrypted).fill(0);
+                    	}
+                    	decrypted = null;
                         altCached_Find = false;
 						continue;
                     }
@@ -2311,6 +2357,8 @@ self.addEventListener('fetch', (event) => {
                                         );
 	                                globalPlaceholderBlob = new Blob([exactBufferP], { type: placeholder.headers.get('Content-Type') || 'image/png' });
 	                                new Uint8Array(buffer).fill(0);
+	                                new Uint8Array(exactBufferP).fill(0);
+	                                if (decrypted instanceof ArrayBuffer) new Uint8Array(decrypted).fill(0);
 	                                decrypted = null;
 	                            }
 							} else {
@@ -2330,6 +2378,17 @@ self.addEventListener('fetch', (event) => {
 			            }
 			        } catch (err) { // 🔇
 			            //console.error("❌ SW: Errore decriptazione placeholder: ", err);
+			            // 🧼 BONIFICA DI EMERGENZA RAM:
+			            if (typeof exactBufferP !== 'undefined' && exactBufferP instanceof ArrayBuffer) {
+			                new Uint8Array(exactBufferP).fill(0);
+			            }
+			            if (typeof buffer !== 'undefined' && buffer instanceof ArrayBuffer) {
+			                new Uint8Array(buffer).fill(0);
+			            }
+			            if (typeof decrypted !== 'undefined' && decrypted instanceof ArrayBuffer) {
+			                new Uint8Array(decrypted).fill(0);
+			            }
+                    decrypted = null;
 			        }
 			    }
 				// 🎯 FALLBACK DI EMERGENZA.
@@ -2349,8 +2408,10 @@ self.addEventListener('fetch', (event) => {
 		        console.info(`📦❌ SW: Recupero fallito per: ${finalPath}`);
 		    }
 		    if ( isCoreAsset && !isNewInstallation ) {
-		        console.log(`📡❌ SW CORE: Rete off-line per risorsa critica :\n ${finalPath}`);
-		        CoreAssets_Destroy_Caches();
+		        if (navigator.onLine) {
+		            console.log(`📡❌ SW CORE: Rete off-line per risorsa critica :\n ${finalPath}`);
+		            CoreAssets_Destroy_Caches();
+		        }
 	     	}			
 	     	if (isHTML) {
 		        return await generateErrorPage(globalPlaceholderBlob, url.pathname);
