@@ -186,7 +186,7 @@ document.addEventListener('DOMContentLoaded', async () => {
             const typedBlob = new Blob([activeRawBuffer], { type: mimeType });
             activeObjectUrl = URL.createObjectURL(typedBlob);
 
-            sandboxFrame.setAttribute('sandbox', 'allow-scripts');
+            sandboxFrame.setAttribute('sandbox', 'allow-scripts allow-same-origin');
             sandboxFrame.src = 'about:blank';
 
             let renderedContentHtml = '';
