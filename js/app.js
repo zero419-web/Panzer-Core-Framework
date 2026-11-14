@@ -1,7 +1,7 @@
 /**
  * ⚙️⚡ App Controller 
  * Dashboard PA & Gestione UI
- * v2.3.6.8
+ * v2.3.6.9
  *
  * * 👤 Autore: Valentino Aglianó
  * Perito Informatico / Idoneo ASMEL 2025
@@ -310,10 +310,12 @@ document.addEventListener('DOMContentLoaded', async () => {
                             }
                         }
                     }
-
-                    window.addEventListener('DOMContentLoaded', renderSecurePDF);
+                    if (document.readyState === 'loading') {
+                        window.addEventListener('DOMContentLoaded', renderSecurePDF);
+                    } else {
+                        renderSecurePDF();
+                    }
                 `;
-
                 const mainScriptBlob = new Blob([mainScriptText], { type: 'application/javascript' });
                 activeMainScriptBlobUrl = URL.createObjectURL(mainScriptBlob);
 
