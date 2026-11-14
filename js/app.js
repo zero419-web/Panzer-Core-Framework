@@ -70,9 +70,10 @@ document.addEventListener('DOMContentLoaded', async () => {
     let manifestCache = null;
     let activeObjectUrl = null;
     let activeRawBuffer = null;
+    let activeViewerBlobUrl = null;
     let currentZoom = 1.0;
     let totalCombinedCount = 0;
-
+    
     const logToTerminal = (level, text) => {
         const timeString = new Date().toLocaleTimeString('it-IT', { hour12: false });
         const line = document.createElement('div');
