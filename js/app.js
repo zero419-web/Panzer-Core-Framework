@@ -164,11 +164,10 @@ document.addEventListener('DOMContentLoaded', async () => {
             const response = await fetch(url);
             if (!response || !response.ok) throw new Error(`HTTP ${response?.status || 'Risorsa irreperibile'}`);
             
+            // 🛡️ Acquisizione del buffer grezzo in RAM per la bonifica successiva
             activeRawBuffer = await response.arrayBuffer();
             const rawMime = response.headers.get('Content-Type') || 'application/octet-stream';
             const mimeType = CoreUtils.detectMimeType(url, rawMime);
-            const typedBlob = new Blob([activeRawBuffer], { type: mimeType });
-activeObjectUrl = URL.createObjectURL(typedBlob);
 
             if (btnZoomIn && btnZoomOut) {
                 btnZoomIn.disabled = false;
@@ -183,7 +182,8 @@ activeObjectUrl = URL.createObjectURL(typedBlob);
                 URL.revokeObjectURL(activeObjectUrl);
             }
 
-            const typedBlob = new Blob([blob], { type: mimeType });
+            // 🛡️📦 Creazione sicura del Blob dal buffer raw e generazione Object URL
+            const typedBlob = new Blob([activeRawBuffer], { type: mimeType });
             activeObjectUrl = URL.createObjectURL(typedBlob);
 
             sandboxFrame.setAttribute('sandbox', 'allow-scripts');
