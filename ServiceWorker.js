@@ -188,7 +188,7 @@ const CONFIG = {
                 '/objstm',
                 '/crypt',
                 '/asciihexdecode',
-                '/asci85decode',
+                '/ascii85decode',
                 '/runlengthdecode'
             ],
             'supportedSignatures': [
