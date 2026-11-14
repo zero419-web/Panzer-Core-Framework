@@ -1,7 +1,7 @@
 /**
  * ⚙️⚡ App Controller 
  * Dashboard PA & Gestione UI
- * v2.3.6.3
+ * v2.3.6.4
  *
  * * 👤 Autore: Valentino Aglianó
  * Perito Informatico / Idoneo ASMEL 2025
@@ -182,7 +182,7 @@ document.addEventListener('DOMContentLoaded', async () => {
                 activeObjectUrl = null;
             }
 
-            // 🛡️ Conversione Base64 a blocchi.
+            // 🛡️ Base64 a blocchi.
             const bytes = new Uint8Array(activeRawBuffer);
             let binary = '';
             const chunkSize = 8192;
@@ -192,7 +192,7 @@ document.addEventListener('DOMContentLoaded', async () => {
             }
             const base64Data = btoa(binary);
 
-            // 🔒 Sandbox isolata.
+            // 🫙🔒 Sandbox isolata.
             sandboxFrame.setAttribute('sandbox', 'allow-scripts');
             sandboxFrame.src = 'about:blank';
 
@@ -229,7 +229,6 @@ document.addEventListener('DOMContentLoaded', async () => {
                 `;
             } else if (mimeType.includes('pdf')) {
                 const baseUrl = window.location.href.substring(0, window.location.href.lastIndexOf('/') + 1);
-                const PDFlib = baseUrl + 'js/pdf_min.js';
 
                 renderedContentHtml = `
                     <!DOCTYPE html>
@@ -237,6 +236,7 @@ document.addEventListener('DOMContentLoaded', async () => {
                     <head>
                         <meta charset="UTF-8">
                         <meta name="viewport" content="width=device-width, initial-scale=1.0">
+                        <base href="${baseUrl}">
                         <style>
                             * { margin:0; padding:0; box-sizing:border-box; user-select:none; -webkit-user-select:none; -webkit-touch-callout:none; }
                             body, html { width:100%; height:100%; background:#0f172a; overflow:auto; -webkit-overflow-scrolling:touch; }
@@ -244,7 +244,7 @@ document.addEventListener('DOMContentLoaded', async () => {
                             canvas { max-width:100%; height:auto; box-shadow:0 4px 20px rgba(0,0,0,0.6); background:#fff; border-radius:6px; pointer-events:none; display:block; transition: width 0.15s ease, height 0.15s ease; }
                             .loading { color:#f8fafc; display:flex; flex-direction:column; justify-content:center; align-items:center; height:100vh; font-family:sans-serif; gap:10px; }
                         </style>
-                        <script src="${PDFlib}"><\/script>
+                        <script src="js/pdf_min.js"><\/script>
                     </head>
                     <body oncontextmenu="return false;" ondragstart="return false;" onselectstart="return false;">
                         <div id="loading" class="loading"><div>⏳📄 PDF Loading...</div></div>
@@ -252,7 +252,15 @@ document.addEventListener('DOMContentLoaded', async () => {
                         <script>
                             async function renderSecurePDF() {
                                 try {
-                                    if (typeof pdfjsLib === 'undefined') throw new Error("Libreria PDF.js non disponibile.");
+                                    // 🛡️ Attesa attiva finché la libreria PDF.js non è completamente caricata ed eseguita
+                                    let attempts = 0;
+                                    while (typeof pdfjsLib === 'undefined' && attempts < 60) {
+                                        await new Promise(r => setTimeout(r, 100));
+                                        attempts++;
+                                    }
+                                    if (typeof pdfjsLib === 'undefined') {
+                                        throw new Error("Timeout: Impossibile caricare la libreria pdf_min.js.");
+                                    }
                                     
                                     const base64Str = "${base64Data}";
                                     const binaryString = atob(base64Str);
@@ -262,7 +270,6 @@ document.addEventListener('DOMContentLoaded', async () => {
                                         rawData[i] = binaryString.charCodeAt(i);
                                     }
 
-                                    // 🚀 Caricamento diretto con disableWorker attivo (Nessun bisogno di Worker esterni)
                                     const loadingTask = pdfjsLib.getDocument({
                                         data: rawData,
                                         disableWorker: true,
