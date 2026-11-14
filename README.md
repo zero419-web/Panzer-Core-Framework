@@ -137,7 +137,7 @@ Il sistema si compone di due livelli perfettamente integrati: il **Service Worke
 ## 📜 Changelog & Storico Versioni
 
 <details>
-<summary><strong>⚙️🪖 Espandi Changelog CORE PANZER (v7.6+ → v7.9.8+)</strong></summary>
+<summary><strong>⚙️🪖 Espandi Changelog CORE PANZER ( v7.6+ → v7.9.9+ )</strong></summary>
 
 <br>
 
