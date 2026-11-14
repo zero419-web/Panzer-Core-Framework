@@ -1,7 +1,7 @@
 /**
  * ⚙️⚡ App Controller 
  * Dashboard PA & Gestione UI
- * v2.3.6.6
+ * v2.3.6.7
  *
  * * 👤 Autore: Valentino Aglianó
  * Perito Informatico / Idoneo ASMEL 2025
@@ -160,9 +160,9 @@ document.addEventListener('DOMContentLoaded', async () => {
             const isMobile = window.innerWidth <= 768;
             currentZoom = isMobile ? 0.5 : 1.0;
 
-            logToTerminal('vault', `🫙🔒 Apertura visore protetto per: ${fileName || url} (Zoom: ${Math.round(currentZoom * 100)}%)`);
+            logToTerminal('vault', `🫙🔒 Apertura visore protetto per: ${fileName || url} (Zoom iniziale: ${Math.round(currentZoom * 100)}%)`);
             
-            // Fetch parallelo.
+            // 🌐🏁 Fetch parallelo.
             const [response, pdfLibRes] = await Promise.all([
                 fetch(url),
                 fetch('js/pdf_min.js')
@@ -204,6 +204,7 @@ document.addEventListener('DOMContentLoaded', async () => {
             }
             const base64Data = btoa(binary);
 
+            // 🛡️ Creazione Blob URL.
             const pdfLibBlob = new Blob([pdfLibText], { type: 'application/javascript' });
             const pdfLibBlobUrl = URL.createObjectURL(pdfLibBlob);
 
@@ -242,18 +243,36 @@ document.addEventListener('DOMContentLoaded', async () => {
                             body, html { width:100%; height:100%; background:#0f172a; overflow:auto; -webkit-overflow-scrolling:touch; }
                             #pdf-wrapper { display:flex; flex-direction:column; align-items:center; padding:20px 10px; min-width:100%; width:max-content; margin:0 auto; gap:15px; }
                             canvas { max-width:100%; height:auto; box-shadow:0 4px 20px rgba(0,0,0,0.6); background:#fff; border-radius:6px; pointer-events:none; display:block; }
-                            .loading { color:#f8fafc; display:flex; flex-direction:column; justify-content:center; align-items:center; height:100vh; font-family:sans-serif; gap:10px; }
+                            .loading { color:#f8fafc; display:flex; flex-direction:column; justify-content:center; align-items:center; height:100vh; font-family:sans-serif; gap:12px; padding: 20px; text-align: center; }
+                            .log-box { width: 100%; max-width: 450px; height: 180px; background: #020617; border: 1px solid #334155; border-radius: 6px; padding: 10px; font-family: monospace; font-size: 11px; color: #38bdf8; text-align: left; overflow-y: auto; }
                         </style>
                         <script src="${pdfLibBlobUrl}"><\/script>
                     </head>
                     <body oncontextmenu="return false;" ondragstart="return false;" onselectstart="return false;">
-                        <div id="loading" class="loading"><div>⏳📄 PDF Loading...</div></div>
+                        <div id="loading" class="loading">
+                            <div style="font-size: 16px; font-weight: bold;">⏳📄 PDF Loading...</div>
+                            <div id="status-log" class="log-box">[0.0s] Visore avviato, attesa script esterno...</div>
+                        </div>
                         <div id="pdf-wrapper"></div>
                         <script>
+                            const statusLog = document.getElementById('status-log');
+                            function logStep(msg) {
+                                const timeStr = new Date().toLocaleTimeString();
+                                const line = document.createElement('div');
+                                line.textContent = '[' + timeStr + '] ' + msg;
+                                statusLog.appendChild(line);
+                                statusLog.scrollTop = statusLog.scrollHeight;
+                            }
+
                             async function renderSecurePDF() {
                                 try {
-                                    if (typeof pdfjsLib === 'undefined') throw new Error("Libreria PDF.js non disponibile.");
-                                    
+                                    logStep("Controllo disponibilità oggetto pdfjsLib...");
+                                    if (typeof pdfjsLib === 'undefined') {
+                                        throw new Error("pdfjsLib non definito (Blob script non eseguito).");
+                                    }
+                                    logStep("Lib PDF_min.js caricata con successo via Blob.");
+
+                                    logStep("Inizio decodifica stringa Base64 in Array binario...");
                                     const base64Str = "${base64Data}";
                                     const binaryString = atob(base64Str);
                                     const len = binaryString.length;
@@ -261,7 +280,9 @@ document.addEventListener('DOMContentLoaded', async () => {
                                     for (let i = 0; i < len; i++) {
                                         rawData[i] = binaryString.charCodeAt(i);
                                     }
+                                    logStep("Decodifica completata. Byte totali: " + rawData.length);
 
+                                    logStep("Avvio parser documento PDF (pdfjsLib.getDocument)...");
                                     const loadingTask = pdfjsLib.getDocument({
                                         data: rawData,
                                         disableWorker: true,
@@ -269,11 +290,14 @@ document.addEventListener('DOMContentLoaded', async () => {
                                     });
 
                                     const pdfDoc = await loadingTask.promise;
+                                    logStep("PDF analizzato! Pagine totali: " + pdfDoc.numPages);
+
                                     document.getElementById('loading').style.display = 'none';
                                     const container = document.getElementById('pdf-wrapper');
                                     const initialZoom = ${currentZoom};
 
                                     for (let pageNum = 1; pageNum <= pdfDoc.numPages; pageNum++) {
+                                        logStep("Rendering pagina " + pageNum + " di " + pdfDoc.numPages + "...");
                                         const page = await pdfDoc.getPage(pageNum);
                                         const viewport = page.getViewport({ scale: 1.5 });
                                         
@@ -293,11 +317,16 @@ document.addEventListener('DOMContentLoaded', async () => {
                                             canvasContext: context,
                                             viewport: viewport
                                         }).promise;
+                                        logStep("Pagina " + pageNum + " renderizzata con successo.");
                                     }
+                                    logStep("✅ Rendering completato!");
                                 } catch (err) {
-                                    document.getElementById('loading').innerHTML = '<div style="color:#f87171; text-align:center; padding:20px;">❌ Errore rendering: ' + err.message + '</div>';
+                                    console.error(err);
+                                    logStep("❌ ERRORE: " + err.message);
+                                    document.getElementById('loading').innerHTML = '<div style="color:#f87171; font-weight:bold;">❌ Errore critico nel rendering PDF:</div><div style="color:#cbd5e1; font-size:12px; margin-top:8px;">' + err.message + '</div>';
                                 }
                             }
+
                             window.addEventListener('DOMContentLoaded', renderSecurePDF);
                         <\/script>
                     </body>
@@ -316,7 +345,7 @@ document.addEventListener('DOMContentLoaded', async () => {
                 `;
             }
 
-            // 🫙 Incapsulamento del viewer.
+            // 🫙 Incapsulamento.
             const viewerBlob = new Blob([viewerHtml], { type: 'text/html' });
             activeViewerBlobUrl = URL.createObjectURL(viewerBlob);
 
@@ -326,7 +355,7 @@ document.addEventListener('DOMContentLoaded', async () => {
             sandboxTitle.textContent = `🔎🔒 ${fileName || url}`;
             sandboxModal.classList.add('active');
 
-            logToTerminal('success', `🛡📦️ Documento aperto nel visore protetto anti-download.`);
+            logToTerminal('success', `🛡📦️ Documento Cifrato Inviato al Visore.`);
         } catch (err) {
             logToTerminal('error', `❌ 👁️‍🗨️Errore apertura visore: ${err.message}`);
         }
