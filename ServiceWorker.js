@@ -947,27 +947,26 @@ Object.freeze(performProbe);
  * @returns {string} Percorso pulito e standardizzato per le chiavi di indicizzazione del database delle cache.
  */
 const normalize = (url) => {
-
     if (!url || typeof url !== 'string' || url.startsWith('data:')) return url;
 
     try {
-
         const baseSafe = new URL(CONFIG.ROOT, self.location.origin).href;
-
         const resolved = new URL(url, baseSafe);
-
         let cleanPath = resolved.pathname.replace(/\/+/g, '/');
 
         const rootNormalized = CONFIG.ROOT.replace(/\/+/g, '/');
         if (cleanPath === rootNormalized || cleanPath === rootNormalized + '/') {
-
-			const mainEntry = activeCoreAssets.find(asset => asset.toLowerCase().includes('.html'));
-			cleanPath = normalize(mainEntry);
+            // 🛡️ Protezione: verifica che activeCoreAssets esista.
+            const coreList = (typeof activeCoreAssets !== 'undefined' && Array.isArray(activeCoreAssets)) 
+                ? activeCoreAssets 
+                : [CONFIG.ROOT, CONFIG.ROOT + 'index.html'];
+            
+            const mainEntry = coreList.find(asset => asset.toLowerCase().includes('.html')) || (CONFIG.ROOT + 'index.html');
+            cleanPath = normalize(mainEntry);
         }
 
         return cleanPath;
     } catch (e) {
-
         return url.split('?')[0].replace(/\/+/g, '/');
     }
 };
@@ -2285,6 +2284,9 @@ self.addEventListener('fetch', (event) => {
 		        for (let variantExt of CONFIG.extensions) {
 		            altPath = basePath + '.' + variantExt;
 		            if (altPath === finalPath) continue;
+                    let buffer = null;
+                    let decrypted = null;
+                    let exactBufferIMG = null;
                     try {
                         const altCached = await mainCache.match(altPath, { ignoreSearch: true }) ||
                                           await userCache.match(altPath, { ignoreSearch: true });
@@ -2294,13 +2296,13 @@ self.addEventListener('fetch', (event) => {
                                 console.info(`🛸🎯 SW Recovery: Trovata variante :\n ${altPath}`);
 								altCached_Find = true;
                                 if (altCached.headers.get('X-PWA-Encrypted') === 'true') {
-                                    const buffer = await altCached.clone().arrayBuffer();
-                                    let decrypted = await decryptBuffer(buffer);
+                                    buffer = await altCached.clone().arrayBuffer();
+                                    decrypted = await decryptBuffer(buffer);
                                     if (decrypted) {
                                         const variantExtLower = variantExt.toLowerCase();
                                         
                                         const decryptedBytesIMG = new Uint8Array(decrypted);
-                                        const exactBufferIMG = decryptedBytesIMG.buffer.slice(
+                                        exactBufferIMG = decryptedBytesIMG.buffer.slice(
                                             decryptedBytesIMG.byteOffset, 
                                             decryptedBytesIMG.byteOffset + decryptedBytesIMG.byteLength
                                         );
@@ -2329,13 +2331,13 @@ self.addEventListener('fetch', (event) => {
                         }
                     } catch (decryptErr) { // 🔇
                     	// 🧼 BONIFICA DI EMERGENZA RAM:
-                    	if (typeof exactBufferIMG !== 'undefined' && exactBufferIMG instanceof ArrayBuffer) {
+                    	if (exactBufferIMG instanceof ArrayBuffer) {
                     	    new Uint8Array(exactBufferIMG).fill(0);
                     	}
-                    	if (typeof buffer !== 'undefined' && buffer instanceof ArrayBuffer) {
+                    	if (buffer instanceof ArrayBuffer) {
                     	    new Uint8Array(buffer).fill(0);
                     	}
-                    	if (typeof decrypted !== 'undefined' && decrypted instanceof ArrayBuffer) {
+                    	if (decrypted instanceof ArrayBuffer) {
                     	    new Uint8Array(decrypted).fill(0);
                     	}
                     	decrypted = null;
@@ -2353,23 +2355,26 @@ self.addEventListener('fetch', (event) => {
 			    const placeholderPath = normalize(CONFIG.defPlaceHolderLogo);
 			    const placeholder = await caches.match(placeholderPath);
 			    if ( placeholder ) {
+			        let bufferP = null;
+			        let decryptedP = null;
+			        let exactBufferP = null;
 			         try {
 			            if (globalPlaceholderBlob === null) {
 			                if (placeholder.headers.get('X-PWA-Encrypted') === 'true') {
-			                        const buffer = await placeholder.clone().arrayBuffer();
-			                        let decrypted = await decryptBuffer(buffer);
+			                        bufferP = await placeholder.clone().arrayBuffer();
+			                        decryptedP = await decryptBuffer(bufferP);
 			                        
-	                            if (decrypted && decrypted.byteLength > 0) {
-	                                const decryptedBytesP = new Uint8Array(decrypted);
-	                                const exactBufferP = decryptedBytesP.buffer.slice(
+	                            if (decryptedP && decryptedP.byteLength > 0) {
+	                                const decryptedBytesP = new Uint8Array(decryptedP);
+	                                exactBufferP = decryptedBytesP.buffer.slice(
                                             decryptedBytesP.byteOffset, 
                                             decryptedBytesP.byteOffset + decryptedBytesP.byteLength
                                         );
 	                                globalPlaceholderBlob = new Blob([exactBufferP], { type: placeholder.headers.get('Content-Type') || 'image/png' });
-	                                new Uint8Array(buffer).fill(0);
+	                                new Uint8Array(bufferP).fill(0);
 	                                new Uint8Array(exactBufferP).fill(0);
-	                                new Uint8Array(decrypted).fill(0);
-	                                decrypted = null;
+	                                new Uint8Array(decryptedP).fill(0);
+	                                decryptedP = null;
 	                            }
 							} else {
 		                        globalPlaceholderBlob = await placeholder.clone().blob();
@@ -2389,16 +2394,16 @@ self.addEventListener('fetch', (event) => {
 			        } catch (err) { // 🔇
 			            //console.error("❌ SW: Errore decriptazione placeholder: ", err);
 			            // 🧼 BONIFICA DI EMERGENZA RAM:
-			            if (typeof exactBufferP !== 'undefined' && exactBufferP instanceof ArrayBuffer) {
+			            if (exactBufferP instanceof ArrayBuffer) {
 			                new Uint8Array(exactBufferP).fill(0);
 			            }
-			            if (typeof buffer !== 'undefined' && buffer instanceof ArrayBuffer) {
-			                new Uint8Array(buffer).fill(0);
+			            if (bufferP instanceof ArrayBuffer) {
+			                new Uint8Array(bufferP).fill(0);
 			            }
-			            if (typeof decrypted !== 'undefined' && decrypted instanceof ArrayBuffer) {
-			                new Uint8Array(decrypted).fill(0);
+			            if (decryptedP instanceof ArrayBuffer) {
+			                new Uint8Array(decryptedP).fill(0);
 			            }
-                    decrypted = null;
+                    decryptedP = null;
 			        }
 			    }
 				// 🎯 FALLBACK DI EMERGENZA.
