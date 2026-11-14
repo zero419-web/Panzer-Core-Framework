@@ -1,7 +1,7 @@
 /**
  * ⚙️⚡ App Controller 
  * Dashboard PA & Gestione UI
- * v2.3.7
+ * v2.3.8
  *
  * * 👤 Autore: Valentino Aglianó
  * Perito Informatico / Idoneo ASMEL 2025
@@ -116,36 +116,35 @@ document.addEventListener('DOMContentLoaded', async () => {
         }
     });
 
-    // 🔭 Zoom dinamico universale
+    // 🔭 Zoom dinamico universale...
     const applyZoom = () => {
-        try {
-            const iframeDoc = sandboxFrame.contentDocument || sandboxFrame.contentWindow.document;
-            const images = iframeDoc.querySelectorAll('img');
-            if (images.length > 0) {
-                images.forEach(img => {
-                    img.style.transform = `scale(${currentZoom})`;
-                });
-                logToTerminal('vault', `🔍📄 Zoom: ${Math.round(currentZoom * 100)}%`);
-                return;
-            }
-
-            const canvases = iframeDoc.querySelectorAll('canvas');
-            if (canvases.length > 0) {
-                canvases.forEach(canvas => {
-                    const baseW = parseFloat(canvas.dataset.baseWidth);
-                    const baseH = parseFloat(canvas.dataset.baseHeight);
-                    if (baseW && baseH) {
-                        canvas.style.width = (baseW * currentZoom) + 'px';
-                        canvas.style.height = (baseH * currentZoom) + 'px';
-                    }
-                });
-                logToTerminal('vault', `🔍📄 Zoom PDF: ${Math.round(currentZoom * 100)}%`);
-            }
-        } catch (e) {
-            console.warn("❌🔎 Zoom non applicabile.", e);
+        if (sandboxFrame && sandboxFrame.contentWindow) {
+            sandboxFrame.contentWindow.postMessage({
+                type: 'PANZER_ZOOM',
+                zoom: currentZoom
+            }, '*');
+            logToTerminal('vault', `🔍📄 Zoom: ${Math.round(currentZoom * 100)}%`);
         }
     };
-    
+
+    if (btnZoomIn) {
+        btnZoomIn.addEventListener('click', () => {
+            if (currentZoom < 3.0) {
+                currentZoom = Math.round((currentZoom + 0.25) * 100) / 100;
+                applyZoom();
+            }
+        });
+    }
+
+    if (btnZoomOut) {
+        btnZoomOut.addEventListener('click', () => {
+            if (currentZoom > 0.5) {
+                currentZoom = Math.round((currentZoom - 0.25) * 100) / 100;
+                applyZoom();
+            }
+        });
+    }
+
     // 🔒 Visore Sandbox Protetto.
     const openInSandbox = async (url, fileName) => {
         try {
@@ -197,15 +196,25 @@ document.addEventListener('DOMContentLoaded', async () => {
                     <html>
                     <head>
                         <meta charset="UTF-8">
+                        <meta name="viewport" content="width=device-width, initial-scale=1.0">
                         <style>
                             * { margin:0; padding:0; box-sizing:border-box; user-select:none; -webkit-user-select:none; }
                             body, html { width:100%; height:100%; background:#000; overflow:auto; display:flex; justify-content:center; align-items:center; }
                             .container { width:100%; height:100%; display:flex; justify-content:center; align-items:center; padding:20px; }
-                            img { max-width: 100%; height: auto; object-fit: contain; pointer-events: none; -webkit-user-drag: none; transform: scale(${currentZoom}); transition: transform 0.15s ease; }
+                            img { width: ${currentZoom * 100}%; max-width: none; height: auto; object-fit: contain; pointer-events: none; -webkit-user-drag: none; transition: width 0.15s ease; }
                         </style>
                     </head>
                     <body oncontextmenu="return false;" ondragstart="return false;" onselectstart="return false;">
                         <div class="container"><img src="${dataUrl}" alt="Immagine protetta" /></div>
+                        <script>
+                            window.addEventListener('message', (e) => {
+                                if (e.data && e.data.type === 'PANZER_ZOOM') {
+                                    const newWidth = (e.data.zoom * 100) + '%';
+                                    const img = document.querySelector('img');
+                                    if (img) img.style.width = newWidth;
+                                }
+                            });
+                        <\/script>
                     </body>
                     </html>
                 `;
@@ -277,14 +286,24 @@ document.addEventListener('DOMContentLoaded', async () => {
                         <style>
                             * { margin:0; padding:0; box-sizing:border-box; user-select:none; -webkit-user-select:none; }
                             body, html { width:100%; height:100%; background:#0f172a; overflow:auto; -webkit-overflow-scrolling:touch; }
-                            #pdf-wrapper { display:flex; flex-direction:column; align-items:center; padding:10px 5px; min-width:100%; width:max-content; margin:0 auto; gap:6px; }
-                            img { max-width:100%; height:auto; background:#fff; border-radius:0; box-shadow:none; pointer-events:none; -webkit-user-drag:none; display:block; transition: transform 0.15s ease; transform: scale(${currentZoom}); }
+                            #pdf-wrapper { display:flex; flex-direction:column; align-items:center; width:100%; padding:8px; gap:6px; }
+                            img { width:${currentZoom * 100}%; height:auto; background:#fff; pointer-events:none; -webkit-user-drag:none; display:block; }
                         </style>
                     </head>
                     <body oncontextmenu="return false;" ondragstart="return false;" onselectstart="return false;">
                         <div id="pdf-wrapper">
                             ${imagesHtmlList}
                         </div>
+                        <script>
+                            window.addEventListener('message', (e) => {
+                                if (e.data && e.data.type === 'PANZER_ZOOM') {
+                                    const newWidth = (e.data.zoom * 100) + '%';
+                                    document.querySelectorAll('img').forEach(img => {
+                                        img.style.width = newWidth;
+                                    });
+                                }
+                            });
+                        <\/script>
                     </body>
                     </html>
                 `;
@@ -315,7 +334,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         }
     };
 
-        // ️🔎🔒 Chiusura Visore.
+    // ️🔎🔒 Chiusura Visore.
     const closeSandbox = () => {
         sandboxModal.classList.remove('active');
         sandboxFrame.src = 'about:blank';
@@ -328,23 +347,23 @@ document.addEventListener('DOMContentLoaded', async () => {
             URL.revokeObjectURL(activeObjectUrl);
             activeObjectUrl = null;
         }
-
         if (activeRawBuffer) {
             try {
-                const secureView = new Uint8Array(activeRawBuffer);
-                secureView.fill(0);
-                logToTerminal('vault', '🧹📄 Buffer Eliminato dalla RAM. ✅');
+                if (!activeRawBuffer.detached && activeRawBuffer.byteLength > 0) {
+                    const secureView = new Uint8Array(activeRawBuffer);
+                    secureView.fill(0);
+                    logToTerminal('vault', '🧹📄 Buffer Eliminato dalla RAM.');
+                } else {
+                    logToTerminal('vault', '🧹📄 Buffer RAM già rilasciato dal pdf_worker_min.js');
+                }
             } catch (err) {
                 logToTerminal('error', `❌ 🧹 Errore pulizia RAM: ${err.message}`);
             }
             activeRawBuffer = null;
-        } else {
-            logToTerminal('vault', '⚠️ Visore: nessun buffer attivo trovato in RAM.');
         }
 
         logToTerminal('info', '🔎🔒 Visore protetto chiuso. ✅');
     };
-
 
     btnCloseSandbox.addEventListener('click', closeSandbox);
 
