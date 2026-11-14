@@ -123,7 +123,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     // 🔭 Zoom Universale...
     const applyZoom = () => {
         if (!activeRawBuffer) return;
-        logToTerminal('vault', `🔍📄 Zoom: ${Math.round(currentZoom * 100)}%`);
+        //logToTerminal('vault', `🔍📄 Zoom: ${Math.round(currentZoom * 100)}%`);
         renderAndMountSandbox();
     };
 
