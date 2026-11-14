@@ -939,6 +939,13 @@ const performProbe = async (url, rules) => {
 };
 Object.freeze(performProbe);
 
+// 📄⚙️ Definizione globale iniziale dei file core (dichiarata PRIMA di normalize() per evitare la TDZ).
+// Valori già normalizzati: nessuna chiamata a normalize() in fase di inizializzazione.
+let activeCoreAssets = [
+    BASE_PATH,
+    BASE_PATH + 'index.html'
+];
+
 /**
  * 🔗 FLUSSI: Normalizzatore Strict degli URI Telematici.
  * Converte e depura qualsiasi stringa di percorso o URL in un cammino assoluto sterile privo di parametri di query superflui o doppi slash (//).
@@ -1001,7 +1008,7 @@ const smartDownload = async (url, cache, isCore = false, version = '', probeSize
             try {
                 const blob = await existing.blob();
 
-                if (await isValidBlob(blob, existing.headers.get('Content-Type'), 0, isEncrypted, syncAbortController?.signal)) {
+                if ((await isValidBlob(blob, existing.headers.get('Content-Type'), 0, isEncrypted, syncAbortController?.signal)).valid) {
                     return "ALREADY_OK";
                 }
             } catch (e) {
@@ -1016,12 +1023,12 @@ const smartDownload = async (url, cache, isCore = false, version = '', probeSize
                 return "ALREADY_OK";
             }
 
+            const profile = getNetworkProfile(self.navigator);
+            // 🛡️ ADATTAMENTO DINAMICO: Il timeout segue il profilo...
+            const dynamicTimeout = (profile.timeout * 1000);
+            const controller = new AbortController();
+            const timeoutId = setTimeout(() => controller.abort(), dynamicTimeout);
             try {
-				const profile = getNetworkProfile(self.navigator);
-				// 🛡️ ADATTAMENTO DINAMICO: Il timeout segue il profilo...
-				const dynamicTimeout = (profile.timeout * 1000);
-				const controller = new AbortController();
-				const timeoutId = setTimeout(() => controller.abort(), dynamicTimeout);
 				const fetchSignal = syncAbortController
                 ? AbortSignal.any([syncAbortController?.signal, controller?.signal])
                 : controller?.signal;
@@ -1172,7 +1179,6 @@ const smartDownload = async (url, cache, isCore = false, version = '', probeSize
 							// 🪝🛡️⏱️ INNESTO:
 								await injectTimingNoise(startNetworkTime, 50);
 							}
-						}
 
                         const uCache = await caches.open(CONFIG.userCacheName);
                         await uCache.delete(cleanKey);
@@ -1892,11 +1898,7 @@ const assegnaFlussoPolimorfo = (hasCache, nav = self.navigator) => {
 Object.freeze(assegnaFlussoPolimorfo);
 
 // 📄⚙️ normaliza file core...
-// Definizione globale iniziale per evitare ReferenceError
-let activeCoreAssets = [
-    normalize(BASE_PATH),
-    normalize(BASE_PATH + 'index.html')
-];
+// (activeCoreAssets è dichiarato più in alto, prima di normalize(), per evitare la TDZ)
 let CORE_ASSETS_SET = new Set(activeCoreAssets);
 
 /**
@@ -2105,7 +2107,7 @@ self.addEventListener('fetch', (event) => {
                 }
             } catch (err) {
                 // 🪝🛡️⏱️ INNESTO TEMPORALE ANTI-PROFILING NELLA PIPELINE DI BACKGROUND
-                if (typeof injectTimingNoise === 'function') await injectTimingNoise(startNetworkTime, 30);
+                if (typeof injectTimingNoise === 'function') await injectTimingNoise(startFetchTime, 30);
 
                 // 🏴‍☠️ ANTI-PROFILING: Sterilizzazione radicale dello Stack Trace del fallimento DNA/Scrittura
                 console.error("💥💾 SW: Errore fatale nel flusso di salvataggio in fetch: ", createCleanError("ForensicValidationError", err && err.message ? String(err.message) : "Eccezione controllata nel modulo Fetch Vault"));
@@ -2116,11 +2118,12 @@ self.addEventListener('fetch', (event) => {
 			if ( isOnline ) {
 				// 🌐 SEZIONE II.I: FLUSSO DI INSTRADAMENTO, LA RETE E ATTIVA ( ONLINE GATEWAY )
 				// CACHE MISS: Nessuna cache locale, fetch di rete immediato per la Ux
+				let tId = null;
 				try {
 					const currentProfile = getNetworkProfile(self.navigator);
 					const TIMEOUT_MS = (currentProfile.timeout * 1000);
 					const controller = new AbortController();
-					const tId = setTimeout(() => controller.abort(), TIMEOUT_MS);
+					tId = setTimeout(() => controller.abort(), TIMEOUT_MS);
 					const fetchSignal = globalAbortController
 					? AbortSignal.any([globalAbortController?.signal, controller?.signal])
 					: controller?.signal;
