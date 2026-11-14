@@ -1,7 +1,7 @@
 /**
  * ⚙️⚡ App Controller 
  * Dashboard PA & Gestione UI
- * v2.3.6
+ * v2.3.6.2
  *
  * * 👤 Autore: Valentino Aglianó
  * Perito Informatico / Idoneo ASMEL 2025
@@ -186,7 +186,7 @@ document.addEventListener('DOMContentLoaded', async () => {
             const typedBlob = new Blob([activeRawBuffer], { type: mimeType });
             activeObjectUrl = URL.createObjectURL(typedBlob);
 
-            sandboxFrame.setAttribute('sandbox', 'allow-scripts allow-same-origin');
+            sandboxFrame.setAttribute('sandbox', 'allow-scripts');
             sandboxFrame.src = 'about:blank';
 
             let renderedContentHtml = '';
@@ -224,6 +224,9 @@ document.addEventListener('DOMContentLoaded', async () => {
                 const PDFlib = baseUrl + 'js/pdf_min.js';
                 const PDFworker = baseUrl + 'js/pdf_worker_min.js';
 
+                // 🛡️ Convet ArrayBuffer...
+                const byteArray = Array.from(new Uint8Array(activeRawBuffer));
+
                 renderedContentHtml = `
                     <!DOCTYPE html>
                     <html>
@@ -249,8 +252,11 @@ document.addEventListener('DOMContentLoaded', async () => {
                                     
                                     pdfjsLib.GlobalWorkerOptions.workerSrc = '${PDFworker}';
 
+                                    // 🛡️ Ricostruiamo il TypedArray direttamente in memoria locale all'iframe
+                                    const rawData = new Uint8Array([${byteArray.toString()}]);
+
                                     const loadingTask = pdfjsLib.getDocument({
-                                        url: "${activeObjectUrl}",
+                                        data: rawData,
                                         isEvalSupported: false
                                     });
 

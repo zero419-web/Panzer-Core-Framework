@@ -1,5 +1,5 @@
 /**
- * ⚙️🪖🛡️ PanzerSDK - v2.3.6
+ * ⚙️🪖🛡️ PanzerSDK - v2.3.6.2
  * 
  * * 👤 Autore: Valentino Aglianó
  * Perito Informatico / Idoneo ASMEL 2025
@@ -234,19 +234,21 @@ export class PanzerSDK {
         });
     }
 
-    /**
-     * 🖼️ Motore grafico centralizzato per il rendering dei modal blocker (DRY).
+    /** v2.0
+     * 🖼️ Motore grafico centralizzato per il rendering dei modal blocker (DOM Nativo / Zero Injections).
      * @private
      * @param {BlockerConfig} cfg - ⚙️ Configurazione del blocker da renderizzare
      */
     _renderModalBlocker(cfg) {
-        if (document.getElementById(cfg.ID)) return;
+        const targetId = cfg.blockerID || cfg.ID;
+        if (!targetId || document.getElementById(targetId)) return;
 
         document.body.style.overflow = 'hidden';
         if (document.documentElement) document.documentElement.style.overflow = 'hidden';
 
+        // Creazione Overlay.
         const blocker = document.createElement('div');
-        blocker.id = cfg.ID;
+        blocker.id = targetId;
         blocker.style.cssText = `
             position: fixed !important;
             inset: 0 !important;
@@ -261,6 +263,7 @@ export class PanzerSDK {
             box-sizing: border-box !important;
         `;
 
+        // Creazione Card.
         const card = document.createElement('div');
         card.style.cssText = `
             width: 100% !important;
@@ -274,16 +277,27 @@ export class PanzerSDK {
             box-sizing: border-box !important;
         `;
 
-        card.innerHTML = `
-            <div style="font-size: 42px; margin-bottom: 12px;">${cfg.Icons}</div>
-            <h2 style="color: ${cfg.titleColor}; margin-bottom: 12px; font-size: 20px;">${cfg.title}</h2>
-            <p style="color: ${cfg.textColor}; font-size: 14px; line-height: 1.5; margin-bottom: 20px;">
-                ${cfg.message}
-            </p>
-        `;
+        // Icon.
+        const iconDiv = document.createElement('div');
+        iconDiv.style.cssText = 'font-size: 42px; margin-bottom: 12px;';
+        iconDiv.textContent = cfg.Icons || '';
+        card.appendChild(iconDiv);
 
+        // Title.
+        const titleEl = document.createElement('h2');
+        titleEl.style.cssText = `color: ${cfg.titleColor}; margin-bottom: 12px; font-size: 20px;`;
+        titleEl.textContent = cfg.title || '';
+        card.appendChild(titleEl);
+
+        // Messaggio...
+        const msgEl = document.createElement('p');
+        msgEl.style.cssText = `color: ${cfg.textColor}; font-size: 14px; line-height: 1.5; margin-bottom: 20px;`;
+        msgEl.innerHTML = cfg.message || '';
+        card.appendChild(msgEl);
+
+        // Pulsante.
         const button = document.createElement('button');
-        button.textContent = cfg.buttonText;
+        button.textContent = cfg.buttonText || 'OK';
         button.style.cssText = `
             width: 100% !important;
             background: ${cfg.buttonBg} !important;
@@ -305,11 +319,12 @@ export class PanzerSDK {
             }
         };
 
+        // Assemblaggio.
         card.appendChild(button);
         blocker.appendChild(card);
         (document.documentElement || document.body).appendChild(blocker);
     }
-
+    
     /**
      * 🔎 Verifica se il browser corrente utilizza il motore Chromium/Blink.
      * @private
