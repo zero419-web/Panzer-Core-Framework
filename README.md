@@ -5,7 +5,7 @@
 <h1 align="center">🏗️ PANZER SDK & CORE FRAMEWORK</h1>
 
 <p align="center">
-  <img src="https://img.shields.io/badge/🌀_PANZER_SDK_BETA-v2.3.8-1f4e79" alt="SDK Badge">
+  <img src="https://img.shields.io/badge/🌀_PANZER_SDK_BETA-v2.x-1f4e79" alt="SDK Badge">
   <img src="https://img.shields.io/badge/⚙️🪖_CORE_PANZER-v7.9.8+-4f4f00" alt="Core Badge">
   <img src="https://img.shields.io/badge/PoC-📱_PWA_x_PA-af0000" alt="PoC Badge">
   <img src="https://img.shields.io/badge/Licenza-🇪🇺_EUPL_v1.2-0055a5" alt="License Badge">
