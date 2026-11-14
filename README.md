@@ -137,11 +137,21 @@ Il sistema si compone di due livelli perfettamente integrati: il **Service Worke
 ## 📜 Changelog & Storico Versioni
 
 <details>
-<summary><strong>⚙️🪖 Espandi Changelog CORE PANZER ( v7.6+ → v7.9.9+ )</strong></summary>
+<summary><strong>⚙️🪖 Espandi Changelog CORE PANZER ( v7.6+ → v7.9.11+ )</strong></summary>
 
 <br>
 
-### 🪖 NOVITÀ v7.9.9+ (`🪨 Hardening`)
+### 🪖 NOVITÀ v7.9.11+ ( `🪨 Hardening` ) 
+
+- 🧬🔬 **DNA Forensic** `IsvalidBlob` : migliore, bug fix, Hardening, e sbarramenti per decompressione fino a 50mb di PDF.
+
+- 💉🔰️ **Iniezione chirurgica delle intestazioni di sicurezza prima di servire la risposta al browser, esteso anche alle risorse in cache.**
+
+- 🪳 **Bug fixed generali e minori...**
+
+<br>
+
+### 🪖 NOVITÀ v7.9.9+ ( `🪨 Hardening` )
 
 - 🛡️ **Validazione Forense Estesa al Magazzino (`userCache`) :**
   - Il controllo rigoroso tramite `isValidBlob` è stato esteso simmetricamente anche alle risorse non cifrate estratte dal Magazzino, con eliminazione automatica (`cache.delete`) e rilascio di risposta `404` in caso di file corrotti o manomessi sul disco.
