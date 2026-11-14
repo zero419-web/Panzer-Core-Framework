@@ -74,6 +74,10 @@ document.addEventListener('DOMContentLoaded', async () => {
     let currentZoom = 1.0;
     let totalCombinedCount = 0;
     
+    let activeMimeType = null;
+    let activeImagesHtmlList = null;
+    let activeFallbackDataUrl = null;
+    
     const logToTerminal = (level, text) => {
         const timeString = new Date().toLocaleTimeString('it-IT', { hour12: false });
         const line = document.createElement('div');
@@ -116,15 +120,11 @@ document.addEventListener('DOMContentLoaded', async () => {
         }
     });
 
-        // 🔭 Zoom dinamico universale...
+    // 🔭 Zoom Universale...
     const applyZoom = () => {
-        if (sandboxFrame && sandboxFrame.contentWindow) {
-            sandboxFrame.contentWindow.postMessage({
-                type: 'PANZER_ZOOM',
-                zoom: currentZoom
-            }, '*');
-            logToTerminal('vault', `🔍📄 Zoom: ${Math.round(currentZoom * 100)}%`);
-        }
+        if (!activeRawBuffer) return;
+        logToTerminal('vault', `🔍📄 Zoom: ${Math.round(currentZoom * 100)}%`);
+        renderAndMountSandbox();
     };
 
     if (btnZoomIn) {
@@ -145,7 +145,80 @@ document.addEventListener('DOMContentLoaded', async () => {
         });
     }
 
-    // 🔒 Visore Sandbox Protetto.
+    // 🖼️📄 Generatore del visore protetto.
+    const renderAndMountSandbox = () => {
+        let renderedContentHtml = '';
+
+        if (activeMimeType && activeMimeType.startsWith('image/')) {
+            renderedContentHtml = `
+                <!DOCTYPE html>
+                <html>
+                <head>
+                    <meta charset="UTF-8">
+                    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+                    <style>
+                        * { margin:0; padding:0; box-sizing:border-box; user-select:none; -webkit-user-select:none; }
+                        body, html { width:100%; height:100%; background:#000; overflow:auto; }
+                        .container { min-width:100%; min-height:100%; display:flex; justify-content:center; align-items:center; padding:12px; }
+                        img { width: ${currentZoom * 100}%; max-width: none; height: auto; object-fit: contain; pointer-events: none; -webkit-user-drag: none; display: block; transition: width 0.15s ease; }
+                    </style>
+                </head>
+                <body oncontextmenu="return false;" ondragstart="return false;" onselectstart="return false;">
+                    <div class="container"><img src="${activeFallbackDataUrl}" alt="Immagine protetta" /></div>
+                </body>
+                </html>
+            `;
+        } else if (activeMimeType && activeMimeType.includes('pdf')) {
+            renderedContentHtml = `
+                <!DOCTYPE html>
+                <html>
+                <head>
+                    <meta charset="UTF-8">
+                    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+                    <style>
+                        * { margin:0; padding:0; box-sizing:border-box; user-select:none; -webkit-user-select:none; }
+                        body, html { width:100%; height:100%; background:#0f172a; overflow:auto; -webkit-overflow-scrolling:touch; }
+                        #pdf-wrapper { display:flex; flex-direction:column; align-items:center; width:100%; padding:8px; gap:6px; }
+                        .pdf-page { width: ${currentZoom * 100}%; height: auto; background: #fff; pointer-events: none; -webkit-user-drag: none; display: block; transition: width 0.15s ease; }
+                    </style>
+                </head>
+                <body oncontextmenu="return false;" ondragstart="return false;" onselectstart="return false;">
+                    <div id="pdf-wrapper">
+                        ${activeImagesHtmlList}
+                    </div>
+                </body>
+                </html>
+            `;
+        } else {
+            renderedContentHtml = `
+                <!DOCTYPE html>
+                <html>
+                <head>
+                    <meta charset="UTF-8">
+                    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+                    <style>
+                        * { margin:0; padding:0; box-sizing:border-box; }
+                        body, html { width:100%; height:100%; background:#111; display:flex; justify-content:center; align-items:center; overflow:auto; }
+                        object { width: ${currentZoom * 100}%; height: ${currentZoom * 100}%; transition: width 0.15s ease, height 0.15s ease; }
+                    </style>
+                </head>
+                <body>
+                    <object data="${activeFallbackDataUrl}" type="${activeMimeType}" width="100%" height="100%"></object>
+                </body>
+                </html>
+            `;
+        }
+
+        if (activeViewerBlobUrl) {
+            URL.revokeObjectURL(activeViewerBlobUrl);
+        }
+         // 🫙 Incapsulamento pulito.
+        const viewerBlob = new Blob([renderedContentHtml], { type: 'text/html' });
+        activeViewerBlobUrl = URL.createObjectURL(viewerBlob);
+        sandboxFrame.src = activeViewerBlobUrl;
+    };
+    
+    // 🔒 Visore Sandbox Protetto
     const openInSandbox = async (url, fileName) => {
         try {
             currentZoom = 1.0;
@@ -157,7 +230,7 @@ document.addEventListener('DOMContentLoaded', async () => {
 
             activeRawBuffer = await response.arrayBuffer();
             const rawMime = response.headers.get('Content-Type') || 'application/octet-stream';
-            const mimeType = CoreUtils.detectMimeType(url, rawMime);
+            activeMimeType = CoreUtils.detectMimeType(url, rawMime);
 
             if (btnZoomIn && btnZoomOut) {
                 btnZoomIn.disabled = false;
@@ -171,14 +244,12 @@ document.addEventListener('DOMContentLoaded', async () => {
             if (activeObjectUrl) { URL.revokeObjectURL(activeObjectUrl); activeObjectUrl = null; }
             if (activeViewerBlobUrl) { URL.revokeObjectURL(activeViewerBlobUrl); activeViewerBlobUrl = null; }
 
-            // 🔒 Sandbox isolata.
+            // 🔒 Sandbox isolata
             sandboxFrame.setAttribute('sandbox', 'allow-scripts');
             sandboxFrame.src = 'about:blank';
 
-            let renderedContentHtml = '';
-
-            if (mimeType.startsWith('image/')) {
-                // ⚙️ Conveti Base64 a blocchi.
+            // ℹ️ Dati in base al tipo di file
+            if (activeMimeType.startsWith('image/')) {
                 const bytes = new Uint8Array(activeRawBuffer);
                 let binary = '';
                 const chunkSize = 8192;
@@ -187,38 +258,11 @@ document.addEventListener('DOMContentLoaded', async () => {
                     binary += String.fromCharCode.apply(null, chunk);
                 }
                 const base64Data = btoa(binary);
-                const dataUrl = `data:${mimeType};base64,${base64Data}`;
+                activeFallbackDataUrl = `data:${activeMimeType};base64,${base64Data}`;
+                activeImagesHtmlList = null;
 
-                renderedContentHtml = `
-                    <!DOCTYPE html>
-                    <html>
-                    <head>
-                        <meta charset="UTF-8">
-                        <meta name="viewport" content="width=device-width, initial-scale=1.0">
-                        <style>
-                            * { margin:0; padding:0; box-sizing:border-box; user-select:none; -webkit-user-select:none; }
-                            body, html { width:100%; height:100%; background:#000; overflow:auto; }
-                            .container { min-width:100%; min-height:100%; display:flex; justify-content:center; align-items:center; padding:12px; }
-                            img { width: ${currentZoom * 100}%; max-width: none; height: auto; object-fit: contain; pointer-events: none; -webkit-user-drag: none; display: block; transition: width 0.15s ease; }
-                        </style>
-                    </head>
-                    <body oncontextmenu="return false;" ondragstart="return false;" onselectstart="return false;">
-                        <div class="container"><img src="${dataUrl}" alt="Immagine protetta" /></div>
-                        <script>
-                            window.addEventListener('message', (e) => {
-                                if (e.data && e.data.type === 'PANZER_ZOOM') {
-                                    const img = document.querySelector('img');
-                                    if (img) img.style.width = (e.data.zoom * 100) + '%';
-                                }
-                            });
-                        </script>
-                    </body>
-                    </html>
-                `;
-            } else if (mimeType.includes('pdf')) {
-                // 🖼️📄 Rasterizzazione PDF.
+            } else if (activeMimeType.includes('pdf')) {
                 if (typeof pdfjsLib === 'undefined') {
-                    //logToTerminal('vault', '📥 Load async lib. pdf_min.js...');
                     await new Promise((resolve, reject) => {
                         const scriptEl = document.createElement('script');
                         scriptEl.src = 'js/pdf_min.js';
@@ -233,8 +277,6 @@ document.addEventListener('DOMContentLoaded', async () => {
                 }
 
                 pdfjsLib.GlobalWorkerOptions.workerSrc = 'js/pdf_worker_min.js';
-
-                //logToTerminal('vault', '📥 Preparazione buffer binario...');
                 const pdfDataBytes = new Uint8Array(activeRawBuffer);
 
                 const loadingTask = pdfjsLib.getDocument({
@@ -243,16 +285,12 @@ document.addEventListener('DOMContentLoaded', async () => {
                     isEvalSupported: false
                 });
 
-                //logToTerminal('vault', '📥 Attesa Parsing Doc. PDF...');
                 const pdfDoc = await loadingTask.promise;
                 logToTerminal('vault', `✅🔎 PDF - Pagine totali: ${pdfDoc.numPages}`);
                 
-                let imagesHtmlList = '';
-
+                let rawImagesHtml = '';
                 for (let pageNum = 1; pageNum <= pdfDoc.numPages; pageNum++) {
-                    //logToTerminal('vault', `📄 Elaborazione pagina ${pageNum} di ${pdfDoc.numPages}...`);
                     const page = await pdfDoc.getPage(pageNum);
-                    
                     const scale = window.devicePixelRatio > 1 ? 1.5 : 1.2;
                     const viewport = page.getViewport({ scale: scale });
                     
@@ -261,51 +299,19 @@ document.addEventListener('DOMContentLoaded', async () => {
                     canvas.height = viewport.height;
                     canvas.width = viewport.width;
 
-                    //logToTerminal('vault', `⚙️ Rendering pagina ${pageNum} su canvas...`);
                     await page.render({
                         canvasContext: context,
                         viewport: viewport
                     }).promise;
 
-                    //logToTerminal('vault', `📸 Generazione IMG protetta, pag. ${pageNum}`);
                     const pageDataUrl = canvas.toDataURL('image/png');
-                    imagesHtmlList += `<img src="${pageDataUrl}" alt="Pagina ${pageNum}" />\n`;
+                    rawImagesHtml += `<img src="${pageDataUrl}" alt="Pagina ${pageNum}" />\n`;
                 }
 
-                //logToTerminal('vault', '✅ Tutte le pagine convertite con successo.');
-                
-                renderedContentHtml = `
-                    <!DOCTYPE html>
-                    <html>
-                    <head>
-                        <meta charset="UTF-8">
-                        <meta name="viewport" content="width=device-width, initial-scale=1.0">
-                        <style>
-                            * { margin:0; padding:0; box-sizing:border-box; user-select:none; -webkit-user-select:none; }
-                            body, html { width:100%; height:100%; background:#0f172a; overflow:auto; -webkit-overflow-scrolling:touch; }
-                            #pdf-wrapper { display:flex; flex-direction:column; align-items:center; width:100%; padding:8px; gap:6px; }
-                            .pdf-page { width: ${currentZoom * 100}%; height: auto; background: #fff; pointer-events: none; -webkit-user-drag: none; display: block; transition: width 0.15s ease; }
-                        </style>
-                    </head>
-                    <body oncontextmenu="return false;" ondragstart="return false;" onselectstart="return false;">
-                        <div id="pdf-wrapper">
-                            ${imagesHtmlList.replace(/<img /g, '<img class="pdf-page" ')}
-                        </div>
-                        <script>
-                            window.addEventListener('message', (e) => {
-                                if (e.data && e.data.type === 'PANZER_ZOOM') {
-                                    const newW = (e.data.zoom * 100) + '%';
-                                    document.querySelectorAll('.pdf-page').forEach(img => {
-                                        img.style.width = newW;
-                                    });
-                                }
-                            });
-                        </script>
-                    </body>
-                    </html>
-                `;
+                activeImagesHtmlList = rawImagesHtml.replace(/<img /g, '<img class="pdf-page" ');
+                activeFallbackDataUrl = null;
+
             } else {
-                // 🛡️ Fallback other typefile...
                 const bytes = new Uint8Array(activeRawBuffer);
                 let binary = '';
                 const chunkSize = 8192;
@@ -314,43 +320,12 @@ document.addEventListener('DOMContentLoaded', async () => {
                     binary += String.fromCharCode.apply(null, chunk);
                 }
                 const base64Data = btoa(binary);
-                const dataUrl = `data:${mimeType};base64,${base64Data}`;
-                
-                renderedContentHtml = `
-                    <!DOCTYPE html>
-                    <html>
-                    <head>
-                        <meta charset="UTF-8">
-                        <meta name="viewport" content="width=device-width, initial-scale=1.0">
-                        <style>
-                            * { margin:0; padding:0; box-sizing:border-box; }
-                            body, html { width:100%; height:100%; background:#111; display:flex; justify-content:center; align-items:center; overflow:auto; }
-                            object { width: ${currentZoom * 100}%; height: ${currentZoom * 100}%; transition: width 0.15s ease, height 0.15s ease; }
-                        </style>
-                    </head>
-                    <body>
-                        <object data="${dataUrl}" type="${mimeType}" width="100%" height="100%"></object>
-                        <script>
-                            window.addEventListener('message', (e) => {
-                                if (e.data && e.data.type === 'PANZER_ZOOM') {
-                                    const obj = document.querySelector('object');
-                                    if (obj) {
-                                        const val = (e.data.zoom * 100) + '%';
-                                        obj.style.width = val;
-                                        obj.style.height = val;
-                                    }
-                                }
-                            });
-                        </script>
-                    </body>
-                    </html>
-                `;
+                activeFallbackDataUrl = `data:${activeMimeType};base64,${base64Data}`;
+                activeImagesHtmlList = null;
             }
 
-            // 🫙 Incapsulamento pulito.
-            const viewerBlob = new Blob([renderedContentHtml], { type: 'text/html' });
-            activeViewerBlobUrl = URL.createObjectURL(viewerBlob);
-            sandboxFrame.src = activeViewerBlobUrl;
+            // ⚙️ Montaggio del visore
+            renderAndMountSandbox();
 
             sandboxTitle.textContent = `🔎🔒 ${fileName || url}`;
             sandboxModal.classList.add('active');
