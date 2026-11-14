@@ -22,7 +22,11 @@
 >
 >   - **🪨 Hardening 🔄📊 GUI DashBoard :** </br> **📜 File :** `app.js` *v2.3.6*
 >
->     - 👁️‍🗨️🔒 **Zero Tracce in Memoria :** Nel `visore protetto della Dashboard`, non appena `l'utente chiude l'anteprima` di un `documento o di un'immagine`, la **memoria temporanea utilizzata viene sovrascritta e azzerata fisicamente** all'istante ( `RAM Zeroization` 🧹 ), **impedendo che residui dei file sensibili rimangano leggibili sul dispositivo.**
+>     - 🪟 **Visore e Permessi Minimi:** La finestra di anteprima dei documenti opera in una gabbia di sicurezza isolata ( `Sandbox` ) che blocca ogni comunicazione o accesso non strettamente necessario alla sola visualizzazione.
+>
+>        - 👁️‍🗨️🔒 **Zero Tracce in Memoria :** Nel `visore protetto della Dashboard`, non appena `l'utente chiude l'anteprima` di un `documento o di un'immagine`, la **memoria temporanea utilizzata viene sovrascritta e azzerata fisicamente** all'istante ( `RAM Zeroization` 🧹 ), **impedendo che residui dei file sensibili rimangano leggibili sul dispositivo.**
+>
+>     - ❄️ **Configurazioni e Manifesto assets in Sola Lettura :** Le configurazioni e il manifesto dei file della Pubblica Amministrazione vengono "congelati 🧊" in memoria all'avvio ( `Deep Freeze` ), impedendo qualsiasi alterazione accidentale o manomissione esterna durante l'uso.
 > ***
 > - **📣 NOVITÀ v2.3.4 :** <br> `🪨 Hardening`
 >
