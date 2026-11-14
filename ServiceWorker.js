@@ -1,7 +1,7 @@
 /*
  * 📄 [ DISCIPLINARE TECNICO DI CONFORMITÀ ]
  *
- * ⚙️ CORE: 🪖 PANZER v7.10+ ( v2.x SDK ⛓️)
+ * ⚙️ CORE: 🪖 PANZER v7.11+ ( v2.x SDK ⛓️)
  *
  * 🛡️ REQUISITI OPERATIVI DI SISTEMA :
  *
@@ -2271,7 +2271,8 @@ self.addEventListener('fetch', (event) => {
 	                    exactBuffer = null;
 	                    buffer = null;
 						console.info(`💾🛡️ SW: Risorsa estratta dal, ${targetCache}\nURL : ${finalPath}\n🛡️🧹 SW: Bonifica RAM eseguita.`);
-						return outResponse;
+						// 💉🔰️ Iniezione chirurgica delle intestazioni di sicurezza prima di servire la risposta al browser.
+                return injectSecurityHeaders( outResponse );
 					}
                 } catch (err) {
                     	// 🪝🛡️⏱️ INNESTO TEMPORALE SU FALLIMENTO DECRITTAZIONE (PREVIENE TIMING ATTACKS SULLE CHIAVI)
@@ -2324,7 +2325,8 @@ self.addEventListener('fetch', (event) => {
                     }
                 } catch (_) {}
                 console.info(`💾🛡️ SW: Risorsa estratta dal, ${targetCache}\nURL : ${finalPath}`);
-                return cached.clone();
+                // 💉🔰️ Iniezione chirurgica delle intestazioni di sicurezza prima di servire la risposta al browser.
+                return injectSecurityHeaders( cached.clone() );
             }
 		} else {
 		    // 🖼️ SEZIONE IV.I: FILTRO MULTIMEDIALE
@@ -2382,10 +2384,12 @@ self.addEventListener('fetch', (event) => {
                                         new Uint8Array(exactBufferIMG).fill(0);
                                         new Uint8Array(decrypted).fill(0);
                                         decrypted = null;
-                                       return variantResponse;
+                                       	// 💉🔰️ Iniezione chirurgica delle intestazioni di sicurezza prima di servire la risposta al browser.
+                                       	return injectSecurityHeaders(variantResponse);
                                     }
                                 }
-		                        return altCached.clone();
+		                        // 💉🔰️ Iniezione chirurgica delle intestazioni di sicurezza prima di servire la risposta al browser.
+		                        return injectSecurityHeaders( altCached.clone() );
                             }
                         }
                     } catch (decryptErr) { // 🔇
