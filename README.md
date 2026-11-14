@@ -20,11 +20,21 @@
 >
 >     - 🚨 **Ripristino Guidato :** Nel rari casi in cui la stiva viene compromessa, il sistema interviene all'istante bloccando la navigazione e mostrando un comodo popup di avviso che guida l'utente a ripristinare e ricaricare la PWA con un solo click.
 >
->   - **🪨 Hardening 🔄📊 GUI DashBoard :** </br> **📜 File :** `app.js` *v2.3.6*
+>   - **🪨 Hardening 🔄📊 GUI DashBoard :** </br> **📜 File :** `app.js` *v2.3.6 / v2.3.8*
 >
->     - 🪟 **Visore e Permessi Minimi:** La finestra di anteprima dei documenti opera in una gabbia di sicurezza isolata ( `Sandbox` ) che blocca ogni comunicazione o accesso non strettamente necessario alla sola visualizzazione.
+>   - **📣🔄📊 NOVITÀ v2.3.8 :**
 >
->        - 👁️‍🗨️🔒 **Zero Tracce in Memoria :** Nel `visore protetto della Dashboard`, non appena `l'utente chiude l'anteprima` di un `documento o di un'immagine`, la **memoria temporanea utilizzata viene sovrascritta e azzerata fisicamente** all'istante ( `RAM Zeroization` 🧹 ), **impedendo che residui dei file sensibili rimangano leggibili sul dispositivo.**
+>     - 🔒 **Visore Sandbox Protetto (`openInSandbox`) :**
+>
+>        - 🕳️ **Isolamento CSP Rigoroso:** Apertura dei documenti tramite `iframe` con policy `sandbox="allow-scripts"`, garantendo il totale isolamento del DOM e la protezione dei dati sensibili.
+>
+>        - 🔭 **Zoom Universale, Blob:** Il documento viene rasterizzato ed elaborato una sola volta; i comandi di zoom ( `+` / `-` ) aggiornano istantaneamente la scala percentuale ( `width: X%` ) sul contenitore ripristinando il Blob in meno di un millisecondo.
+>     
+>     - 💻 **Gestione Sicura della Memoria RAM ( `closeSandbox` ) :**
+>
+>        - 🧹 **Zeroization Preventiva:** Controllo rigoroso dello stato del buffer grezzo ( `!activeRawBuffer.detached` ).
+>
+>        - 🧽 **Sanitizzazione Heap:** Svuotamento e azzeramento dei byte sensibili tramite `Uint8Array.fill(0)` prima del rilascio definitivo della memoria per prevenire data leakage alla chiusura del visore.
 >
 >     - ❄️ **Configurazioni e Manifesto assets in Sola Lettura :** Le configurazioni e il manifesto dei file della Pubblica Amministrazione vengono "congelati 🧊" in memoria all'avvio ( `Deep Freeze` ), impedendo qualsiasi alterazione accidentale o manomissione esterna durante l'uso.
 > ***
