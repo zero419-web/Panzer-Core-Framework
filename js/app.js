@@ -1,7 +1,7 @@
 /**
  * ⚙️⚡ App Controller 
  * Dashboard PA & Gestione UI
- * v2.3.8
+ * v2.3.9
  *
  * * 👤 Autore: Valentino Aglianó
  * Perito Informatico / Idoneo ASMEL 2025
@@ -199,7 +199,7 @@ document.addEventListener('DOMContentLoaded', async () => {
                             * { margin:0; padding:0; box-sizing:border-box; user-select:none; -webkit-user-select:none; }
                             body, html { width:100%; height:100%; background:#000; overflow:auto; }
                             .container { min-width:100%; min-height:100%; display:flex; justify-content:center; align-items:center; padding:12px; }
-                            img { width:${currentZoom * 100}%; max-width:none; height:auto; object-fit:contain; pointer-events:none; -webkit-user-drag:none; display:block; transition: width 0.15s ease; }
+                            img { width: ${currentZoom * 100}%; max-width: none; height: auto; object-fit: contain; pointer-events: none; -webkit-user-drag: none; display: block; transition: width 0.15s ease; }
                         </style>
                     </head>
                     <body oncontextmenu="return false;" ondragstart="return false;" onselectstart="return false;">
@@ -207,9 +207,8 @@ document.addEventListener('DOMContentLoaded', async () => {
                         <script>
                             window.addEventListener('message', (e) => {
                                 if (e.data && e.data.type === 'PANZER_ZOOM') {
-                                    const newWidth = (e.data.zoom * 100) + '%';
                                     const img = document.querySelector('img');
-                                    if (img) img.style.width = newWidth;
+                                    if (img) img.style.width = (e.data.zoom * 100) + '%';
                                 }
                             });
                         </script>
@@ -285,7 +284,7 @@ document.addEventListener('DOMContentLoaded', async () => {
                             * { margin:0; padding:0; box-sizing:border-box; user-select:none; -webkit-user-select:none; }
                             body, html { width:100%; height:100%; background:#0f172a; overflow:auto; -webkit-overflow-scrolling:touch; }
                             #pdf-wrapper { display:flex; flex-direction:column; align-items:center; width:100%; padding:8px; gap:6px; }
-                            .pdf-page { width:${currentZoom * 100}%; height:auto; background:#fff; pointer-events:none; -webkit-user-drag:none; display:block; transition: width 0.15s ease; }
+                            .pdf-page { width: ${currentZoom * 100}%; height: auto; background: #fff; pointer-events: none; -webkit-user-drag: none; display: block; transition: width 0.15s ease; }
                         </style>
                     </head>
                     <body oncontextmenu="return false;" ondragstart="return false;" onselectstart="return false;">
@@ -295,9 +294,9 @@ document.addEventListener('DOMContentLoaded', async () => {
                         <script>
                             window.addEventListener('message', (e) => {
                                 if (e.data && e.data.type === 'PANZER_ZOOM') {
-                                    const newWidth = (e.data.zoom * 100) + '%';
+                                    const newW = (e.data.zoom * 100) + '%';
                                     document.querySelectorAll('.pdf-page').forEach(img => {
-                                        img.style.width = newWidth;
+                                        img.style.width = newW;
                                     });
                                 }
                             });
@@ -326,7 +325,7 @@ document.addEventListener('DOMContentLoaded', async () => {
                         <style>
                             * { margin:0; padding:0; box-sizing:border-box; }
                             body, html { width:100%; height:100%; background:#111; display:flex; justify-content:center; align-items:center; overflow:auto; }
-                            object { width:100%; height:100%; transition: transform 0.15s ease; transform: scale(${currentZoom}); }
+                            object { width: ${currentZoom * 100}%; height: ${currentZoom * 100}%; transition: width 0.15s ease, height 0.15s ease; }
                         </style>
                     </head>
                     <body>
@@ -336,8 +335,9 @@ document.addEventListener('DOMContentLoaded', async () => {
                                 if (e.data && e.data.type === 'PANZER_ZOOM') {
                                     const obj = document.querySelector('object');
                                     if (obj) {
-                                        obj.style.transform = 'scale(' + e.data.zoom + ')';
-                                        obj.style.transformOrigin = 'center center';
+                                        const val = (e.data.zoom * 100) + '%';
+                                        obj.style.width = val;
+                                        obj.style.height = val;
                                     }
                                 }
                             });
