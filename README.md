@@ -1,248 +1,170 @@
-![LOGO](https://img.shields.io/badge/🌀_PANZER_SDK_BETA-v2.x-1f4e79)
-![LOGO](https://img.shields.io/badge/PoC-📱_PWA_x_PA-af0000)
-![LOGO](https://img.shields.io/badge/File:_📜_ServiceWorker.js_=-_⚙️🪖_FrameWork_CORE_PANZER_v7.9.8+-4f4f00)
+<p align="center">
+  <img src="https://raw.githubusercontent.com/zero419-web/Panzer-Core-Framework/main/sw_logo.svg" width="180" alt="Core Logo - Panzer v7.x+">
+</p>
 
-# 🏗️ **SDK** <br> ( ⚙️📦 *Software Development Kit* )
-> [!Important]
->   - 🔃 **Last Update :** `v2.3.6`
-> 
-> - 🌀🧪 **E un PoC, `Proof of Concept`**
-> 
-> ⚙️ **SDK : NOVITÀ, BUG Fix & Altro...**
->
-> - **📣 NOVITÀ v2.3.6 :** <br> `➕🔄 Funzionalità & aggiornamenti...`
->
->   - **NEW, 🐺🗄️ Watchdog Integrità Stiva Anti-Wipe :**
->
->      - 🛡️ **Protezione Intelligente:** Un sistema di controllo che vigilia costantemente sui dati della PWA per impedire che l'interfaccia rimanga "attiva" se la memoria viene svuotata inaspettatamente dal browser o dal sistema operativo.
->
->     - 🔄 **Resilienza a Prova di Riavvio :** Riconosce con precisione se la PWA è stata appena installata per la prima volta o se i suoi dati sono stati cancellati da terzi...
->
->     - 🚨 **Ripristino Guidato :** Nel rari casi in cui la stiva viene compromessa, il sistema interviene all'istante bloccando la navigazione e mostrando un comodo popup di avviso che guida l'utente a ripristinare e ricaricare la PWA con un solo click.
->
->   - **🪨 Hardening 🔄📊 GUI DashBoard :** </br> **📜 File :** `app.js` *v2.3.6 / v2.3.8*
->
->   - **📣🔄📊 NOVITÀ v2.3.8 :**
->
->     - 🔒 **Visore Sandbox Protetto (`openInSandbox`) :**
->
->        - 🕳️ **Isolamento CSP Rigoroso:** Apertura dei documenti tramite `iframe` con policy `sandbox="allow-scripts"`, garantendo il totale isolamento del DOM e la protezione dei dati sensibili.
->
->        - 🔭 **Zoom Universale, Blob:** Il documento viene rasterizzato ed elaborato una sola volta; i comandi di zoom ( `+` / `-` ) aggiornano istantaneamente la scala percentuale ( `width: X%` ) sul contenitore ripristinando il Blob in meno di un millisecondo.
->     
->     - 💻 **Gestione Sicura della Memoria RAM ( `closeSandbox` ) :**
->
->        - 🧹 **Zeroization Preventiva:** Controllo rigoroso dello stato del buffer grezzo ( `!activeRawBuffer.detached` ).
->
->        - 🧽 **Sanitizzazione Heap:** Svuotamento e azzeramento dei byte sensibili tramite `Uint8Array.fill(0)` prima del rilascio definitivo della memoria per prevenire data leakage alla chiusura del visore.
->
->     - ❄️ **Configurazioni e Manifesto assets in Sola Lettura :** Le configurazioni e il manifesto dei file della Pubblica Amministrazione vengono "congelati 🧊" in memoria all'avvio ( `Deep Freeze` ), impedendo qualsiasi alterazione accidentale o manomissione esterna durante l'uso.
-> ***
-> - **📣 NOVITÀ v2.3.4 :** <br> `🪨 Hardening`
->
->   - 🔒 **Immutabilità Totale tramite `❄️ Object.freeze` :**
->
->     - 🛑 Sigillatura completa delle configurazioni dei modali di blocco (`incognitoBlocker`, `cacheWipeBlocker`, `purgeSuccessBlocker`) per prevenire manomissioni a runtime da script terzi o potenziali iniezioni.
->
->     - 📦 Immutabilità dell'array dei Core Assets (`this.coreAssets`) e del payload IPC in uscita (`safePayload` nel metodo `initDB`).
->     
->   - 💻 **Dashboard Client Hardening (`app.js`) :**
->
->      - 🧹 **Sanitizzazione Input di Ricerca:** Pulizia attiva della stringa `filterQuery` mediante rimozione di caratteri di controllo ASCII invisibili (`[\u0000-\u001F\u007F-\u009F]`).
->
->      - 🔒 **Rendering Tabella Sicuro (`renderStorageTable`):** Sostituzione dell'interpolazione `innerHTML` con elementi DOM nativi (`document.createElement`) e `textContent` per eliminare alla radice ogni rischio di DOM-based XSS, mantenendo inalterate le performance del `DocumentFragment`.
-> ***
-> - **🪳 Bug Fix 🔄📊 GUI DashBoard :**
->   - **📜 File :** `app.js` *v2.3.3*
->     - `renderStorageTable()`, ottimizzare le prestazioni visive da non rallentare il browser su dispositivi datati, tramite uso di **DocumentFragment**.
->
-> - **📣 NOVITÀ v2.3.2 :** <br> `➕🔄 Funzionalità & aggiornamenti...`
-> - ⚡ **Controllo del Ciclo di Vita Avanzato (`autoInit`, `init()`, `destroy()`) :**
->   - ⚙️ Aggiunta dell'opzione `autoInit` (default `true`) nel costruttore per una gestione flessibile dell'istanza.
->
->   - 🛑 Introduzione del metodo pubblico `destroy()` per il rilascio sicuro e pulito delle risorse ( annullamento dei timer `setInterval` e rimozione puntuale di tutti i `window`/`navigator` event listener tramite riferimenti vincolati ).
->
-> - 🧱 **Motore Grafico Modale Unificato :**
->    - 🖼️ Centralizzazione del rendering dei modali (`_renderModalBlocker`) con gestione sicura e ripristino automatico dello scroll della pagina (`overflow`).
->
-> - 📚 Integrazione di blocchi JSDoc dettagliati (`@typedef`, `@param`, `@returns`) su tutte le opzioni e i metodi per abilitare l'autocompletamento e l'IntelliSense nativo negli IDE moderni ( es. VS Code ).
-> ***
-> - **📣 NOVITÀ v2.3 :** <br> `➕🔄 Funzionalità & aggiornamenti...`
->    - **🐺🗄️ Watchdog Integrità Stiva ( Cache Wipe ) :**
->       - 🔎 **Monitoraggio periodico della cache con popup di ripristino personalizzabile in caso di cancellazione inaspettata dei dati.**
->
->   - ℹ️ **Popup personalizzabile Se viene fatta la purga volontaria della cache 🗑️🗄️, e pulsante per ricaricare la PWA.**
->
->    - **🕵️‍♂️ Rilevamento Incognito Selettivo :**
->       - 🔎 **Controllo mirato esclusivamente sui motori Chromium/Blink** ( *escludendo nativamente iOS, Safari e Mac Safari* ).
->
->    - **🌐🔄 Gestione Rete Resiliente ( *On-line/Off-line & Auto-Sync* ) :**
->       - ✅ **Sintonizzazione automatica dello stato di connessione con badge dinamico e auto-risincronizzazione della stiva al ritorno della rete.**
->
->    - **📌🗄️ Prefisso Cache Parametrico :**
->       - Gestione centralizzata e parametrica della nomenclatura della stiva (`PA_PANZER_ENGINE_v`).
->
-> ***
-> - **📣 NOVITÀ v2.1 :** <br> `🐛 BUG Fix`
->    - **🪳 BUG Fix :**
->       - 📜 **`SDK.js`**
->       - 📜 **`ServiceWorker.js` fix for `SDK.js`.**
->       - **🔒👁️‍🗨️ Sandbox Visore ❌💾**
->       - **🛡️🗄️ Sync Stiva Bunker.**
-> 
->    - **🔄📊 Aggiornamento GUI DashBoard**
->       - **📜 File :** `app.js, SDK.js`
->
-> ***
-> - **🐺 Watchdog Anti-Incognito** ❌🕵️ Pre requisiti Install `PWA` & il timeout adattivo dopo `Xsec`, *Minimo / Massimo* personalizzato, ⏱️ Time-out per dichiarare lo stato **🕵️ Incognito del Browser! ✅**
-> 
-> - **📊 Dashboard :**  
-> **🌀 PoC per la PA 🏛️** <br> Un esempio pratico di dashboard sviluppata per la **Pubblica Amministrazione** orientata alla consultazione sicura in modalità *🛡️ Bunker.*
->
+<h1 align="center">🏗️ PANZER SDK & CORE FRAMEWORK</h1>
+
+<p align="center">
+  <img src="https://img.shields.io/badge/🌀_PANZER_SDK_BETA-v2.3.8-1f4e79" alt="SDK Badge">
+  <img src="https://img.shields.io/badge/⚙️🪖_CORE_PANZER-v7.9.8+-4f4f00" alt="Core Badge">
+  <img src="https://img.shields.io/badge/PoC-📱_PWA_x_PA-af0000" alt="PoC Badge">
+  <img src="https://img.shields.io/badge/Licenza-🇪🇺_EUPL_v1.2-0055a5" alt="License Badge">
+</p>
+
 <h2 align="center">
- <a href="https://zero419-web.github.io/Panzer-Core-Framework/">
-  <strong>
-    👁️‍🗨️ SDK DEMO
-  </br>
-    ➡️ On-line 🌐
-  </strong>
- </a>
+  <a href="https://zero419-web.github.io/Panzer-Core-Framework/">
+    <strong>👁️‍🗨️ PROVA LA DEMO LIVE ON-LINE 🌐</strong>
+  </a>
 </h2>
 
----
-![LOGO](https://img.shields.io/badge/Logo-CORE_PANZER_v7.x+-1f4e79)
-<p align="center"><img src="https://raw.githubusercontent.com/zero419-web/Panzer-Core-Framework/main/sw_logo.svg" width="200" alt="Core Logo - Panzer v7.x+"></p>
+> [!NOTE]
+> 💡 **La demo live permette di testare immediatamente:** la Resilienza di rete, la Modalità Bunker 🗄️, la simulazione Lie-Fi 🤥🛜 e il Download 📥 simultaneo delle risorse dal Manifesto.
 
 ---
 
-# 🌐 Browser Supportati !
-| 🌐 Browser | 🔎 Stato |
-| :--- | :--- |
-| 🌐 Google Chrome |  Supportato ✅ |
-| 🌐 Chromium |  Supportato ✅ |
-| 🧭 Safari | **Supportato - non testato** ☑️ |
-| 🦊 FireFox | **Non supportato** ❌ |
+## 🚀 Obiettivi del Progetto
+
+- 🌀 **Proof of Concept (PoC):** Architettura software sovrana per **Progressive Web App (📲 PWA)** basata sul **⚙️🪖 Core Panzer v7.x+**, progettata in modalità *🔐 Zero-Trust*.
+- 🏛️ **Conformità Istituzionale:** Il sistema garantisce **massima resilienza informatica**, continuità operativa *offline-first*, consultazione protetta di atti e documenti della **Pubblica Amministrazione (PA)**, nel pieno rispetto delle linee guida tecniche 📑 **AgID** e del **📜 Codice dell'Amministrazione Digitale (CAD)** per il riuso (*🇪🇺 EUPL v1.2*).
+- ⚙️ **Difesa Attiva & Tolleranza ai Guasti:** Implementa strategie avanzate di computazione asincrona isolata, crittografia simmetrica client-side e tolleranza ai guasti di tipo militare. Garantisce che i dati sensibili rimangano protetti anche su reti degradate (*Lie-Fi 🤥🛜*) o assenti. In caso di manomissione fisica o *data breach* sul file system locale del client, tutti i file vengono eliminati per sicurezza e risincronizzati automaticamente con il server della PA.
+
+---
+
+## 🛠️ Architettura e Caratteristiche Principali
+
+Il sistema si compone di due livelli perfettamente integrati: il **Service Worker (`ServiceWorker.js`)** che agisce come entità autonoma di difesa, e l'**SDK Client (`SDK.js`)** che gestisce l'interfaccia, la memoria e i meccanismi di blocco.
+
+### 🔹 1. Core Engine (`ServiceWorker.js` - v7.x+)
+- **🔐🌡️🛡️ Jittered Thermal Shield Race:** Ispezione forense profonda sul modulo `deepVaultValidation()`. Implementa una gara asincrona tra l'interrogazione a IndexedDB e lo **Scudo Termico Adattivo** (`waitTillIdle`).
+- **🔄🌐🛡️🔗 Dynamic Adaptive Network Resiliency:** Algoritmo proprietario che adatta dinamicamente i timeout di rete basandosi su 5 profili telemetrici hardware di velocità della connessione.
+- **🌐➡️💾 Network-First Predittivo con Cache Fallback:** Intercettazione condizionale degli eventi di fetch con abort atomico delle richieste in caso di latenza degradata e rilascio immediato della risorsa cifrata locale.
+- **🔬🧬 SW Forensics (DNA Check & Binary Validation):** Controllo biometrico sequenziale (**🤯 Testa**, **👣 Coda**, **🪵 Corpo**) tramite `isValidBlob()` per prevenire attacchi di *☠️ Cache Poisoning*, bloccare file polyglot ed eradicare vettori malevoli (*Anti-PDF Scripting ❌📜*).
+- **🛡️📴 Offline Bunker Mode & Emergency Wipe:** In caso di violazione rilevata, il Panzer attiva contromisure distruttive (*Tabula Rasa ☢️*): pialla il `Cache Storage` e il database locale (`indexedDB.deleteDatabase`), isolando il sistema per proteggere il dato sensibile.
+- **🔀📡 Architettura di Instradamento a 5 Sezioni (Fetch Strict Layer 🚥):** Ciclo di vita della richiesta compartimentato in perimetri rigidi per superare i capitolati di ispezione AgID (*Normalizzazione, Online Gateway, Cache Hit, Filtro Multimediale, Critical Fallback*).
+- **✉️↔️📬 Canale IPC PostMessage:** Ricezione sicura dei comandi dal frontend con isolamento della chiave in RAM tramite `Structured Clone API` e validazione profonda (`universalScanner`).
+
+### 🔹 2. Client SDK & Dashboard (`SDK.js` / `app.js` - v2.x)
+- **🐺🗄️ Watchdog Integrità Stiva Anti-Wipe:** Sistema di controllo costante sui dati della PWA per impedire che l'interfaccia rimanga attiva se la memoria viene svuotata inaspettatamente dal browser o dal sistema operativo, con popup di ripristino guidato.
+- **🐺 Watchdog Anti-Incognito ❌🕵️:** Rilevamento selettivo della navigazione in incognito sui motori Chromium/Blink con timeout adattivo configurabile.
+- **🔒 Visore Sandbox Protetto (`openInSandbox`):** Apertura isolata dei documenti tramite `iframe` con policy `sandbox="allow-scripts"`, zoom istantaneo su Blob e **Zeroization preventiva della RAM** (`Uint8Array.fill(0)`) alla chiusura.
+- **❄️ Immutabilità & Hardening Client:** Congelamento delle configurazioni e del manifesto in memoria (`Deep Freeze`), sanitizzazione degli input e rendering sicuro del DOM senza `innerHTML` per azzerare i rischi di DOM-based XSS.
+- **🎖️ Zero-Dipendenze:** Sviluppato interamente in **🍦 Vanilla JS**, garantendo assenza di debiti tecnici e piena rispondenza all'**Art. 69 del CAD**.
+
+---
+
+## 🌐 Browser Supportati
+
+| 🌐 Browser | 🔎 Stato | Note Tecniche |
+| :--- | :--- | :--- |
+| 🌐 **Google Chrome** | Supportato ✅ | Pieno supporto a tutte le feature e Watchdog |
+| 🌐 **Chromium** | Supportato ✅ | Pieno supporto (motore JS V8 ⚡) |
+| 🧭 **Safari** | **In sperimentazione** ☑️ | Watchdog Anti-Incognito non supportato |
+| 🦊 **Firefox** | **Non supportato** ❌ | Limitazioni architetturali sulle API richieste |
 
 > [!TIP]
-> 💡 **Nota:** Progetto pienamente compatibile con altri `Browser` :
-> 
-> ⚙️🌐 Motore di **Chromium : `js V8` ⚡**
->
-> `Es. Edge, Brave, Opera, Vivaldi, Arc `.
-> - ✅ **Supporto :**
->    - 🐺 *Watchdog Anti-Incognito* ❌🕵️
----
-## 🚀 Obiettivi del Progetto :
-
-- 🌀 **Proof of Concept :** <br> ( *PoC* ) di un'architettura software sovrana per <br>Progressive Web App ( 📲 **PWA** ) basata sul **⚙️🪖 Core Panzer v7.x+**, progettata in modalità *🔐 Zero-Trust*. Il sistema garantisce **massima resilienza informatica**, continuità operativa offline-first, consultazione protetta di atti e documenti PA, e piena conformità alle linee guida tecniche 📑 **AgID** e al **📜 Codice dell'Amministrazione Digitale** ( *CAD* ) per il riuso ( *🇪🇺 EUPL v1.2* ).
-
-- ⚙️ Questo engine implementa strategie avanzate di computazione asincrona isolata, crittografia simmetrica client-side e tolleranza ai guasti di tipo militare. Garantisce che le applicazioni web e i dati sensibili rimangano protetti e operativi anche in condizioni di rete degradata ( Lie-Fi 🤥🛜 ), o assente, in caso di tentativi di manomissione fisica o data breach sul file system locale del client tutti i file verrano eliminati per sicurezza e risoncronizari di nuovo col server della PA.
-
-> [!NOTE]
-> 💡 **La demo live serve per provare immediatamente: la Resilienza, la Modalità Bunker 🗄️, il Lie-Fi 🤥🛜 , il Download 📥 simultanio delle Risorse dal Manifesto...** `ecc...`
-> 
----
-## 📣⚙️🪖 NOVITÀ & BUG Fix & Altro...
-- **🪖 NOVITÀ v7.9.8+ :** <br> `🪨 Hardening`
-    - 🛡️ **Validazione Ingressi IPC rigorosa 🚧 ( `validateAndSanitizeAssetPath` ) :**
-       - 🌐 **Same-Origin Check:** Controllo stringente per azzerare qualsiasi rischio di Server-Side Request Forgery ( *SSRF* ) verso domini esterni.
-
-       - 🛑 **Anti-Path Traversal:** Blocco tassativo e preventivo di sequenze di risalita directory (`../`, `..\`, `\0`).
-
-    - 🛑 **Protezione Anti-DoS & Memory Exhaustion :**
-       - Introduzione di un tetto massimo rigoroso (`MAX_ALLOWED_ASSETS = 500`) sul numero di risorse accettate dal manifesto e dai core assets.
-
-- **🪖 NOVITÀ v7.9.7+ :** <br> `🐛 BUG Fix`
-    - 🪳 **Bug Fixed : `Evento Fetch` Del SW ( ⚙️🪖 ),**
-       - 🌐 **NetWorkFirst**
-       - 🚀 **SWR - `Stale-While-Revalidate`**
-       - 🔀🎭 **Regolatore di Flusso Polimorfo**
-       - 🖼️🩹 **Placeholder, non Ritorna per una risorsa Immagine su una richiesta HEAD, ma restituisce un `404 Error` ❌**
-       - 🧠 **Universal-Scan, Fix bug's**
-    
-    - ➕ **🧭 `Safari`, Supporto in sperimentazione ...**
-       - 🧭🚫🐺 **Watchdog `Anti-Incognito` ❌🕵️ non `Supportato`**
-
-- **🪖 NOVITÀ v7.9.6+ :** <br> `🐛 BUG Fix`
-    - 🪳 **Bug Fixed : `Evento Fetch` Del SW ( ⚙️🪖 ),**
-       - ➕ **`Content-Length`, risposta del `SW` alle Risorse da servire al Browser.**
-
-    - 🐺️🐤 **WATCHDOG DI SICUREZZA :**
-       - ➕ **Controllo, 3 tentativi prima di dichiarare se la 🔑🗄️ di cifratura e compromessa veramente.**
- 
-- **🪖 NOVITÀ v7.9.5+ :** <br> `🐛 BUG Fix`
-   - 🪳 **Molti Bug Fixed !**
-      - 🚀 **SWR, Strategia migliorata su reti degradate.**
-      - 🔀🎭 **Fix: `Regolatore di Flusso Polimorfo`, ora si adatta alle reti degradate e decide la strategia migliore.**
-      - 🎯 **Riorganizzazione Del `Evento Fetch` Del SW ( ⚙️🪖 ), Per Il `NetworkFirst/SaveBackground, SWR, CacheFirst ( Off-line )`**
- 
-- **🪖 NOVITÀ v7.9+ :** <br> `🪨 Hardening contro il Red-Team 🔴`
-   - 🔍 **1. Validazione Forense Blob (`isValidBlob`)**
-       - 🧹 **SVG & Anti-Polyglot:** Blocco tag ostili (`<script>`, `<iframe>`), event handler inline (`onload=`) e signature di script in immagini raster (es. `PNG`, `WEBP`, `JPEG`).
-       - 📄 **PDF, PAdES & CAdES De-Obfuscated:** Finestra di analisi estesa a **4096 byte** per header e footer (per tollerare firme digitali, aggiornamenti incrementali e buste crittografiche `.p7m`), soglia minima a **2 KB** (`2048` byte), decodifica esadecimale, strip commenti/spazi, blocco stream compressi (`/flatedecode`, `/lzwdecode`, ecc.) e isolamento pattern malevoli da `CONFIG.pdf`.
-       - 🧠 **RAM Zero-Out:** Bonifica della memoria con `.fill(0)` sui buffer attivi gestita tramite blocchi `finally` sicuri subito dopo l'analisi o in caso di eccezione.
-
-   - 🧠 **2. Deep Scanner IPC (`universalScanner`):**
-       - 🛑 **Cap Nodi & Profilo:** Limite massimo di **999 nodi per albero** e vincolo tassativo a **12 livelli** di profondità ( *Anti-JSON-Bomb* ).
-       - 🛡️ **Anti-Path Traversal:** Sanitizzazione e scarto di chiavi e percorsi con risalite directory (`../`, `..\`) o null byte (`\0`).
-       - ⚡ **CPU Yielding:** Pausa non-blocking dell'Event Loop ogni 10 nodi per preservare la reattività del thread worker.
-
-   - 🔒 **3. Iniezione Security Headers (`injectSecurityHeaders`):**
-       - 🌐 **Fetch Response Hardening:** Riscrittura automatica in-flight degli header HTTP (`nosniff`, `DENY`, `strict-origin-when-cross-origin`, `same-origin`) su ogni risposta intercettata.
-
-- **🪖 NOVITÀ v7.8+ :** <br> `🪨 Hardening TOTALE contro il Red-Team 🔴`
-
-- **🪖 NOVITÀ v7.7+ :** <br> `🪨 Hardening contro il Red-Team 🔴`
-   - 🔬🧬 **SW Forensics ( DNA Check & Binary Validation ), in isValidBlob() :**
-     - 🤯 **Testa ( Header 512 Byte ) :** <br> Analisi dei primi 512 byte del file per la verifica stringente dei Magic Bytes reali, bloccando sul nascere lo spoofing del MIME-type e le estensioni camuffate.
-     - 👣 **Coda ( Tail Check ) :** <br> Test di lettura a basso livello sul terminatore finale via `blob.slice(-5).arrayBuffer()` per escludere troncamenti, file corrotti o stream incompleti.
-     - 🪵 **Corpo & Anti-PDF Obfuscation ( ❌📜 ) :** Scansione dei payload PDF con supporto alla decodifica di tecniche di offuscamento (`stringhe esadecimali/ottali, annotazioni annidate, flussi encodati`) ed eradicazione di vettori malevoli (`/JS, /JavaScript, /OpenAction, /Launch`). <br>
-**✅ Risultato :** <br> Neutralizza il Cache Poisoning ☠️, azzera i crash silenziosi del Service Worker dovuti a eccezioni di lettura e forza l'azzeramento della memoria di lavoro ( *wipeRAM()* 🧽 ) in caso di fallimento o abort dell'operazione.
-
-  - **🪖 NOVITÀ v7.6+ :** <br> `➕ Funzionalità...`
-     - **Integrazione di protocolli 🏴‍☠️ Anti-Profiling :** <br>Ogni punto di errore è stato convertito in un " 🕳️ *Black Hole* " informativo; la **sterilizzazione degli stack trace e l'iniezione di rumore temporale 💉⏱️** previene attacchi di tipo *side-channel* e la profilazione del **🏴‍☠️🔴 Red Team.**
-
-***
-
-## 🛠️ Caratteristiche :<br>( ⚙️🪖 v7.x+ )
-🔹💜 Il cuore del sistema è un **Service Worker** ( `ServiceWorker.js` ) ad altissima specializzazione, operante come entità autonoma tramite i seguenti moduli nativi :
-
-- **🔐🌡️🛡️ Jittered Thermal Shield Race :** <br> Ispezione forense profonda sul modulo `deepVaultValidation()`. Implementa una gara asincrona tra l'interrogazione a IndexedDB e lo **🌡️🛡️ Scudo Termico Adattivo** ( `waitTillIdle` ).
-
-- **🔄🌐🛡️🔗 Dynamic Adaptive Network Resiliency :** <br> Algoritmo proprietario che adatta dinamicamente i timeout di rete basandosi su 5 profili telemetrici hardware di velocità della connessione.
-
-- **🌐➡️💾 Network-First Predittivo con Cache Fallback :** <br> Intercettazione condizionale degli eventi di fetch con abort atomico delle richieste in caso di latenza degradata e rilascio immediato della risorsa cifrata locale.
-
-- **🔬🧬 SW Forensics ( DNA Check & Binary Validation ) :** <br> Controllo biometrico sequenziale ( 🤯 Testa, 👣 Coda, 🪵 Corpo ) per prevenire attacchi di ☠️ *Cache Poisoning* ed eradicare vettori malevoli ( Anti-PDF Scripting ❌📜 ).
-
-- **🛡️📴 Offline Bunker Mode & Emergency Wipe :** <br> In caso di violazione rilevata, il Panzer attiva contromisure distruttive ( *Tabula Rasa* ☢️ ): pialla il `Cache Storage` e il database locale ( `indexedDB.deleteDatabase` ), isolando il sistema per proteggere il dato sensibile.
-
-- **🔀📡 Architettura di Instradamento a 5 Sezioni ( Fetch Strict Layer 🚥 ) :** <br> Ciclo di vita della richiesta compartimentato in perimetri rigidi per superare i capitolati di ispezione AgID ( `Normalizzazione, Online Gateway, Cache Hit, Filtro Multimediale, Critical Fallback` ).
-
-- **✉️↔️📬 Canale IPC PostMessage :** <br> Ricezione sicura dei comandi dal frontend con isolamento della chiave in RAM tramite `Structured Clone API`.
-
-- **🎖️ Conformità Costituzionale e Normativa PA:** <br> Sviluppato interamente in **🍦 Vanilla JS** ( *Zero-Dipendenze* ), garantendo assenza di debiti tecnici e rispondenza all'**Art. 69 del CAD**.
+> 💡 **Compatibilità estesa:** Il progetto è pienamente compatibile con tutti i browser basati su motore **Chromium (`JS V8` ⚡)**, inclusi **Microsoft Edge, Brave, Opera, Vivaldi e Arc** (incluso il supporto completo al *🐺 Watchdog Anti-Incognito ❌🕵️*).
 
 ---
-## 👤 Autore : <br> **Valentino Aglianò**
-- 📌 Perito Industriale <br> **Informatico** ( *2013* )
 
-- 🏥 Production Case Study <br> ( *2014 - 2018* )<br> Sanità Pubblica ( *ASP8 SR* ).<br>
-**📲 APP Gestionale Turnistica Infermieristica :**
-   - 🛡️ **Security:** <br> Cifratura *SQLite via DLL*, `💾 Dongle USB Hardware Binding con Auto-Kill su WMI`, 🍇 RBAC granulare.
+## 📖 Documentazione Ufficiale
 
-   - ⚡🔋 **Stack:** <br> Engine `AutoIt3 + UI HTML4/CSS/JS + DB SQLite`.
-
-   - 📊 **Reliability:** <br> Operatività ininterrotta senza downtime sul campo in ambiente ospedaliero.
-
-- 👩‍💻 Istruttore Informatico: <br> Qualificatosi *Idoneo nel Concorso Nazionale ASMEL 2025* per **Profili IT della Pubblica Amministrazione.**
-
-- ⚙️🛡️ Specialista in ingegneria difensiva, architetture PWA in Bunker Mode e cyber security applicata <br> ( 🟣 Purple Team: bilanciamento tra mentalità offensiva Red team 🔴, e blindatura il Blue Team 🔵 ).
+- 🔍🚀 Per l'analisi dettagliata dei vettori crittografici, le metriche forensi di stabilità e gli scenari applicativi per Enti e Pubblica Amministrazione, consulta la **[📚 Wiki Ufficiale del Progetto](https://github.com/zero419-web/Panzer-Core-Framework/wiki)**.
 
 ---
-## ⚖️ Licenza :
-- ⚙️📑 Progetto rilasciato sotto licenza **🇪🇺 EUPL v1.2**. <br> La legalità del riuso, la trasparenza del codice e la conformità ai framework normativi dell'Unione Europea sono garantiti. Consulta il file [`LICENSE`](https://github.com/zero419-web/Panzer-Core-Framework?tab=License-1-ov-file#%E2%84%B9%EF%B8%8F--eupl-v12---european-union-public-licence).
+
+## 👤 Autore
+
+**Valentino Aglianò**
+- 📌 **Perito Industriale Informatico** (*2013*)
+- 👩‍💻 **Istruttore Informatico:** Qualificatosi *Idoneo nel Concorso Nazionale ASMEL 2025* per **Profili IT della Pubblica Amministrazione**.
+- ⚙️🛡️ **Specializzazione:** Ingegneria difensiva, architetture PWA in *Bunker Mode* e cybersecurity applicata (**🟣 Purple Team:** bilanciamento tra mentalità offensiva *Red Team 🔴* e blindatura difensiva *Blue Team 🔵*).
+- 🏥 **Production Case Study (*2014 - 2018*) – Sanità Pubblica (*ASP8 SR*):**
+  - Sviluppo di **APP Gestionale Turnistica Infermieristica** ad altissima affidabilità (zero downtime in ambiente ospedaliero).
+  - *Security & Stack:* Cifratura *SQLite via DLL*, `💾 Dongle USB Hardware Binding con Auto-Kill su WMI`, RBAC granulare, Engine `AutoIt3 + UI HTML4/CSS/JS + DB SQLite`.
 
 ---
-## 📖 Documentazione Ufficiale :
-- 🔍🚀 Per l'analisi dei vettori crittografici, le metriche forensi di stabilità e gli scenari applicativi per Enti e Pubblica Amministrazione, consulta la nostra [📚 Wiki Ufficiale](https://github.com/zero419-web/Panzer-Core-Framework/wiki).
+
+## ⚖️ Licenza
+
+- ⚙️📑 Progetto rilasciato sotto licenza **🇪🇺 EUPL v1.2** (*European Union Public Licence*).
+- La legalità del riuso, la trasparenza del codice e la conformità ai framework normativi dell'Unione Europea sono garantiti. Consulta il file [`LICENSE`](https://github.com/zero419-web/Panzer-Core-Framework?tab=License-1-ov-file#%E2%84%B9%EF%B8%8F--eupl-v12---european-union-public-licence) per i dettagli.
+
+---
+
+## 📜 Changelog & Storico Versioni
+
+<details>
+<summary><strong>⚙️🪖 Espandi Changelog CORE PANZER (v7.6+ → v7.9.8+)</strong></summary>
+
+### 🪖 NOVITÀ v7.9.8+ (`🪨 Hardening`)
+- 🛡️ **Validazione Ingressi IPC rigorosa 🚧 (`validateAndSanitizeAssetPath`):**
+  - 🌐 **Same-Origin Check:** Controllo stringente per azzerare qualsiasi rischio di *Server-Side Request Forgery (SSRF)* verso domini esterni.
+  - 🛑 **Anti-Path Traversal:** Blocco tassativo e preventivo di sequenze di risalita directory (`../`, `..\`, `\0`).
+- 🛑 **Protezione Anti-DoS & Memory Exhaustion:** Introduzione di un tetto massimo rigoroso (`MAX_ALLOWED_ASSETS = 500`) sul numero di risorse accettate dal manifesto e dai core assets.
+
+### 🪖 NOVITÀ v7.9.7+ (`🐛 BUG Fix`)
+- 🪳 **Bug Fixed su Evento Fetch del SW:** Ottimizzazione di *NetWorkFirst*, *SWR (Stale-While-Revalidate)*, *Regolatore di Flusso Polimorfo* e *Universal-Scan*.
+- 🖼️🩹 **Gestione Placeholder:** Risolto il comportamento sulle richieste `HEAD` per le risorse immagine (restituisce `404 Error` ❌ invece del placeholder).
+- ➕ **🧭 Safari:** Avviato supporto in sperimentazione (escluso il Watchdog Anti-Incognito).
+
+### 🪖 NOVITÀ v7.9.6+ (`🐛 BUG Fix`)
+- 🪳 **Evento Fetch:** Aggiunto calcolo e invio corretto dell'header `Content-Length` nelle risposte servite dal Service Worker.
+- 🐺️🐤 **Watchdog di Sicurezza:** Introdotta tolleranza a **3 tentativi** prima di dichiarare compromessa la chiave di cifratura della stiva (`🔑🗄️`).
+
+### 🪖 NOVITÀ v7.9.5+ (`🐛 BUG Fix`)
+- 🚀 **SWR & Reti Degradate:** Strategia migliorata e perfezionamento del *Regolatore di Flusso Polimorfo* per adattarsi dinamicamente alle connessioni instabili.
+- 🎯 **Riorganizzazione Fetch:** Ottimizzazione dei flussi *NetworkFirst/SaveBackground*, *SWR* e *CacheFirst (Off-line)*.
+
+### 🪖 NOVITÀ v7.9+ (`🪨 Hardening contro il Red-Team 🔴`)
+- 🔍 **1. Validazione Forense Blob (`isValidBlob`):**
+  - 🧹 **SVG & Anti-Polyglot:** Blocco tag ostili (`<script>`, `<iframe>`), event handler inline (`onload=`) e signature di script in immagini raster (`PNG`, `WEBP`, `JPEG`).
+  - 📄 **PDF, PAdES & CAdES De-Obfuscated:** Finestra di analisi estesa a **4096 byte** per header e footer (supporto firme digitali e buste `.p7m`), soglia minima a **2 KB**, decodifica esadecimale, strip commenti/spazi, blocco stream compressi (`/flatedecode`, `/lzwdecode`) e isolamento pattern malevoli.
+  - 🧠 **RAM Zero-Out:** Bonifica della memoria con `.fill(0)` sui buffer attivi gestita tramite blocchi `finally` sicuri.
+- 🧠 **2. Deep Scanner IPC (`universalScanner`):**
+  - 🛑 **Cap Nodi & Profilo:** Limite massimo di **999 nodi per albero** e vincolo a **12 livelli** di profondità (*Anti-JSON-Bomb*).
+  - 🛡️ **Anti-Path Traversal:** Sanitizzazione e scarto di chiavi e percorsi con risalite directory (`../`, `..\`) o null byte (`\0`).
+  - ⚡ **CPU Yielding:** Pausa non-blocking dell'Event Loop ogni 10 nodi per preservare la reattività del thread worker.
+- 🔒 **3. Iniezione Security Headers (`injectSecurityHeaders`):** Riscrittura automatica in-flight degli header HTTP (`nosniff`, `DENY`, `strict-origin-when-cross-origin`, `same-origin`) su ogni risposta intercettata.
+
+### 🪖 NOVITÀ v7.7+ / v7.8+ (`🪨 Hardening Totale`)
+- 🔬🧬 **SW Forensics (DNA Check & Binary Validation):** Verifica dei Magic Bytes nei primi 512 byte (*Testa*), controllo terminatore finale via `blob.slice(-5).arrayBuffer()` (*Coda*) e scansione anti-offuscamento del corpo PDF (`/JS`, `/JavaScript`, `/OpenAction`, `/Launch`) con azzeramento memoria (`wipeRAM()`) in caso di fallimento.
+
+### 🪖 NOVITÀ v7.6+ (`➕ Funzionalità`)
+- 🏴‍☠️ **Protocolli Anti-Profiling:** Conversione dei punti di errore in *Black Hole* informativi, sterilizzazione degli stack trace e iniezione di rumore temporale (`💉⏱️`) contro attacchi *side-channel*.
+
+</details>
+
+<details>
+<summary><strong>⚙️📦 Espandi Changelog SDK & DASHBOARD (v2.1 → v2.3.8)</strong></summary>
+
+### 📣 NOVITÀ v2.3.8 (`🔄📊 GUI DashBoard & Sandbox`)
+- 🔒 **Visore Sandbox Protetto (`openInSandbox`):** Isolamento tramite `iframe` (`sandbox="allow-scripts"`) e zoom universale istantaneo su Blob rasterizzato.
+- 💻 **Gestione Sicura RAM (`closeSandbox`):** Controllo `!activeRawBuffer.detached` e sanitizzazione Heap con `Uint8Array.fill(0)` prima del rilascio definitivo.
+- ❄️ **Deep Freeze:** Configurazioni e manifesto PA congelati in sola lettura all'avvio.
+
+### 📣 NOVITÀ v2.3.6 (`🐺🗄️ Watchdog & Hardening`)
+- 🛡️ **Watchdog Integrità Stiva Anti-Wipe:** Protezione intelligente contro lo svuotamento imprevisto della memoria, resilienza al riavvio e popup di ripristino guidato con un click.
+- 🪨 **Hardening GUI DashBoard (`app.js`):** Aggiornamenti di sicurezza sull'interfaccia.
+
+### 📣 NOVITÀ v2.3.4 (`🪨 Hardening`)
+- 🔒 **Immutabilità Totale (`Object.freeze`):** Sigillatura dei modali di blocco (`incognitoBlocker`, `cacheWipeBlocker`, `purgeSuccessBlocker`), dei Core Assets e del payload IPC (`safePayload`).
+- 💻 **Dashboard Client Hardening (`app.js`):** Sanitizzazione input di ricerca (`filterQuery`) da caratteri di controllo ASCII e sostituzione di `innerHTML` con `document.createElement` e `textContent` in `renderStorageTable` per prevenire DOM-based XSS.
+
+### 🪳 Bug Fix v2.3.3 (`app.js`)
+- Ottimizzazione delle prestazioni visive di `renderStorageTable()` su dispositivi datati tramite `DocumentFragment`.
+
+### 📣 NOVITÀ v2.3.2 (`➕🔄 Ciclo di Vita & Modali`)
+- ⚡ **Controllo Ciclo di Vita:** Aggiunta opzione `autoInit` nel costruttore e metodo pubblico `destroy()` per la pulizia sicura di timer ed event listener.
+- 🧱 **Motore Grafico Modale Unificato (`_renderModalBlocker`):** Gestione centralizzata dei modali e ripristino automatico dello scroll.
+- 📚 **JSDoc Completo:** Integrazione di `@typedef`, `@param`, `@returns` per supporto IntelliSense negli IDE.
+
+### 📣 NOVITÀ v2.3 (`➕🔄 Funzionalità`)
+- **🐺🗄️ Watchdog Integrità Stiva:** Monitoraggio periodico della cache con popup personalizzabile per purga volontaria o involontaria.
+- **🕵️‍♂️ Rilevamento Incognito Selettivo:** Controllo mirato esclusivamente su motori Chromium/Blink.
+- **🌐🔄 Gestione Rete Resiliente:** Badge dinamico On-line/Off-line e auto-risincronizzazione della stiva al ritorno della rete.
+- **📌🗄️ Prefisso Cache Parametrico:** Gestione centralizzata (`PA_PANZER_ENGINE_v`).
+
+### 📣 NOVITÀ v2.1 (`🐛 BUG Fix`)
+- Fix generali su `SDK.js`, `ServiceWorker.js`, Sandbox Visore, Sync Stiva Bunker e aggiornamento GUI Dashboard (`app.js`).
+
+</details>
