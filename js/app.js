@@ -1,7 +1,7 @@
 /**
  * ⚙️⚡ App Controller 
  * Dashboard PA & Gestione UI
- * v2.3.6.2
+ * v2.3.6.3
  *
  * * 👤 Autore: Valentino Aglianó
  * Perito Informatico / Idoneo ASMEL 2025
@@ -153,18 +153,17 @@ document.addEventListener('DOMContentLoaded', async () => {
         applyZoom();
     });
 
-        // 🔒 Visore Sandbox Protetto.
+    // 🔒 Visore Sandbox Protetto.
     const openInSandbox = async (url, fileName) => {
         try {
             const isMobile = window.innerWidth <= 768;
             currentZoom = isMobile ? 0.5 : 1.0;
 
-            logToTerminal('vault', `🫙🔒 Apertura visore protetto per: ${fileName || url} ( Zoom: ${Math.round(currentZoom * 100)}%)`);
+            logToTerminal('vault', `🫙🔒 Apertura visore protetto per: ${fileName || url} (Zoom:  ${Math.round(currentZoom * 100)}%)`);
             
             const response = await fetch(url);
             if (!response || !response.ok) throw new Error(`HTTP ${response?.status || 'Risorsa irreperibile'}`);
             
-            // 🛡 ️Buffer grezzo in RAM.
             activeRawBuffer = await response.arrayBuffer();
             const rawMime = response.headers.get('Content-Type') || 'application/octet-stream';
             const mimeType = CoreUtils.detectMimeType(url, rawMime);
@@ -183,16 +182,17 @@ document.addEventListener('DOMContentLoaded', async () => {
                 activeObjectUrl = null;
             }
 
-            // 🛡️ Conversione in Base64.
+            // 🛡️ Conversione Base64 a blocchi.
             const bytes = new Uint8Array(activeRawBuffer);
             let binary = '';
-            const len = bytes.byteLength;
-            for (let i = 0; i < len; i++) {
-                binary += String.fromCharCode(bytes[i]);
+            const chunkSize = 8192;
+            for (let i = 0; i < bytes.length; i += chunkSize) {
+                const chunk = bytes.subarray(i, i + chunkSize);
+                binary += String.fromCharCode.apply(null, chunk);
             }
             const base64Data = btoa(binary);
 
-            // 🔒 Sandbox blindata.
+            // 🔒 Sandbox isolata.
             sandboxFrame.setAttribute('sandbox', 'allow-scripts');
             sandboxFrame.src = 'about:blank';
 
@@ -230,7 +230,6 @@ document.addEventListener('DOMContentLoaded', async () => {
             } else if (mimeType.includes('pdf')) {
                 const baseUrl = window.location.href.substring(0, window.location.href.lastIndexOf('/') + 1);
                 const PDFlib = baseUrl + 'js/pdf_min.js';
-                const PDFworker = baseUrl + 'js/pdf_worker_min.js';
 
                 renderedContentHtml = `
                     <!DOCTYPE html>
@@ -248,16 +247,13 @@ document.addEventListener('DOMContentLoaded', async () => {
                         <script src="${PDFlib}"><\/script>
                     </head>
                     <body oncontextmenu="return false;" ondragstart="return false;" onselectstart="return false;">
-                        <div id="loading" class="loading"><div>⏳📄 Loading...</div></div>
+                        <div id="loading" class="loading"><div>⏳📄 PDF Loading...</div></div>
                         <div id="pdf-wrapper"></div>
                         <script>
                             async function renderSecurePDF() {
                                 try {
                                     if (typeof pdfjsLib === 'undefined') throw new Error("Libreria PDF.js non disponibile.");
                                     
-                                    pdfjsLib.GlobalWorkerOptions.workerSrc = '${PDFworker}';
-
-                                    // Decodifica Base64 efficiente in Uint8Array all'interno dell'iframe
                                     const base64Str = "${base64Data}";
                                     const binaryString = atob(base64Str);
                                     const len = binaryString.length;
@@ -266,8 +262,10 @@ document.addEventListener('DOMContentLoaded', async () => {
                                         rawData[i] = binaryString.charCodeAt(i);
                                     }
 
+                                    // 🚀 Caricamento diretto con disableWorker attivo (Nessun bisogno di Worker esterni)
                                     const loadingTask = pdfjsLib.getDocument({
                                         data: rawData,
+                                        disableWorker: true,
                                         isEvalSupported: false
                                     });
 
@@ -299,7 +297,7 @@ document.addEventListener('DOMContentLoaded', async () => {
                                         }).promise;
                                     }
                                 } catch (err) {
-                                    document.getElementById('loading').innerHTML = '<div style="color:#f87171; text-align:center; padding:20px;">❌ Errore rendering PDF: ' + err.message + '</div>';
+                                    document.getElementById('loading').innerHTML = '<div style="color:#f87171; text-align:center; padding:20px; font-family:sans-serif;">❌ Errore rendering PDF: ' + err.message + '</div>';
                                 }
                             }
                             window.addEventListener('DOMContentLoaded', renderSecurePDF);
