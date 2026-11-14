@@ -1523,12 +1523,13 @@ try {
             }
         });
     } 
+    
     // Eventuale supporto formato ( se strutturato come array di gruppi )
     else if (Array.isArray(structured)) {
         if (structured.length > MAX_ALLOWED_ASSETS) {
             throw new Error("MANIFEST_GROUPS_LIMIT_EXCEEDED");
         }
-        structured.assets.forEach(group => { // oppure la logica dei gruppi esistente
+        structured.forEach(group => {
             const directory = group.dir || "";
             if (group.files && Array.isArray(group.files)) {
                 group.files.forEach(f => {
@@ -2173,21 +2174,24 @@ self.addEventListener('fetch', (event) => {
 			// Intercetta la risorsa memorizzata localmente nelle stive. Se l'asset appartiene al Bunker Core,
 			// devia il flusso verso il modulo di decrittazione asincrona nativa per ripristinare il plaintext.
             if (cached.headers.get('X-PWA-Encrypted') === 'true') {
+                let buffer = null;
+                let decrypted = null;
+                let exactBuffer = null;
                 try {
 					//await waitTillIdle(50);
                     const isOk = await verifyVaultIntegrity();
                     if (!isOk || !encryptionKey) throw new Error("VAULT_LOCKED_NO_KEY");
-                    const buffer = await cached.clone().arrayBuffer();
-                    let decrypted = await decryptBuffer(buffer);
+                    buffer = await cached.clone().arrayBuffer();
+                    decrypted = await decryptBuffer(buffer);
 					if (decrypted) {
 	                    const detectedContentType = cached.headers.get('Content-Type') || '';
 	                    const dotIdx = finalPath.lastIndexOf('.');
 	                    const ext = dotIdx !== -1 ? finalPath.substring(dotIdx + 1).toLowerCase() : '';
 	                    
-	                    decrypted = new Uint8Array(decrypted);
-	                    const exactBuffer = decrypted.buffer.slice(
-	                        decrypted.byteOffset, 
-	                        decrypted.byteOffset + decrypted.byteLength
+	                    const decryptedBytes = new Uint8Array(decrypted);
+	                    exactBuffer = decryptedBytes.buffer.slice(
+	                        decryptedBytes.byteOffset, 
+	                        decryptedBytes.byteOffset + decryptedBytes.byteLength
 	                    );
 	                    const secureHeaders = new Headers({
 	                        'Content-Type': detectedContentType,
@@ -2204,8 +2208,10 @@ self.addEventListener('fetch', (event) => {
 	                    const outResponse = new Response(exactBuffer, { status: 200, headers: secureHeaders });
 						new Uint8Array(buffer).fill(0);
 						new Uint8Array(exactBuffer).fill(0);
-	                    if (decrypted instanceof ArrayBuffer) new Uint8Array(decrypted).fill(0);
+	                    new Uint8Array(decrypted).fill(0);
 	                    decrypted = null;
+	                    exactBuffer = null;
+	                    buffer = null;
 						console.info(`💾🛡️ SW: Risorsa estratta dal, ${targetCache}\nURL : ${finalPath}\n🛡️🧹 SW: Bonifica RAM eseguita.`);
 						return outResponse;
 					}
@@ -2213,16 +2219,18 @@ self.addEventListener('fetch', (event) => {
                     	// 🪝🛡️⏱️ INNESTO TEMPORALE SU FALLIMENTO DECRITTAZIONE (PREVIENE TIMING ATTACKS SULLE CHIAVI)
 					if (typeof injectTimingNoise === 'function') await injectTimingNoise(startFetchTime, 40);
 					 // 🧼 BONIFICA DI EMERGENZA RAM:
-					 if (typeof exactBuffer !== 'undefined' && exactBuffer instanceof ArrayBuffer) {
+					 if (exactBuffer instanceof ArrayBuffer) {
 					     new Uint8Array(exactBuffer).fill(0);
-}
-                    if (typeof buffer !== 'undefined' && buffer instanceof ArrayBuffer) {
+                     }
+                    if (buffer instanceof ArrayBuffer) {
                         new Uint8Array(buffer).fill(0);
                     }
-                    if (typeof decrypted !== 'undefined' && decrypted instanceof ArrayBuffer) {
+                    if (decrypted instanceof ArrayBuffer) {
                         new Uint8Array(decrypted).fill(0);
                     }
                     decrypted = null;
+                    exactBuffer = null;
+                    buffer = null;
 
 					// 🏴‍☠️ ACCECAMENTO: Rimozione totale delle tracce crittografiche dall'oggetto errore
 					const cleanDecryptErr = {};
@@ -2291,9 +2299,10 @@ self.addEventListener('fetch', (event) => {
                                     if (decrypted) {
                                         const variantExtLower = variantExt.toLowerCase();
                                         
-                                        const exactBufferIMG = decrypted.buffer.slice(
-                                            decrypted.byteOffset, 
-                                            decrypted.byteOffset + decrypted.byteLength
+                                        const decryptedBytesIMG = new Uint8Array(decrypted);
+                                        const exactBufferIMG = decryptedBytesIMG.buffer.slice(
+                                            decryptedBytesIMG.byteOffset, 
+                                            decryptedBytesIMG.byteOffset + decryptedBytesIMG.byteLength
                                         );
                                         const secureHeaders = new Headers({
                                             'Content-Type': contentTypeIMG,
@@ -2310,7 +2319,7 @@ self.addEventListener('fetch', (event) => {
                                         const variantResponse = new Response(exactBufferIMG, { status: 200, headers: secureHeaders });
                                         new Uint8Array(buffer).fill(0);
                                         new Uint8Array(exactBufferIMG).fill(0);
-                                        if (decrypted instanceof ArrayBuffer) new Uint8Array(decrypted).fill(0);
+                                        new Uint8Array(decrypted).fill(0);
                                         decrypted = null;
                                        return variantResponse;
                                     }
@@ -2351,14 +2360,15 @@ self.addEventListener('fetch', (event) => {
 			                        let decrypted = await decryptBuffer(buffer);
 			                        
 	                            if (decrypted && decrypted.byteLength > 0) {
-	                                const exactBufferP = decrypted.buffer.slice(
-                                            decrypted.byteOffset, 
-                                            decrypted.byteOffset + decrypted.byteLength
+	                                const decryptedBytesP = new Uint8Array(decrypted);
+	                                const exactBufferP = decryptedBytesP.buffer.slice(
+                                            decryptedBytesP.byteOffset, 
+                                            decryptedBytesP.byteOffset + decryptedBytesP.byteLength
                                         );
 	                                globalPlaceholderBlob = new Blob([exactBufferP], { type: placeholder.headers.get('Content-Type') || 'image/png' });
 	                                new Uint8Array(buffer).fill(0);
 	                                new Uint8Array(exactBufferP).fill(0);
-	                                if (decrypted instanceof ArrayBuffer) new Uint8Array(decrypted).fill(0);
+	                                new Uint8Array(decrypted).fill(0);
 	                                decrypted = null;
 	                            }
 							} else {
