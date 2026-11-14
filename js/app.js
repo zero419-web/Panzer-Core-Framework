@@ -1,7 +1,7 @@
 /**
  * ⚙️⚡ App Controller 
  * Dashboard PA & Gestione UI
- * v2.3.6.9
+ * v2.3.6.10
  *
  * * 👤 Autore: Valentino Aglianó
  * Perito Informatico / Idoneo ASMEL 2025
@@ -152,19 +152,19 @@ document.addEventListener('DOMContentLoaded', async () => {
         currentZoom = Math.max(currentZoom - 0.25, 0.25);
         applyZoom();
     });
-
+    
     // 🔒 Visore Sandbox Protetto.
     let activeViewerBlobUrl = null;
     let activeLibBlobUrl = null;
     let activeMainScriptBlobUrl = null;
+
     const openInSandbox = async (url, fileName) => {
         try {
             const isMobile = window.innerWidth <= 768;
             currentZoom = isMobile ? 0.5 : 1.0;
 
-            logToTerminal('vault', `🫙🔒 Apertura visore protetto per: ${fileName || url} ( Zoom: ${Math.round(currentZoom * 100)}% )`);
+            logToTerminal('vault', `🫙🔒 Apertura visore protetto per: ${fileName || url} (Zoom iniziale: ${Math.round(currentZoom * 100)}%)`);
             
-            // 🌐🏁 Fetch parallelo.
             const [response, pdfLibRes] = await Promise.all([
                 fetch(url),
                 fetch('js/pdf_min.js')
@@ -187,13 +187,11 @@ document.addEventListener('DOMContentLoaded', async () => {
                 btnZoomOut.style.cursor = 'pointer';
             }
 
-            // 🧹 Pulizia vecchi URL in memoria
             if (activeObjectUrl) { URL.revokeObjectURL(activeObjectUrl); activeObjectUrl = null; }
             if (activeViewerBlobUrl) { URL.revokeObjectURL(activeViewerBlobUrl); activeViewerBlobUrl = null; }
             if (activeLibBlobUrl) { URL.revokeObjectURL(activeLibBlobUrl); activeLibBlobUrl = null; }
             if (activeMainScriptBlobUrl) { URL.revokeObjectURL(activeMainScriptBlobUrl); activeMainScriptBlobUrl = null; }
 
-            // 🛡️ Conversione Base64 a blocchi
             const bytes = new Uint8Array(activeRawBuffer);
             let binary = '';
             const chunkSize = 8192;
@@ -203,7 +201,6 @@ document.addEventListener('DOMContentLoaded', async () => {
             }
             const base64Data = btoa(binary);
 
-            // 🛡️ Blob Libreria PDF_min.js
             const pdfLibBlob = new Blob([pdfLibText], { type: 'application/javascript' });
             activeLibBlobUrl = URL.createObjectURL(pdfLibBlob);
 
@@ -232,6 +229,16 @@ document.addEventListener('DOMContentLoaded', async () => {
                 `;
             } else if (mimeType.includes('pdf')) {
                 const mainScriptText = `
+                    // 🚨 TRAPPOLA ERRORI...
+                    window.onerror = function(msg, url, lineNo, columnNo, error) {
+                        const statusLog = document.getElementById('status-log');
+                        if (statusLog) {
+                            statusLog.innerHTML += '<div style="color:#f87171;">💥 CRASH JS [L.' + lineNo + ']: ' + msg + '</div>';
+                            statusLog.scrollTop = statusLog.scrollHeight;
+                        }
+                        return false;
+                    };
+
                     const statusLog = document.getElementById('status-log');
                     function logStep(msg) {
                         const timeStr = new Date().toLocaleTimeString();
@@ -247,11 +254,11 @@ document.addEventListener('DOMContentLoaded', async () => {
                         try {
                             logStep("Controllo disponibilità oggetto pdfjsLib...");
                             if (typeof pdfjsLib === 'undefined') {
-                                throw new Error("pdfjsLib non definito (Script Blob non eseguito).");
+                                throw new Error("pdfjsLib non definito. La libreria non è stata caricata dal Blob.");
                             }
                             logStep("Libreria PDF.js caricata con successo.");
 
-                            logStep("Inizio decodifica stringa Base64 in Array binario...");
+                            logStep("Inizio decodifica Base64...");
                             const base64Str = "${base64Data}";
                             const binaryString = atob(base64Str);
                             const len = binaryString.length;
@@ -259,9 +266,9 @@ document.addEventListener('DOMContentLoaded', async () => {
                             for (let i = 0; i < len; i++) {
                                 rawData[i] = binaryString.charCodeAt(i);
                             }
-                            logStep("Decodifica completata. Byte totali: " + rawData.length);
+                            logStep("Decodifica completata. Byte: " + rawData.length);
 
-                            logStep("Avvio parser documento PDF (pdfjsLib.getDocument)...");
+                            logStep("Avvio parser documento PDF...");
                             const loadingTask = pdfjsLib.getDocument({
                                 data: rawData,
                                 disableWorker: true,
@@ -298,24 +305,22 @@ document.addEventListener('DOMContentLoaded', async () => {
                                     canvasContext: context,
                                     viewport: viewport
                                 }).promise;
-                                logStep("Pagina " + pageNum + " renderizzata con successo.");
+                                logStep("Pagina " + pageNum + " renderizzata.");
                             }
-                            logStep("✅ Rendering completato!");
+                            logStep("✅ Rendering completato con successo!");
                         } catch (err) {
                             console.error(err);
                             logStep("❌ ERRORE: " + err.message);
                             const loadingEl = document.getElementById('loading');
                             if (loadingEl) {
-                                loadingEl.innerHTML = '<div style="color:#f87171; font-weight:bold;">❌ Errore critico nel rendering PDF:</div><div style="color:#cbd5e1; font-size:12px; margin-top:8px;">' + err.message + '</div>';
+                                loadingEl.innerHTML = '<div style="color:#f87171; font-weight:bold;">❌ Errore rendering PDF:</div><div style="color:#cbd5e1; font-size:12px; margin-top:8px;">' + err.message + '</div>';
                             }
                         }
                     }
-                    if (document.readyState === 'loading') {
-                        window.addEventListener('DOMContentLoaded', renderSecurePDF);
-                    } else {
-                        renderSecurePDF();
-                    }
+
+                    setTimeout(renderSecurePDF, 50);
                 `;
+
                 const mainScriptBlob = new Blob([mainScriptText], { type: 'application/javascript' });
                 activeMainScriptBlobUrl = URL.createObjectURL(mainScriptBlob);
 
@@ -333,14 +338,13 @@ document.addEventListener('DOMContentLoaded', async () => {
                             .loading { color:#f8fafc; display:flex; flex-direction:column; justify-content:center; align-items:center; height:100vh; font-family:sans-serif; gap:12px; padding: 20px; text-align: center; }
                             .log-box { width: 100%; max-width: 450px; height: 180px; background: #020617; border: 1px solid #334155; border-radius: 6px; padding: 10px; font-family: monospace; font-size: 11px; color: #38bdf8; text-align: left; overflow-y: auto; }
                         </style>
-                        <!-- Script caricati esclusivamente tramite Blob URL esterni (Conforme CSP) -->
                         <script src="${activeLibBlobUrl}"></script>
                         <script src="${activeMainScriptBlobUrl}"></script>
                     </head>
                     <body oncontextmenu="return false;" ondragstart="return false;" onselectstart="return false;">
                         <div id="loading" class="loading">
                             <div style="font-size: 16px; font-weight: bold;">⏳📄 PDF Loading...</div>
-                            <div id="status-log" class="log-box">[0.0s] Visore avviato, esecuzione script blob in corso...</div>
+                            <div id="status-log" class="log-box">[0.0s] Visore avviato, in attesa di script...</div>
                         </div>
                         <div id="pdf-wrapper"></div>
                     </body>
@@ -359,7 +363,6 @@ document.addEventListener('DOMContentLoaded', async () => {
                 `;
             }
 
-            // 🫙 Incapsulamento.
             const viewerBlob = new Blob([viewerHtml], { type: 'text/html' });
             activeViewerBlobUrl = URL.createObjectURL(viewerBlob);
 
@@ -369,7 +372,7 @@ document.addEventListener('DOMContentLoaded', async () => {
             sandboxTitle.textContent = `🔎🔒 ${fileName || url}`;
             sandboxModal.classList.add('active');
 
-            logToTerminal('success', `🛡📦️ Documento Cifrato inviato al visore.`);
+            logToTerminal('success', `🛡📦️ Documento inviato al visore.`);
         } catch (err) {
             logToTerminal('error', `❌ 👁️‍🗨️Errore apertura visore: ${err.message}`);
         }
