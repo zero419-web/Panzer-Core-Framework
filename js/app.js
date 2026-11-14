@@ -149,7 +149,8 @@ document.addEventListener('DOMContentLoaded', async () => {
     // 🔒 Visore Sandbox Protetto.
     const openInSandbox = async (url, fileName) => {
         try {
-            currentZoom = 1.0;
+            const isMobile = window.innerWidth <= 768;
+            currentZoom = isMobile ? 0.5 : 1.0;
 
             logToTerminal('vault', `🫙🔒 Apertura visore protetto per: ${fileName || url} ( Zoom: ${Math.round(currentZoom * 100)}% )`);
             
@@ -209,11 +210,9 @@ document.addEventListener('DOMContentLoaded', async () => {
                     </html>
                 `;
             } else if (mimeType.includes('pdf')) {
-                // 🖼️📄 Rasterizzazione PDF con diagnostica passo-passo
-                logToTerminal('vault', '🔄 Conversione PDF in immagini...');
-                
-                                if (typeof pdfjsLib === 'undefined') {
-                    logToTerminal('vault', '📥 Caricamento asincrono libreria PDF.js...');
+                // 🖼️📄 Rasterizzazione PDF.
+                if (typeof pdfjsLib === 'undefined') {
+                    //logToTerminal('vault', '📥 Load async lib. pdf_min.js...');
                     await new Promise((resolve, reject) => {
                         const scriptEl = document.createElement('script');
                         scriptEl.src = 'js/pdf_min.js';
@@ -224,12 +223,12 @@ document.addEventListener('DOMContentLoaded', async () => {
                 }
 
                 if (typeof pdfjsLib === 'undefined') {
-                    throw new Error("Lib PDF_min.js non caricata nel contesto principale.");
+                    throw new Error("Lib. pdf_min.js non caricata nel contesto principale.");
                 }
 
                 pdfjsLib.GlobalWorkerOptions.workerSrc = 'js/pdf_worker_min.js';
 
-                logToTerminal('vault', '📥 Preparazione buffer binario (Uint8Array)...');
+                //logToTerminal('vault', '📥 Preparazione buffer binario...');
                 const pdfDataBytes = new Uint8Array(activeRawBuffer);
 
                 const loadingTask = pdfjsLib.getDocument({
@@ -238,34 +237,34 @@ document.addEventListener('DOMContentLoaded', async () => {
                     isEvalSupported: false
                 });
 
-                logToTerminal('vault', '📥 Attesa Parsing Doc. PDF...');
+                //logToTerminal('vault', '📥 Attesa Parsing Doc. PDF...');
                 const pdfDoc = await loadingTask.promise;
                 logToTerminal('vault', `✅🔎 PDF - Pagine totali: ${pdfDoc.numPages}`);
                 
                 let imagesHtmlList = '';
 
                 for (let pageNum = 1; pageNum <= pdfDoc.numPages; pageNum++) {
-                    logToTerminal('vault', `📄 Elaborazione pagina ${pageNum} di ${pdfDoc.numPages}...`);
+                    //logToTerminal('vault', `📄 Elaborazione pagina ${pageNum} di ${pdfDoc.numPages}...`);
                     const page = await pdfDoc.getPage(pageNum);
-                    const viewport = page.getViewport({ scale: 1.0 });
+                    const viewport = page.getViewport({ scale: 1.5 });
                     
                     const canvas = document.createElement('canvas');
                     const context = canvas.getContext('2d');
                     canvas.height = viewport.height;
                     canvas.width = viewport.width;
 
-                    logToTerminal('vault', `⚙️ Rendering pagina ${pageNum} su canvas...`);
+                    //logToTerminal('vault', `⚙️ Rendering pagina ${pageNum} su canvas...`);
                     await page.render({
                         canvasContext: context,
                         viewport: viewport
                     }).promise;
 
-                    logToTerminal('vault', `📸 Generazione IMG protetta, pag. ${pageNum}`);
+                    //logToTerminal('vault', `📸 Generazione IMG protetta, pag. ${pageNum}`);
                     const pageDataUrl = canvas.toDataURL('image/png');
                     imagesHtmlList += `<img src="${pageDataUrl}" alt="Pagina ${pageNum}" />\n`;
                 }
 
-                logToTerminal('vault', '✅ Tutte le pagine convertite con successo.');
+                //logToTerminal('vault', '✅ Tutte le pagine convertite con successo.');
                 
                 renderedContentHtml = `
                     <!DOCTYPE html>
