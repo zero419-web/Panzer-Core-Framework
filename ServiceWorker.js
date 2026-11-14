@@ -1,7 +1,7 @@
 /*
  * 📄 [ DISCIPLINARE TECNICO DI CONFORMITÀ ]
  *
- * ⚙️ CORE: 🪖 PANZER v7.9.9+ ( v2.x SDK ⛓️)
+ * ⚙️ CORE: 🪖 PANZER v7.10+ ( v2.x SDK ⛓️)
  *
  * 🛡️ REQUISITI OPERATIVI DI SISTEMA :
  *
@@ -23,7 +23,7 @@
  *   5. 🌡️🛡 ️CPU THERMAL SHIELD :
  *     Ottimizzatore adattivo del respiro dell'Event Loop via 'waitTillIdle' per la prevenzione del logoramento hardware.
  *
- * ⚙️️ NUCLEO: [ SERVICE WORKER ] - ( SW ) " 🪖 PANZER V7.x+ " :
+ * ⚙ NUCLEO: [ SERVICE WORKER ] - ( SW ) " 🪖 PANZER V7.x+ " :
  *   🎖 MILITARY EDITION ( 🔐 CRYPTOGRAPHIC 🗄️ VAULT 🔑 AES-GCM 256-BIT ).
  *
  * Licenza di Distribuzione :
@@ -682,6 +682,7 @@ const isValidBlob = async (input, contentType, expectedSize = 0, isEncrypted = f
             if (signal?.aborted) return result;
 
             const configPdfPatterns = (pdfConfig.pdfMaliciousPatterns || []).map(p => p.toLowerCase());
+            const MAX_DECOMPRESSED_STREAM_SIZE = 50 * 1024 * 1024; // 50 MB tetto massimo
 
             if (typeof waitTillIdle === 'function') {
                 const idleMin = pdfConfig.idleMinMs || 200;
@@ -694,9 +695,16 @@ const isValidBlob = async (input, contentType, expectedSize = 0, isEncrypted = f
             const streamContextWindow = pdfConfig.streamContextWindow || 300;
             let offset = 0;
             let inStream = false;
+            let chunkStartTime = performance.now();
 
             while (offset < blob.size) {
                 if (signal?.aborted) return result;
+
+                // Watchdog yielding per prevenire il kill del Service Worker
+                if (performance.now() - chunkStartTime > 50) {
+                    await waitTillIdle(10, 500);
+                    chunkStartTime = performance.now();
+                }
 
                 let chunkBuffer = null;
                 const chunkBuffersToClean = [];
@@ -793,11 +801,47 @@ const isValidBlob = async (input, contentType, expectedSize = 0, isEncrypted = f
                                 if (streamBytes.length > 0) {
                                     const format = ((streamBytes[0] & 0x0F) === 8) ? 'deflate' : 'deflate-raw';
                                     const decompressedStream = new Blob([streamBytes]).stream().pipeThrough(new DecompressionStream(format));
-                                    const decompressedBuffer = await new Response(decompressedStream).arrayBuffer();
-                                    chunkBuffersToClean.push(decompressedBuffer);
+                                    
+                                    const reader = decompressedStream.getReader();
+                                    let totalDecoded = 0;
+                                    const chunks = [];
+                                    while (true) {
+                                        const { done, value } = await reader.read();
+                                        if (done) break;
+                                        totalDecoded += value.length;
+                                        if (totalDecoded > MAX_DECOMPRESSED_STREAM_SIZE) {
+                                            reader.cancel();
+                                            throw new Error("DECOMPRESSION_BOMB_DETECTED");
+                                        }
+                                        chunks.push(value);
+                                    }
 
-                                    decompText = new TextDecoder('iso-8859-1', { fatal: false }).decode(new Uint8Array(decompressedBuffer)).toLowerCase();
+                                    const decompressedBuffer = new Uint8Array(totalDecoded);
+                                    let pIdx = 0;
+                                    for (const chunk of chunks) {
+                                        decompressedBuffer.set(chunk, pIdx);
+                                        pIdx += chunk.length;
+                                    }
+                                    chunkBuffersToClean.push(decompressedBuffer.buffer);
+
+                                    decompText = new TextDecoder('iso-8859-1', { fatal: false }).decode(decompressedBuffer).toLowerCase();
                                     decompText = decompText.replace(/#([0-9a-f]{2})/g, (_, hex) => String.fromCharCode(parseInt(hex, 16)).toLowerCase());
+                                    
+                                    // Normalizzazione hex obfustation
+                                    decompText = decompText.replace(/<([0-9a-fA-F\s]+)>/g, (_, hexContent) => {
+                                        try {
+                                            const cleanHex = hexContent.replace(/\s+/g, '');
+                                            if (cleanHex.length % 2 === 0) {
+                                                let decoded = '';
+                                                for (let i = 0; i < cleanHex.length; i += 2) {
+                                                    decoded += String.fromCharCode(parseInt(cleanHex.substr(i, 2), 16));
+                                                }
+                                                return decoded.toLowerCase();
+                                            }
+                                        } catch (_) {}
+                                        return '';
+                                    });
+
                                     decompText = decompText.replace(/\s+/g, ' ');
 
                                     for (const pattern of configPdfPatterns) {
@@ -1992,6 +2036,10 @@ self.addEventListener('fetch', (event) => {
 
     // 🚧 SEZIONE I B : GESTIONE CACHE & FALLBACK...
     event.respondWith((async () => {
+        // Supporto Navigation Preload API
+        const preloadResponse = await event.preloadResponse;
+        if (preloadResponse) return injectSecurityHeaders(preloadResponse);
+
         // ⏱️ Marcatore iniziale:
         const startFetchTime = performance.now();
         let finalPath = cleanPath;
@@ -2195,6 +2243,14 @@ self.addEventListener('fetch', (event) => {
 	                        decryptedBytes.byteOffset, 
 	                        decryptedBytes.byteOffset + decryptedBytes.byteLength
 	                    );
+
+                        // 🛡️ DNA CHECK FORENSE POST-DECRITTAZIONE SUL PLAINTEXT
+                        const decryptedBlob = new Blob([exactBuffer], { type: detectedContentType });
+                        const forensicCheck = await isValidBlob(decryptedBlob, detectedContentType, 0, true, globalAbortController?.signal);
+                        if (!forensicCheck.valid) {
+                            throw new Error("VAULT_PLAINTEXT_DNA_CORRUPTED");
+                        }
+
 	                    const secureHeaders = new Headers({
 	                        'Content-Type': detectedContentType,
 	                        'X-PWA-Source': 'Bunker-Decrypted', 
@@ -2219,7 +2275,7 @@ self.addEventListener('fetch', (event) => {
 					}
                 } catch (err) {
                     	// 🪝🛡️⏱️ INNESTO TEMPORALE SU FALLIMENTO DECRITTAZIONE (PREVIENE TIMING ATTACKS SULLE CHIAVI)
-					if (typeof injectTimingNoise === 'function') await injectTimingNoise(startFetchTime, 40);
+					if (typeof injectTimingNoise === 'function') await injectTimingNoise(startFetchTime, 150);
 					 // 🧼 BONIFICA DI EMERGENZA RAM:
 					 if (exactBuffer instanceof ArrayBuffer) {
 					     new Uint8Array(exactBuffer).fill(0);
@@ -2476,6 +2532,7 @@ self.addEventListener('activate', (event) => {
 	console.info("⚡ SW: attivazione...");
     event.waitUntil(
         Promise.all([
+            self.registration.navigationPreload ? self.registration.navigationPreload.enable() : Promise.resolve(),
 
             caches.keys().then(keys => {
                 return Promise.all(
