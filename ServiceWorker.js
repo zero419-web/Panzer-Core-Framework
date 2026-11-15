@@ -2486,7 +2486,7 @@ self.addEventListener('fetch', (event) => {
 		        console.info(`📦❌ SW: Recupero fallito per: ${finalPath}`);
 		    }
 		    if ( isCoreAsset && !isNewInstallation ) {
-		        if (navigator.onLine) {
+		        if (await checkRealOnline('fetch')) {
 		            console.log(`📡❌ SW CORE: Rete off-line per risorsa critica :\n ${finalPath}`);
 		            CoreAssets_Destroy_Caches();
 		        }
