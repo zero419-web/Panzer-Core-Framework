@@ -1336,7 +1336,7 @@ const checkRealOnline = async (mode = 'fetch') => {
         if (navigator.connection && navigator.connection.saveData) return false;
         timeoutMs = Math.min(netProfile.timeout * 1000, 15000);
     } else {
-        timeoutMs = (profileName === 'Fast' || profileName === 'ultrafast') ? 2500 : 5500;
+        timeoutMs = (profileName === 'Fast' || profileName === 'Ultrafast') ? 2500 : 5500;
     }
     try {
         const controller = new AbortController();
