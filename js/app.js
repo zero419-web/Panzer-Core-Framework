@@ -676,15 +676,30 @@ document.addEventListener('DOMContentLoaded', async () => {
     }
 
     // 🔎 Controllo iniziale dello stato del Caveau all'avvio
-    if (sdk && sdk.vaultManager) {
-        sdk.vaultManager.checkStatus((status) => {
-            if (!status.configured) {
-                showPinModal('setup', 'Prima installazione: Crea un PIN di sicurezza per cifrare la stiva:');
-            } else if (!status.unlocked) {
-                showPinModal('unlock', 'Inserisci il PIN per sbloccare il caveau della PA:');
-            }
-        });
-    }
+    const initVaultCheck = async () => {
+        if ('serviceWorker' in navigator) {
+            // Se c'è un Service Worker in fase di attivazione, attendiamo che prenda il controllo
+            await navigator.serviceWorker.ready;
+            
+            // Diamo un micro-istante al bridge IPC per stabilizzarsi
+            setTimeout(() => {
+                if (sdk && sdk.vaultManager) {
+                    sdk.vaultManager.checkStatus((status) => {
+                        // Se il caveau non è configurato (prima installazione), apre subito il modale di setup
+                        if (!status || !status.configured) {
+                            showPinModal('setup', 'Prima installazione: Crea un PIN di sicurezza per cifrare la stiva:');
+                        } else if (!status.unlocked) {
+                            showPinModal('unlock', 'Inserisci il PIN per sbloccare il caveau della PA:');
+                        }
+                    });
+                }
+            }, 300);
+        }
+    };
+
+    // Avvia il controllo in modo asincrono all'avvio
+    initVaultCheck();
+
 
     // 📊🔎🗄️ Rendering Tabella Ispezione Stiva.
     const renderStorageTable = async () => {
