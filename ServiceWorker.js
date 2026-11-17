@@ -2688,6 +2688,10 @@ self.addEventListener('fetch', (event) => {
     })());
 });
 
+self.addEventListener('online', () => {
+    console.info("📡📶 SW: Rete rilevata! Pronto per nuovi comandi.");
+});
+
 /**
  * 📥🏛️ INSTALLAZIONE SW: Inizializzazione Core e Pre-Cache.
  * Dispone il caricamento forzato dei moduli di sistema e impone il bypass
@@ -2698,12 +2702,7 @@ self.addEventListener('install', (event) => {
 	isNewInstallation = true;
     console.info("🛠️ SW: Installazione in corso...");
     event.waitUntil((async () => {
-        const key = await getStoredKey();
-        if (key) {
-            console.info("🔑️ SW: Vault inizializzato durante l'installazione.");
-        } else {
-            console.info("⚠️ SW: Vault fallito, verrà ritentato all'attivazione.");
-        }
+        console.info("🛠️ SW: Installazione completata, skipWaiting in corso...");
 		self.skipWaiting();
         await caches.open(CONFIG.cacheName);
         await caches.open(CONFIG.userCacheName);
@@ -2735,23 +2734,108 @@ self.addEventListener('activate', (event) => {
 
             (async () => {
 				try {
-					encryptionKey = await getStoredKey();
-					console.info("🗄️✅ SW: Vault Unlock Ok.");
-					console.info("🛡️🔍 SW: Check di Sicurezza...");
-					await deepVaultValidation();
-					console.info("🛡️✅ SW: Integrità Bunker confermata.");
+                    // Verifica...
+                    const vaultConfigured = await new Promise((resolve) => {
+                        const req = indexedDB.open("PWA_Vault", 1);
+                        req.onupgradeneeded = (e) => {
+                            const d = e.target.result;
+                            if (!d.objectStoreNames.contains("keys")) d.createObjectStore("keys");
+                        };
+                        req.onsuccess = (e) => {
+                            const db = e.target.result;
+                            const tx = db.transaction("keys", "readonly");
+                            const store = tx.objectStore("keys");
+                            const getReq = store.get("wrapped_master_key");
+                            getReq.onsuccess = () => {
+                                db.close();
+                                resolve(!!getReq.result);
+                            };
+                            getReq.onerror = () => { db.close(); resolve(false); };
+                        };
+                        req.onerror = () => resolve(false);
+                    });
+
+                    if (vaultConfigured) {
+                        encryptionKey = await getStoredKey();
+                        if (encryptionKey) {
+                            console.info("🗄️✅ SW: Vault Unlock Ok.");
+                            console.info("🛡️🔍 SW: Check di Sicurezza...");
+                            await deepVaultValidation();
+                            console.info("🛡️✅ SW: Integrità Bunker confermata.");
+                        } else {
+                            console.info("🗄️🔒 SW: Vault presente ma in attesa di sblocco PIN.");
+                        }
+                    } else {
+                        console.info("🆕ℹ️ SW: Nessun Vault configurato (Prima installazione). In attesa di Setup PIN.");
+                    }
+
 					await cleanUserCache();
-				} catch (err) {
-					console.error("⚡🚨 SW: Erorre: ", err.message);
-				}
+				} catch (_) {}
             })()
         ]).then(() => self.clients.claim())
     );
 });
 
+/**
+ * 📥🏛️ INSTALLAZIONE SW: Inizializzazione Core e Pre-Cache.
+ * Dispone il caricamento forzato dei moduli di sistema e impone il bypass
+ * dei tempi di attesa tramite self.skipWaiting() per l'allineamento immediato del Panzer.
+ * @param {ExtendableEvent} e - Evento di installazione intercettato dal browser.
+ */
+self.addEventListener('install', (event) => {
+	isNewInstallation = true;
+    console.info("🛠️ SW: Installazione in corso...");
+    event.waitUntil((async () => {
+        console.info("🛠️ SW: Installazione completata, skipWaiting in corso...");
+		self.skipWaiting();
+        await caches.open(CONFIG.cacheName);
+        await caches.open(CONFIG.userCacheName);
+    })());
+});
 
-self.addEventListener('online', () => {
-    console.info("📡📶 SW: Rete rilevata! Pronto per nuovi comandi.");
+/**
+ * ⚡⚙️ ATTIVAZIONE SW: Bonifica Archivi e Sblocco Interfaccia.
+ * Esegue il subentro immediato nei frontend attivi (clients.claim) e avvia
+ * la purga automatica dei magazzini di cache obsoleti non conformi alla versione corrente.
+ * @param {ExtendableEvent} e - Evento di attivazione del ciclo di vita.
+ */
+self.addEventListener('activate', (event) => {
+	console.info("⚡ SW: attivazione...");
+    event.waitUntil(
+        Promise.all([
+            self.registration.navigationPreload ? self.registration.navigationPreload.enable() : Promise.resolve(),
+
+            caches.keys().then(keys => {
+                return Promise.all(
+                    keys.map(k => {
+                        if (k !== CONFIG.cacheName && k !== CONFIG.userCacheName) {
+							console.info(`🧹📦 SW: Remove Old cache version: ${k}`);
+							return caches.delete(k);
+                        }
+                    })
+                );
+            }),
+
+            (async () => {
+				try {
+					const key = await getStoredKey();
+					if (key) {
+						encryptionKey = key;
+						console.info("🗄️✅ SW: Vault Unlock Ok.");
+						console.info("🛡️🔍 SW: Check di Sicurezza...");
+						await deepVaultValidation();
+						console.info("🛡️✅ SW: Integrità Bunker confermata.");
+					} else {
+						console.info("🗄️🔒 SW: Attivazione completata. Caveau presente ma in attesa di sblocco PIN via IPC ( o prima installazione... ).");
+					}
+
+					await cleanUserCache();
+				} catch (_) {
+					console.info("ℹ️ SW: Stato stiva in attivazione ( Normale al primo avvio in attesa di PIN ).");
+				}
+            })()
+        ]).then(() => self.clients.claim())
+    );
 });
 
 /**
