@@ -1409,7 +1409,7 @@ self.addEventListener('message', (event) => {
             return;
         }
 
-        if (eventDataSnapshot.type === 'SUBMIT_PIN') {
+                if (eventDataSnapshot.type === 'SUBMIT_PIN') {
             const startPinTime = performance.now(); // ⏱️ Marcatore temporale.
             const pinArrayBuffer = eventDataSnapshot.pinBuffer;
             const mode = eventDataSnapshot.mode || 'unlock';
@@ -1453,7 +1453,8 @@ self.addEventListener('message', (event) => {
                             false,
                             ["encrypt", "decrypt"]
                         );
-                        rawBytes.fill(0);
+                        // 🛡️ CORRETTO: Avvolgimento in Uint8Array per consentire la bonifica sicura della RAM
+                        new Uint8Array(rawBytes).fill(0);
 
                         await new Promise((res, rej) => {
                             const tx = db.transaction("keys", "readwrite");
@@ -1497,10 +1498,8 @@ self.addEventListener('message', (event) => {
                 }
                 const sterileErr = createCleanError("VaultSetupError", "Fallimento operativo durante la gestione del PIN");
                 console.error("❌ SW: Errore critico in SUBMIT_PIN:", sterileErr);
-                //event.source?.postMessage({ type: 'PIN_RESULT', success: false, error: "Errore interno di cifratura della stiva" });
-                // test...
-                const realErrorMsg = err.message || String(err);
-                event.source?.postMessage({ type: 'PIN_RESULT', success: false, error: `CRASH REALE: ${realErrorMsg}` });
+
+                event.source?.postMessage({ type: 'PIN_RESULT', success: false, error: "Errore interno di cifratura della stiva" });
             } finally {
                 if (pinBytes) pinBytes.fill(0);
             }
@@ -1521,12 +1520,17 @@ self.addEventListener('message', (event) => {
             try {
                 db = await new Promise((res, rej) => {
                     const req = indexedDB.open("PWA_Vault", 1);
+                    req.onupgradeneeded = (e) => {
+                        const d = e.target.result;
+                        if (!d.objectStoreNames.contains("keys")) {
+                            d.createObjectStore("keys");
+                        }
+                    };
                     req.onsuccess = () => res(req.result);
                     req.onerror = () => rej(req.error);
                 });
 
-                // 1️⃣ Lettura in una transazione breve (le transazioni IndexedDB si chiudono da sole
-                //    se si attende altro, come la crittografia, prima di usarle).
+                // 1️⃣ Lettura in una transazione breve
                 const readStore = db.transaction("keys", "readonly").objectStore("keys");
                 const wrappedKey = await new Promise((res, rej) => { const r = readStore.get("wrapped_master_key"); r.onsuccess = () => res(r.result); r.onerror = () => rej(r.error); });
                 const salt = await new Promise((res, rej) => { const r = readStore.get("vault_salt"); r.onsuccess = () => res(r.result); r.onerror = () => rej(r.error); });
@@ -1561,7 +1565,8 @@ self.addEventListener('message', (event) => {
             }
             return;
         }
-
+        
+    // 🔄📥 Comando Di Sync Download...
         if (eventDataSnapshot.type === 'INIT_DB') {
 
             if (isSyncing) {
