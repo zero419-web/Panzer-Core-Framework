@@ -1409,7 +1409,7 @@ self.addEventListener('message', (event) => {
             return;
         }
 
-                if (eventDataSnapshot.type === 'SUBMIT_PIN') {
+        if (eventDataSnapshot.type === 'SUBMIT_PIN') {
             const startPinTime = performance.now(); // ⏱️ Marcatore temporale.
             const pinArrayBuffer = eventDataSnapshot.pinBuffer;
             const mode = eventDataSnapshot.mode || 'unlock';
@@ -1453,7 +1453,7 @@ self.addEventListener('message', (event) => {
                             false,
                             ["encrypt", "decrypt"]
                         );
-                        // 🛡️ CORRETTO: Avvolgimento in Uint8Array per consentire la bonifica sicura della RAM
+                        // 🛡️ Uint8Array per consentire la bonifica sicura della RAM
                         new Uint8Array(rawBytes).fill(0);
 
                         await new Promise((res, rej) => {
@@ -1461,6 +1461,7 @@ self.addEventListener('message', (event) => {
                             const store = tx.objectStore("keys");
                             store.put(wrapped, "wrapped_master_key");
                             store.put(newSalt, "vault_salt");
+                            store.put(0, "failed_pin_attempts"); // 🔄 Inizializzazione a 0 persistente dei tentativi
                             store.delete("master_key");
                             tx.oncomplete = () => res();
                             tx.onerror = () => rej(tx.error);
@@ -1485,8 +1486,29 @@ self.addEventListener('message', (event) => {
                 if (key && key !== false) {
                     event.source?.postMessage({ type: 'PIN_RESULT', success: true });
                 } else {
-                    const remaining = Math.max(0, 3 - failedPinAttempts);
-                    if (failedPinAttempts >= 3) {
+                    // Leggi i tentativi reali persistiti nel DB in modo sicuro
+                    let persistedAttempts = 1;
+                    let checkDb = null;
+                    try {
+                        checkDb = await new Promise((res, rej) => {
+                            const req = indexedDB.open("PWA_Vault", 1);
+                            req.onsuccess = () => res(req.result);
+                            req.onerror = () => rej(req.error);
+                        });
+                        const tx = checkDb.transaction("keys", "readonly");
+                        persistedAttempts = await new Promise((res) => {
+                            const r = tx.objectStore("keys").get("failed_pin_attempts");
+                            r.onsuccess = () => res(r.result !== undefined ? r.result : 1);
+                            r.onerror = () => res(1);
+                        });
+                    } catch (_) {
+                        persistedAttempts = failedPinAttempts;
+                    } finally {
+                        if (checkDb) { try { checkDb.close(); } catch (_) {} }
+                    }
+
+                    const remaining = Math.max(0, 3 - persistedAttempts);
+                    if (persistedAttempts >= 3) {
                         event.source?.postMessage({ type: 'PIN_RESULT', success: false, wiped: true, error: "Tentativi esauriti. Stiva distrutta." });
                     } else {
                         event.source?.postMessage({ type: 'PIN_RESULT', success: false, attemptsLeft: remaining, error: `PIN errato. Rimasti ${remaining} tentativi.` });
@@ -3189,25 +3211,62 @@ const getStoredKey = async (pinBytes = null) => {
                             try {
                                 const key = await unwrapMasterKey(wrappedKey, pinBytes, salt);
                                 
-                                // Test canarino di validazione
-                                encryptionKey = key;
+                                // Test canarino di validazione isolato con chiave temporanea
                                 const canaryText = CONFIG.vaultCanaryText;
                                 const testBlob = new Blob([canaryText], { type: "text/plain" });
-                                const encrypted = await encryptBlob(testBlob);
-                                await decryptBuffer(await encrypted.arrayBuffer());
+                                
+                                const iv = crypto.getRandomValues(new Uint8Array(12));
+                                const buffer = await testBlob.arrayBuffer();
+                                const ciphertext = await crypto.subtle.encrypt({ name: "AES-GCM", iv: iv }, key, buffer);
+                                const combined = new Uint8Array(iv.length + ciphertext.byteLength);
+                                combined.set(iv);
+                                combined.set(new Uint8Array(ciphertext), iv.length);
 
+                                const decIv = combined.subarray(0, 12);
+                                const decCipher = combined.subarray(12);
+                                const decrypted = await crypto.subtle.decrypt({ name: "AES-GCM", iv: decIv }, key, decCipher);
+                                const decryptedText = new TextDecoder().decode(decrypted);
+
+                                if (decryptedText !== canaryText) {
+                                    throw new Error("CANARY_MISMATCH");
+                                }
+
+                                encryptionKey = key;
                                 failedPinAttempts = 0;
+                                
+                                // Resetta i tentativi falliti persistenti nello store
+                                try {
+                                    const resetTx = dbRef.transaction("keys", "readwrite");
+                                    resetTx.objectStore("keys").put(0, "failed_pin_attempts");
+                                } catch (_) {}
+
                                 if (dbRef) dbRef.close();
                                 resolve(key);
                             } catch (cryptoErr) {
                                 encryptionKey = null;
-                                failedPinAttempts++;
+                                
+                                // Gestione persistente dei tentativi falliti tramite IndexedDB
+                                let currentAttempts = 1;
+                                try {
+                                    const attemptTx = dbRef.transaction("keys", "readwrite");
+                                    const attemptStore = attemptTx.objectStore("keys");
+                                    await new Promise((res) => {
+                                        const req = attemptStore.get("failed_pin_attempts");
+                                        req.onsuccess = () => {
+                                            currentAttempts = (req.result || 0) + 1;
+                                            attemptStore.put(currentAttempts, "failed_pin_attempts");
+                                            res();
+                                        };
+                                        req.onerror = () => res();
+                                    });
+                                } catch (_) {
+                                    failedPinAttempts++;
+                                    currentAttempts = failedPinAttempts;
+                                }
+
                                 if (dbRef) dbRef.close();
 
-                                // 🔍 LOG DIAGNOSTICO: Tracciamento del fallimento e dei tentativi residui
-                                //console.error("❌🔑 SW: Decrittazione o validazione fallita nel recupero chiave dal Caveau.", cryptoErr);
-
-                                if (failedPinAttempts >= 3) {
+                                if (currentAttempts >= 3) {
                                     console.error("🚨 SW: 3 tentativi PIN falliti! Tabula Rasa totale di sicurezza.");
                                     await Destroy_ALL_Caches("PIN_BRUTE_FORCE_DETECTED");
                                     await new Promise((res) => {
