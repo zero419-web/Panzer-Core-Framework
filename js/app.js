@@ -13,12 +13,18 @@ import { PanzerSDK } from './SDK.js';
 document.addEventListener('DOMContentLoaded', async () => {
     'use strict';
     
-    // 🛡️ Controllo chiusura scheda / nuova sessione
+    // 🛡️ Controllo Chiusura scheda / nuova sessione...
     if (!sessionStorage.getItem('panzer_tab_active')) {
         sessionStorage.setItem('panzer_tab_active', 'true');
+        if (navigator.serviceWorker && navigator.serviceWorker.controller) {
+            navigator.serviceWorker.controller.postMessage({ type: 'LOCK_VAULT' });
+        }
     }
     window.addEventListener('beforeunload', () => {
         sessionStorage.removeItem('panzer_tab_active');
+        if (navigator.serviceWorker && navigator.serviceWorker.controller) {
+            navigator.serviceWorker.controller.postMessage({ type: 'LOCK_VAULT' });
+        }
     });
     
     
