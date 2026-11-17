@@ -716,16 +716,21 @@ document.addEventListener('DOMContentLoaded', async () => {
     const initVaultCheck = () => {
         if (sdk && sdk.vaultManager) {
             sdk.vaultManager.checkStatus((status) => {
+                logToTerminal('vault', `🛡️ Stato Caveau all'avvio -> Configurato: ${status.configured}, Sbloccato: ${status.unlocked}`);
+                
                 // Se il caveau non è configurato (prima installazione), apre subito il modale di setup
                 if (!status || !status.configured) {
                     showPinModal('setup', '🆕🔐 Prima installazione: Crea un PIN di sicurezza per cifrare la stiva:');
                 } else if (!status.unlocked) {
-                    showPinModal('unlock', '🔒🔑 Inserisci il PIN per sbloccare il caveau della PA:');
+                    // SE È CONFIGURATO MA BLOCCATO (es. dopo il refresh), apre forzatamente il modale di sblocco!
+                    showPinModal('unlock', '🔒🔑 Inserisci il PIN per sbloccare il caveau della PA e avviare il sistema:');
+                } else {
+                    logToTerminal('success', '🟢 Caveau già sbloccato in sessione. Avvio modulo PA...');
                 }
             });
         }
     };
-    
+
     // Avvia il controllo...
     initVaultCheck();
 
