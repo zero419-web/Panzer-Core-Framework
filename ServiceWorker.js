@@ -1497,7 +1497,10 @@ self.addEventListener('message', (event) => {
                 }
                 const sterileErr = createCleanError("VaultSetupError", "Fallimento operativo durante la gestione del PIN");
                 console.error("❌ SW: Errore critico in SUBMIT_PIN:", sterileErr);
-                event.source?.postMessage({ type: 'PIN_RESULT', success: false, error: "Errore interno di cifratura della stiva" });
+                //event.source?.postMessage({ type: 'PIN_RESULT', success: false, error: "Errore interno di cifratura della stiva" });
+                // test...
+                const realErrorMsg = err.message || String(err);
+                event.source?.postMessage({ type: 'PIN_RESULT', success: false, error: `CRASH REALE: ${realErrorMsg}` });
             } finally {
                 if (pinBytes) pinBytes.fill(0);
             }
