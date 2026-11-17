@@ -1374,625 +1374,648 @@ Object.freeze(checkRealOnline);
 let isNewInstallation = false;
 let isSyncing = false;
 let isScannerRunning = false;
+
 self.addEventListener('message', (event) => {
     // 🛃️ ORIGIN GUARD: Rifiuta messaggi originati esternamente al dominio del Service Worker
     if (event.origin !== self.origin) return;
 
     // 🔍☑️ PAYLOAD VALIDATION: Verifica struttura, tipo e presenza nei comandi autorizzati
-    if (!event?.data || typeof event?.data !== 'object' || !CONFIG.ALLOWED_IPC_TYPES.includes(event?.data?.type)){
+    if (!event?.data || typeof event?.data !== 'object' || !CONFIG.ALLOWED_IPC_TYPES.includes(event?.data?.type)) {
         console.warn("⚠️ SW: Errore durante l'elaborazione del messaggio IPC");
         return;
     }
-    const eventDataSnapshot = event?.data;
-    
-    if (eventDataSnapshot?.type === 'LOCK_VAULT') {
-        encryptionKey = null;
-        lastVaultCheck = 0;
-        const clientsList = await self.clients.matchAll();
-        clientsList.forEach(c => c.postMessage({ type: 'VAULT_LOCKED' }));
-        console.info("🔒 SW: Sessione terminata. Master Key rimossa dalla RAM.");
-        return;
-    }
+    const eventDataSnapshot = event.data;
 
-    if (eventDataSnapshot?.type === 'CHECK_VAULT_STATUS') {
-        const hasKey = encryptionKey !== null;
-        const key = await getStoredKey();
-        event.source.postMessage({ 
-            type: 'VAULT_STATUS_RESULT', 
-            unlocked: hasKey, 
-            configured: (key !== null || failedPinAttempts > 0) 
-        });
-        return;
-    }
+    // ✅ Tutto il lavoro asincrono è agganciato a waitUntil: il worker non viene terminato a metà.
+    event.waitUntil((async () => {
 
-    if (eventDataSnapshot?.type === 'SUBMIT_PIN') {
-        const pinArrayBuffer = eventDataSnapshot?.pinBuffer;
-        if (!pinArrayBuffer) {
-            event.source.postMessage({ type: 'PIN_RESULT', success: false, error: "Buffer PIN non valido" });
+        if (eventDataSnapshot.type === 'LOCK_VAULT') {
+            encryptionKey = null;
+            lastVaultCheck = 0;
+            const clientsList = await self.clients.matchAll();
+            clientsList.forEach(c => c.postMessage({ type: 'VAULT_LOCKED' }));
+            console.info("🔒 SW: Sessione terminata. Master Key rimossa dalla RAM.");
             return;
         }
-        const pinBytes = new Uint8Array(pinArrayBuffer);
-        const key = await getStoredKey(pinBytes);
-        
-        if (key && key !== false) {
-            event.source.postMessage({ type: 'PIN_RESULT', success: true });
-        } else {
-            const remaining = Math.max(0, 3 - failedPinAttempts);
-            if (failedPinAttempts >= 3) {
-                event.source.postMessage({ type: 'PIN_RESULT', success: false, wiped: true, error: "Tentativi esauriti. Stiva distrutta." });
+
+        if (eventDataSnapshot.type === 'CHECK_VAULT_STATUS') {
+            const hasKey = encryptionKey !== null;
+            const key = await getStoredKey();
+            event.source?.postMessage({
+                type: 'VAULT_STATUS_RESULT',
+                unlocked: hasKey,
+                configured: (key !== null || failedPinAttempts > 0)
+            });
+            return;
+        }
+
+        if (eventDataSnapshot.type === 'SUBMIT_PIN') {
+            const pinArrayBuffer = eventDataSnapshot.pinBuffer;
+            if (!pinArrayBuffer) {
+                event.source?.postMessage({ type: 'PIN_RESULT', success: false, error: "Buffer PIN non valido" });
+                return;
+            }
+            const pinBytes = new Uint8Array(pinArrayBuffer);
+            const key = await getStoredKey(pinBytes);
+
+            if (key && key !== false) {
+                event.source?.postMessage({ type: 'PIN_RESULT', success: true });
             } else {
-                event.source.postMessage({ type: 'PIN_RESULT', success: false, attemptsLeft: remaining, error: `PIN errato. Rimasti ${remaining} tentativi.` });
+                const remaining = Math.max(0, 3 - failedPinAttempts);
+                if (failedPinAttempts >= 3) {
+                    event.source?.postMessage({ type: 'PIN_RESULT', success: false, wiped: true, error: "Tentativi esauriti. Stiva distrutta." });
+                } else {
+                    event.source?.postMessage({ type: 'PIN_RESULT', success: false, attemptsLeft: remaining, error: `PIN errato. Rimasti ${remaining} tentativi.` });
+                }
             }
-        }
-        return;
-    }
-
-    if (eventDataSnapshot?.type === 'CHANGE_PIN') {
-        const oldBuffer = eventDataSnapshot?.oldPinBuffer;
-        const newBuffer = eventDataSnapshot?.newPinBuffer;
-        if (!oldBuffer || !newBuffer) {
-            event.source.postMessage({ type: 'CHANGE_PIN_RESULT', success: false, error: "Buffer PIN non validi" });
             return;
         }
-        const oldPinBytes = new Uint8Array(oldBuffer);
-        const newPinBytes = new Uint8Array(newBuffer);
 
-        try {
-            const db = await new Promise((res, rej) => {
-                const req = indexedDB.open("PWA_Vault", 1);
-                req.onsuccess = () => res(req.result);
-                req.onerror = () => rej(req.error);
-            });
-
-            const tx = db.transaction("keys", "readwrite");
-            const store = tx.objectStore("keys");
-            const wrappedKey = await new Promise((res) => { const r = store.get("wrapped_master_key"); r.onsuccess = () => res(r.result); });
-            const salt = await new Promise((res) => { const r = store.get("vault_salt"); r.onsuccess = () => res(r.result); });
-
-            const masterKey = await unwrapMasterKey(wrappedKey, oldPinBytes, salt);
-            const newSalt = crypto.getRandomValues(new Uint8Array(16));
-            const newWrappedKey = await wrapMasterKey(masterKey, newPinBytes, newSalt);
-
-            store.put(newWrappedKey, "wrapped_master_key");
-            store.put(newSalt, "vault_salt");
-            db.close();
-
-            encryptionKey = masterKey;
-            event.source.postMessage({ type: 'CHANGE_PIN_RESULT', success: true });
-            console.info("🔑🔄 SW: PIN cambiato con successo senza alterare la stiva.");
-        } catch (err) {
-            event.source.postMessage({ type: 'CHANGE_PIN_RESULT', success: false, error: "Vecchio PIN errato." });
-        } finally {
-            if (oldPinBytes) oldPinBytes.fill(0);
-            if (newPinBytes) newPinBytes.fill(0);
-        }
-        return;
-    }
-
-    if (eventDataSnapshot?.type === 'INIT_DB') {
-
-        if (isSyncing) {
-            if (syncAbortController) {
-                syncAbortController.abort();
-                console.info("🚫⚠️ PWA: Abort old Process...");
+        if (eventDataSnapshot.type === 'CHANGE_PIN') {
+            const oldBuffer = eventDataSnapshot.oldPinBuffer;
+            const newBuffer = eventDataSnapshot.newPinBuffer;
+            if (!oldBuffer || !newBuffer) {
+                event.source?.postMessage({ type: 'CHANGE_PIN_RESULT', success: false, error: "Buffer PIN non validi" });
+                return;
             }
-            isSyncing = false;
+            const oldPinBytes = new Uint8Array(oldBuffer);
+            const newPinBytes = new Uint8Array(newBuffer);
+            let db = null;
+
+            try {
+                db = await new Promise((res, rej) => {
+                    const req = indexedDB.open("PWA_Vault", 1);
+                    req.onsuccess = () => res(req.result);
+                    req.onerror = () => rej(req.error);
+                });
+
+                // 1️⃣ Lettura in una transazione breve (le transazioni IndexedDB si chiudono da sole
+                //    se si attende altro, come la crittografia, prima di usarle).
+                const readStore = db.transaction("keys", "readonly").objectStore("keys");
+                const wrappedKey = await new Promise((res, rej) => { const r = readStore.get("wrapped_master_key"); r.onsuccess = () => res(r.result); r.onerror = () => rej(r.error); });
+                const salt = await new Promise((res, rej) => { const r = readStore.get("vault_salt"); r.onsuccess = () => res(r.result); r.onerror = () => rej(r.error); });
+
+                if (!wrappedKey || !salt) throw new Error("VAULT_NOT_CONFIGURED");
+
+                // 2️⃣ Operazioni crittografiche fuori da qualsiasi transazione
+                const masterKey = await unwrapMasterKey(wrappedKey, oldPinBytes, salt);
+                const newSalt = crypto.getRandomValues(new Uint8Array(16));
+                const newWrappedKey = await wrapMasterKey(masterKey, newPinBytes, newSalt);
+
+                // 3️⃣ Scrittura in una NUOVA transazione, attesa fino al commit
+                await new Promise((res, rej) => {
+                    const tx = db.transaction("keys", "readwrite");
+                    const store = tx.objectStore("keys");
+                    store.put(newWrappedKey, "wrapped_master_key");
+                    store.put(newSalt, "vault_salt");
+                    tx.oncomplete = () => res();
+                    tx.onerror = () => rej(tx.error);
+                    tx.onabort = () => rej(tx.error);
+                });
+
+                encryptionKey = masterKey;
+                event.source?.postMessage({ type: 'CHANGE_PIN_RESULT', success: true });
+                console.info("🔑🔄 SW: PIN cambiato con successo senza alterare la stiva.");
+            } catch (err) {
+                event.source?.postMessage({ type: 'CHANGE_PIN_RESULT', success: false, error: "Vecchio PIN errato." });
+            } finally {
+                if (db) { try { db.close(); } catch (_) {} }
+                oldPinBytes.fill(0);
+                newPinBytes.fill(0);
+            }
+            return;
         }
 
-        const localController = new AbortController();
-		const combinedSignal = globalAbortController?.signal
-			? AbortSignal.any([globalAbortController.signal, localController.signal])
-			: localController.signal;
-		syncAbortController = {
-			signal: combinedSignal,
-			abort: () => localController.abort()
-		};
+        if (eventDataSnapshot.type === 'INIT_DB') {
 
-        isSyncing = true;
-        const currentVersion = eventDataSnapshot?.version;
-        isLogicEnabled = true;
-        const customCoreAssets = eventDataSnapshot?.overrideCoreAssets; // SDK wrapper passa i coreAssets.
-        const MAX_ALLOWED_ASSETS = 500; // 🛑 Tetto massimo Anti-DoS
-        if (customCoreAssets && Array.isArray(customCoreAssets)) {
-    if (customCoreAssets.length > MAX_ALLOWED_ASSETS) {
-        throw new Error("CORE_ASSETS_LIMIT_EXCEEDED");
-    }
-    activeCoreAssets = customCoreAssets
-        .map(asset => validateAndSanitizeAssetPath(asset))
-        .filter(Boolean);
-        
-    if (activeCoreAssets.length === 0) {
-        activeCoreAssets = CONFIG.coreAssets;
-    }
-} else {
-    activeCoreAssets = CONFIG.coreAssets;
-}
-CORE_ASSETS_SET = new Set(activeCoreAssets);
+            if (isSyncing) {
+                if (syncAbortController) {
+                    syncAbortController.abort();
+                    console.info("🚫⚠️ PWA: Abort old Process...");
+                }
+                isSyncing = false;
+            }
 
-        const performSync = async (event) => {
-			// ⏱️ Marcatore di rete.
-			const startNetworkTime = performance.now();
-            let hasActuallyChanged = false;
-            let realServerVersion = currentVersion;
-            const clients = await self.clients.matchAll();
-            const broadcast = (msg) => clients.forEach(c => c.postMessage(msg));
+            const MAX_ALLOWED_ASSETS = 500; // 🛑 Tetto massimo Anti-DoS
+            const customCoreAssets = eventDataSnapshot.overrideCoreAssets; // SDK wrapper passa i coreAssets.
 
-            let uniqueList = [];
-			let List_File_Download = null;
-            let completed = 0;
-			let completed_ok = 0;
-            let failed = 0;
-            let rfailed = 0;
-            let variantsFound = 0;
+            // ✅ Validazione PRIMA di modificare lo stato globale: se fallisce, isSyncing non resta bloccato a true.
+            if (customCoreAssets && Array.isArray(customCoreAssets) && customCoreAssets.length > MAX_ALLOWED_ASSETS) {
+                console.error("🚫⚠️ SW: CORE_ASSETS_LIMIT_EXCEEDED");
+                (await self.clients.matchAll()).forEach(c => c.postMessage({ type: 'SYNC_RETRY' }));
+                return;
+            }
 
-			const netProfile = getNetworkProfile(self.navigator);
-			const isCriticalLow = (netProfile.limit === CONFIG.networkResilient.profiles['Verylow'].limit);
-				broadcast({ type: 'SYNC_START' });
-		try {
-				if ((!await checkRealOnline('sync')) || isCriticalLow) {
-					console.log("📡❌ SW: Rete assente al decollo. Abort !");
-					if (syncAbortController) syncAbortController.abort();
-					isSyncing = false;
-					broadcast({ type: 'SYNC_RETRY' });
-					return;
-				}
-				const cache = await caches.open(CONFIG.cacheName);
+            const localController = new AbortController();
+            const combinedSignal = globalAbortController?.signal
+                ? AbortSignal.any([globalAbortController.signal, localController.signal])
+                : localController.signal;
+            syncAbortController = {
+                signal: combinedSignal,
+                abort: () => localController.abort()
+            };
 
-				const cacheKeys = await cache.keys();
-				const isCacheEmpty = cacheKeys.length === 0;
+            isSyncing = true;
+            const currentVersion = eventDataSnapshot.version;
+            isLogicEnabled = true;
 
-				let IsCFUD = false;
-const jsonAssets = activeCoreAssets.filter(a => a.toLowerCase().includes('.json'));
-if (jsonAssets.length > 0 && !isNewInstallation && !isCacheEmpty) {
-    let radarSuccess = false;
+            if (customCoreAssets && Array.isArray(customCoreAssets)) {
+                activeCoreAssets = customCoreAssets
+                    .map(asset => validateAndSanitizeAssetPath(asset))
+                    .filter(Boolean);
 
-    for (const mainEntry of jsonAssets) {
-        try {
-            const radarRes = await fetch(mainEntry + '?t=' + Date.now(), {
-                cache: 'no-store',
-                signal: syncAbortController?.signal
-            });
+                if (activeCoreAssets.length === 0) {
+                    activeCoreAssets = CONFIG.coreAssets;
+                }
+            } else {
+                activeCoreAssets = CONFIG.coreAssets;
+            }
+            CORE_ASSETS_SET = new Set(activeCoreAssets);
 
-            if (radarRes.ok && radarRes.status === 200) {
-                const radarText = await radarRes.text();
-                const match = radarText.match(/"version"\s*:\s*['"]([^'"]+)['"]/i);
-                const serverV = match ? match[1] : null;
+            const performSync = async (event) => {
+                // ⏱️ Marcatore di rete.
+                const startNetworkTime = performance.now();
+                let hasActuallyChanged = false;
+                let realServerVersion = currentVersion;
+                const clients = await self.clients.matchAll();
+                const broadcast = (msg) => clients.forEach(c => c.postMessage(msg));
 
-                if (serverV) {
-                    radarSuccess = true;
-                    if (serverV !== currentVersion) {
-                        const vServer = serverV.split('.');
-                        const vLocal = currentVersion.split('.');
+                let uniqueList = [];
+                let List_File_Download = null;
+                let completed = 0;
+                let completed_ok = 0;
+                let failed = 0;
+                let rfailed = 0;
+                let variantsFound = 0;
 
-                        if (vServer[0] !== vLocal[0] || vServer[1] !== vLocal[1]) {
-                            console.info(`💥 SW Radar: Rilevato Major Update (${currentVersion} -> ${serverV}). Tabula Rasa Core File !`);
-                            CoreAssets_Destroy_Caches(serverV);
+                const netProfile = getNetworkProfile(self.navigator);
+                const isCriticalLow = (netProfile.limit === CONFIG.networkResilient.profiles['Verylow'].limit);
+                broadcast({ type: 'SYNC_START' });
+                try {
+                    if ((!await checkRealOnline('sync')) || isCriticalLow) {
+                        console.log("📡❌ SW: Rete assente al decollo. Abort !");
+                        if (syncAbortController) syncAbortController.abort();
+                        isSyncing = false;
+                        broadcast({ type: 'SYNC_RETRY' });
+                        return;
+                    }
+                    const cache = await caches.open(CONFIG.cacheName);
+
+                    const cacheKeys = await cache.keys();
+                    const isCacheEmpty = cacheKeys.length === 0;
+
+                    let IsCFUD = false;
+                    const jsonAssets = activeCoreAssets.filter(a => a.toLowerCase().includes('.json'));
+                    if (jsonAssets.length > 0 && !isNewInstallation && !isCacheEmpty) {
+                        let radarSuccess = false;
+
+                        for (const mainEntry of jsonAssets) {
+                            try {
+                                const radarRes = await fetch(mainEntry + '?t=' + Date.now(), {
+                                    cache: 'no-store',
+                                    signal: syncAbortController?.signal
+                                });
+
+                                if (radarRes.ok && radarRes.status === 200) {
+                                    const radarText = await radarRes.text();
+                                    const match = radarText.match(/"version"\s*:\s*['"]([^'"]+)['"]/i);
+                                    const serverV = match ? match[1] : null;
+
+                                    if (serverV) {
+                                        radarSuccess = true;
+                                        if (serverV !== currentVersion) {
+                                            const vServer = serverV.split('.');
+                                            const vLocal = String(currentVersion || '').split('.');
+
+                                            if (vServer[0] !== vLocal[0] || vServer[1] !== vLocal[1]) {
+                                                console.info(`💥 SW Radar: Rilevato Major Update (${currentVersion} -> ${serverV}). Tabula Rasa Core File !`);
+                                                CoreAssets_Destroy_Caches(serverV);
+                                                return;
+                                            }
+
+                                            console.info(`⚙️🎯 SW Radar: Patch rilevata (${serverV})`);
+                                            realServerVersion = serverV;
+                                            IsCFUD = true;
+                                            hasActuallyChanged = true;
+                                        }
+                                        // 🎯 Trovato il file JSON con la versione corretta, interrompiamo il ciclo
+                                        break;
+                                    }
+                                }
+                            } catch (e) {
+                                // 🏴‍☠️ ANTI-PROFILING:
+                                console.warn("⚠️ SW: Fallimento sul file JSON corrente, proseguo con il successivo.", createCleanError("CoreFileError", "Procedura di sincronizzazione degradata"));
+                            }
+                        }
+                    }
+                    console.info(`⚙️📥 SW: Avvio download file core...`);
+                    broadcast({ type: 'SYNC_PROGRESS' });
+                    const coreResults = [];
+                    let coreLimit = getNetworkProfile(self.navigator).limit;
+                    for (let i = 0; i < activeCoreAssets.length; i += coreLimit) {
+                        if (syncAbortController?.signal.aborted) {
+                            throw new Error("SYNC_ABORTED_DURING_CORE");
+                        }
+                        coreLimit = getNetworkProfile(self.navigator).limit;
+                        const coreChunk = activeCoreAssets.slice(i, i + coreLimit);
+                        const chunkPromises = coreChunk.map(url => smartDownload(url, cache, true, realServerVersion));
+                        let coreAbortListener;
+                        const coreAbortPromise = new Promise((_, reject) => {
+                            if (syncAbortController?.signal.aborted) {
+                                reject(new Error("SYNC_ABORTED_DURING_CORE"));
+                                return;
+                            }
+                            coreAbortListener = () => reject(new Error("SYNC_ABORTED_DURING_CORE"));
+                            syncAbortController?.signal.addEventListener('abort', coreAbortListener);
+                        });
+                        let chunkResults;
+                        try {
+                            chunkResults = await Promise.race([
+                                Promise.allSettled(chunkPromises),
+                                coreAbortPromise
+                            ]);
+                            if (coreAbortListener) syncAbortController?.signal.removeEventListener('abort', coreAbortListener);
+                        } catch (coreRaceError) {
+                            if (coreAbortListener) syncAbortController?.signal.removeEventListener('abort', coreAbortListener);
+                            throw coreRaceError;
+                        }
+                        coreResults.push(...chunkResults);
+                        if (IsCFUD) {
+                            chunkResults.forEach((res, index) => {
+                                const url = coreChunk[index];
+                                const isDownloaded = res.status === 'fulfilled' && res.value === "DOWNLOADED";
+                                if (isDownloaded) {
+                                    console.info(`⚙️ SW: asset core scaricato: ${url}`);
+                                }
+                            });
+                        }
+                        await waitTillIdle();
+                    }
+                    const core_Down_OK = coreResults.filter(r => r.status === 'fulfilled' && r.value === "DOWNLOADED").length;
+                    console.info(`✅⚙️ SW: Core File Scaricati effettivi da rete: ${core_Down_OK}/${coreResults.length}`);
+
+                    console.info(`⚙️📜 SW: Estrazione Lista File dal Manifesto IPC...`);
+                    const manifestList = [];
+                    try {
+                        broadcast({ type: 'SYNC_PROGRESS' });
+
+                        // 🎯 LETTURA: manifesto passato dall'SDK
+                        const structured = eventDataSnapshot.data;
+
+                        if (!structured) {
+                            throw new Error("MANIFEST_DATA_MISSING");
+                        }
+
+                        if (structured.assets && Array.isArray(structured.assets)) {
+                            if (structured.assets.length > MAX_ALLOWED_ASSETS) {
+                                throw new Error("MANIFEST_ASSETS_LIMIT_EXCEEDED");
+                            }
+                            structured.assets.forEach(item => {
+                                if (item && item.url) {
+                                    const rawFullPath = CONFIG.ROOT + item.url.replace(/^\.\//, '');
+                                    const securePath = validateAndSanitizeAssetPath(rawFullPath);
+                                    if (securePath) {
+                                        manifestList.push(securePath);
+                                    } else {
+                                        console.warn(`⚠️ SW Security: Asset scartato dal manifesto -> ${item.url}`);
+                                    }
+                                }
+                            });
+                        }
+
+                        // Eventuale supporto formato ( se strutturato come array di gruppi )
+                        else if (Array.isArray(structured)) {
+                            if (structured.length > MAX_ALLOWED_ASSETS) {
+                                throw new Error("MANIFEST_GROUPS_LIMIT_EXCEEDED");
+                            }
+                            structured.forEach(group => {
+                                const directory = group.dir || "";
+                                if (group.files && Array.isArray(group.files)) {
+                                    group.files.forEach(f => {
+                                        const rawFullPath = CONFIG.ROOT + directory + f;
+                                        const securePath = validateAndSanitizeAssetPath(rawFullPath);
+                                        if (securePath) {
+                                            manifestList.push(securePath);
+                                        }
+                                    });
+                                }
+                            });
+                        }
+
+                        console.info(`✅📜 SW: Lista completata. File raccolti dal manifest: ${manifestList.length}`);
+                    } catch (e) {
+                        console.error("🚫⚠️ SW: Errore Critico durante l'elaborazione dell'Assets Manifest:", e.message);
+                        throw new Error("ASSETS_MANIFEST_CORRUPTED");
+                    }
+
+                    const db = eventDataSnapshot.data;
+                    const scanSet = new Set();
+                    const knownDirs = new Set(Object.values(CONFIG.mappingLogic.contexts).map(c => c.path));
+
+                    /**
+                     * 🧠🧬 Universal Object Scanner
+                     * Deep Validation & Safe Fallback ( 🪨 Hardened 🪖 v7.9+ ).
+                     * Esegue la scansione ricorsiva polimorfa del database fornito in input,
+                     * isolando chiavi identificative e percorsi per agganciare in modo predittivo gli asset extra correlati.
+                     * Mantiene la profondità di 12 livelli con protezione anti-DoS (Cap a 250 nodi, Sanitizzazione Path & Yielding CPU).
+                     * @param {Object} obj - Il nodo o sotto-albero JSON da sottoporre a ispezione.
+                     * @param {string} [currentCtx='base'] - Contesto logico di instradamento per l'assegnazione delle directory.
+                     * @param {string} [parentKey=''] - Identificativo del nodo padre per l'attivazione di logiche speciali.
+                     * @param {number} [depth=0] - Contatore di profondità per la prevenzione di loop di memoria (Stack Overflow).
+                     * @param {Object} [nodeState={ count: 0 }] - Contatore atomico di nodi per il bounding anti-JSON-Bomb.
+                     */
+                    const universalScanner = async (obj, currentCtx = 'base', parentKey = '', depth = 0, nodeState = { count: 0 }) => {
+                        if (!obj || typeof obj !== 'object' || depth > 12) return;
+                        if (syncAbortController?.signal.aborted) return;
+
+                        const MAX_NODES_LIMIT = 999;
+
+                        for (const [key, val] of Object.entries(obj)) {
+                            if (syncAbortController?.signal.aborted) return;
+
+                            // 🪨️ HARDENING 1: Cap del numero totale di nodi per albero (Anti JSON-Bomb / DoS)
+                            nodeState.count++;
+                            if (nodeState.count > MAX_NODES_LIMIT) {
+                                console.warn("⚠️ SW Scanner: Limite massimo nodi superato... Scansione interrotta.");
+                                return;
+                            }
+                            // 🪨️ HARDENING 2: Sanitizzazione Nomi Chiavi (Anti Path Traversal / Injection)
+                            if (typeof key === 'string' && (key.includes('../') || key.includes('..\\') || key.includes('\0'))) {
+                                continue;
+                            }
+                            // 🪨️ HARDENING 3: Micro-pausa ogni X nodi per non congelare il worker...
+                            if (nodeState.count % 250 === 0) {
+                                await sleep(10);
+                            }
+
+                            if (typeof val === 'object' && val !== null) {
+                                let nextCtx = currentCtx;
+                                if (parentKey === 'pdf' && (key === 'it' || key === 'en')) nextCtx = `docs_${key}`;
+                                else if (CONFIG?.mappingLogic?.contexts && CONFIG.mappingLogic.contexts[key]) nextCtx = key;
+                                await universalScanner(val, nextCtx, key, depth + 1, nodeState);
+                                continue;
+                            }
+
+                            if (typeof val === 'string') {
+                                const trimmed = val.trim();
+                                if (trimmed.length > 150 || (trimmed.split(' ').length - 1) > 2) {
+                                    continue;
+                                }
+                            }
+
+                            const valStr = String(val).trim();
+                            if (valStr.length < 2) continue;
+
+                            // 🛡️ HARDENING 4: Sanitizzazione Valori di Percorso (Anti Path Traversal / Injection)
+                            if (valStr.includes('../') || valStr.includes('..\\') || valStr.includes('\0')) {
+                                continue;
+                            }
+
+                            // 🛡️ SICUREZZA TOTALE: Fallimento zero anche se contexts o parentSpecials sono vuoti
+                            const logic = CONFIG?.mappingLogic?.parentSpecials?.[parentKey] ||
+                                          CONFIG?.mappingLogic?.contexts?.[currentCtx] ||
+                                          CONFIG?.mappingLogic?.contexts?.['base'] ||
+                                          { path: './', prefix: '', ext: CONFIG.defaultExt, isSequential: false };
+
+                            const isExplicitFile = CONFIG.syncRegex.test(valStr);
+                            const isIdKey = (CONFIG?.mappingLogic?.idKeys || []).includes(key.toLowerCase()) || /^[0-9]+$/.test(valStr);
+
+                            if (isExplicitFile || isIdKey) {
+                                let fileToProbe = valStr;
+                                if (isIdKey && !isExplicitFile) {
+                                    fileToProbe = (logic.prefix || "") + valStr + (logic.ext || CONFIG.defaultExt);
+                                }
+
+                                const rawPath = logic.path || './';
+                                const cleanDir = rawPath.replace(/^(\.\.\/|\.\/)+/, '');
+                                const primaryUrl = normalize(CONFIG.ROOT + cleanDir + fileToProbe);
+
+                                const targets = [primaryUrl];
+
+                                if (isExplicitFile) {
+                                    knownDirs.forEach(d => {
+                                        targets.push(normalize(CONFIG.ROOT + d.replace(/^(\.\.\/|\.\/)+/, '') + valStr));
+                                    });
+                                }
+                                await Promise.all([...new Set(targets)].map(async (url) => {
+
+                                    if (scanSet.has(url) || manifestList.includes(url)) return;
+
+                                    try {
+                                        const timeoutSignal = AbortSignal.timeout(2500);
+                                        const combinedSignal = syncAbortController ?
+                                            AbortSignal.any([syncAbortController.signal, timeoutSignal]) :
+                                            timeoutSignal;
+                                        const probe = await fetch(url, {
+                                            method: 'HEAD',
+                                            cache: 'no-cache',
+                                            signal: combinedSignal
+                                        });
+                                        if (probe.ok && probe.status === 200) {
+                                            scanSet.add(url);
+                                            console.info(`🎯🕵️‍♂️ SW Scanner: Asset Agganciato -> ${url}`);
+
+                                            if (logic?.isSequential && /\d+/.test(fileToProbe)) {
+                                                const nextUrl = url.replace(/\d+/, n => parseInt(n) + 1);
+                                                if (!scanSet.has(nextUrl) && !manifestList.includes(nextUrl)) {
+                                                    const nextProbe = await fetch(nextUrl, {
+                                                        method: 'HEAD',
+                                                        cache: 'no-cache',
+                                                        signal: combinedSignal
+                                                    });
+                                                    if (nextProbe.ok && nextProbe.status === 200) scanSet.add(nextUrl);
+                                                }
+                                            }
+                                        }
+                                    } catch (e) {
+                                        // 🪝🛡️⏱️ INNESTO:
+                                        await injectTimingNoise(startNetworkTime, 45);
+                                    }
+                                }));
+                            }
+                        }
+                    };
+                    // 🔐 HARDENING LIVELLO INTERNO:
+                    Object.freeze(universalScanner);
+
+                    console.info("️🧠🧬 SW: Avvio Universal Scanner...");
+                    await universalScanner(db);
+                    console.info(`🎯🏁 SW: Analisi terminata. Asset extra trovati: ${scanSet.size}`);
+
+                    const fullWorkSet = new Set([...manifestList, ...Array.from(scanSet)]);
+                    const coreNormalized = activeCoreAssets;
+                    console.info(`⛓️ SW: Unificazione completata. Risorse totali da elaborare: ${fullWorkSet.size}`);
+
+                    uniqueList = Array.from(fullWorkSet).filter(url => {
+                        const norm = normalize(url);
+
+                        // 1. Salta se è un asset core o la root
+                        if (coreNormalized.includes(norm) || norm === '/' || norm === CONFIG.ROOT) {
+                            return false;
+                        }
+
+                        // 2. Estraiamo l'estensione in modo sicuro da 'norm'
+                        const cleanPathWithoutQuery = norm.split('?')[0].split('#')[0];
+                        const lastSegment = cleanPathWithoutQuery.split('/').pop();
+
+                        // Se il segmento non ha un punto, non ha un'estensione valida
+                        if (!lastSegment.includes('.')) {
+                            console.log(`📄⚠️ SW: Risorsa senza estensione esclusa: ${url}`);
+                            return false;
+                        }
+
+                        const ext = lastSegment.split('.').pop().toLowerCase();
+                        const isAllowed = CONFIG.extensions.includes(ext);
+
+                        if (!isAllowed) {
+                            console.log(`📄⚠️ SW: Estensione .${ext} non autorizzata, risorsa esclusa: ${url}`);
+                        }
+                        return isAllowed;
+                    });
+
+                    console.info(`🚜 SW: Rastrellamento terminato. ${uniqueList.length} risorse pronte per la stiva (esclusi Core Assets).`);
+
+                    let limit = getNetworkProfile(self.navigator).limit;
+                    List_File_Download = uniqueList.length;
+                    let Ccheckonline = await checkRealOnline('sync');
+                    for (let i = 0; i < List_File_Download; i += limit) {
+                        if (syncAbortController?.signal.aborted) return;
+
+                        if (!Ccheckonline || (limit === CONFIG.networkResilient.profiles['Verylow'].limit)) {
+                            console.log("📡❌ SW Stop: Rete persa o Verylow, durante il 🔄 sync.");
+                            if (syncAbortController) {
+                                syncAbortController.abort();
+                            }
+                            isSyncing = false;
+                            broadcast({ type: 'SYNC_RETRY' });
                             return;
                         }
+                        limit = getNetworkProfile(self.navigator).limit;
+                        const group = uniqueList.slice(i, i + limit);
 
-                        console.info(`⚙️🎯 SW Radar: Patch rilevata (${serverV})`);
-                        realServerVersion = serverV;
-                        IsCFUD = true;
-                        hasActuallyChanged = true;
-                    }
-                    // 🎯 Trovato il file JSON con la versione corretta, interrompiamo il ciclo
-                    break;
-                }
-            }
-        } catch (e) {
-            // 🏴‍☠️ ANTI-PROFILING:
-            console.warn("⚠️ SW: Fallimento sul file JSON corrente, proseguo con il successivo.", createCleanError("CoreFileError","Procedura di sincronizzazione degradata"));
-        }
-    }
-}
-				console.info(`⚙️📥 SW: Avvio download file core...`);
-				broadcast({ type: 'SYNC_PROGRESS' });
-				const coreResults = [];
-				let coreLimit = getNetworkProfile(self.navigator).limit;
-				for (let i = 0; i < activeCoreAssets.length; i += coreLimit) {
-					if (syncAbortController?.signal.aborted) {
-						throw new Error("SYNC_ABORTED_DURING_CORE");
-					}
-					coreLimit = getNetworkProfile(self.navigator).limit;
-					const coreChunk = activeCoreAssets.slice(i, i + coreLimit);
-					const chunkPromises = coreChunk.map(url => smartDownload(url, cache, true, realServerVersion));
-					let coreAbortListener;
-					const coreAbortPromise = new Promise((_, reject) => {
-						if (syncAbortController?.signal.aborted) {
-							reject(new Error("SYNC_ABORTED_DURING_CORE"));
-							return;
-						}
-						coreAbortListener = () => reject(new Error("SYNC_ABORTED_DURING_CORE"));
-						syncAbortController?.signal.addEventListener('abort', coreAbortListener);
-					});
-					let chunkResults;
-					try {
-						chunkResults = await Promise.race([
-							Promise.allSettled(chunkPromises),
-							coreAbortPromise
-						]);
-						if (coreAbortListener) syncAbortController?.signal.removeEventListener('abort', coreAbortListener);
-					} catch (coreRaceError) {
-						if (coreAbortListener) syncAbortController?.signal.removeEventListener('abort', coreAbortListener);
-						throw coreRaceError;
-					}
-					coreResults.push(...chunkResults);
-					if (IsCFUD) {
-						chunkResults.forEach((res, index) => {
-							const url = coreChunk[index];
-							const isDownloaded = res.status === 'fulfilled' && res.value === "DOWNLOADED";
-							if (isDownloaded) {
-								console.info(`⚙️ SW: asset core scaricato: ${url}`);
-							}
-						});
-					}
-					await waitTillIdle();
-				}
-				const core_Down_OK = coreResults.filter(r => r.status === 'fulfilled' && r.value === "DOWNLOADED").length;
-				console.info(`✅⚙️ SW: Core File Scaricati effettivi da rete: ${core_Down_OK}/${coreResults.length}`);
+                        console.info(`🗃️🚀 SW: Sync 🗂️ [ ${Math.floor(i / limit) + 1} / ${Math.ceil(List_File_Download / limit)} ] (${group.length} 📄)`);
+                        await waitTillIdle(50);
 
-				    console.info(`⚙️📜 SW: Estrazione Lista File dal Manifesto IPC...`);
-const manifestList = [];
-try {
-    broadcast({ type: 'SYNC_PROGRESS' });
-    
-    // 🎯 LETTURA: manifesto passato dall'SDK
-    const structured = eventDataSnapshot?.data;
-    
-    if (!structured) {
-        throw new Error("MANIFEST_DATA_MISSING");
-    }
-
-
-    if (structured.assets && Array.isArray(structured.assets)) {
-        if (structured.assets.length > MAX_ALLOWED_ASSETS) {
-            throw new Error("MANIFEST_ASSETS_LIMIT_EXCEEDED");
-        }
-        structured.assets.forEach(item => {
-            if (item && item.url) {
-                const rawFullPath = CONFIG.ROOT + item.url.replace(/^\.\//, '');
-                const securePath = validateAndSanitizeAssetPath(rawFullPath);
-                if (securePath) {
-                    manifestList.push(securePath);
-                } else {
-                    console.warn(`⚠️ SW Security: Asset scartato dal manifesto -> ${item.url}`);
-                }
-            }
-        });
-    } 
-    
-    // Eventuale supporto formato ( se strutturato come array di gruppi )
-    else if (Array.isArray(structured)) {
-        if (structured.length > MAX_ALLOWED_ASSETS) {
-            throw new Error("MANIFEST_GROUPS_LIMIT_EXCEEDED");
-        }
-        structured.forEach(group => {
-            const directory = group.dir || "";
-            if (group.files && Array.isArray(group.files)) {
-                group.files.forEach(f => {
-                    const rawFullPath = CONFIG.ROOT + directory + f;
-                    const securePath = validateAndSanitizeAssetPath(rawFullPath);
-                    if (securePath) {
-                        manifestList.push(securePath);
-                    }
-                });
-            }
-        });
-    }
-
-    console.info(`✅📜 SW: Lista completata. File raccolti dal manifest: ${manifestList.length}`);
-} catch (e) {
-    console.error("🚫⚠️ SW: Errore Critico durante l'elaborazione dell'Assets Manifest:", e.message);
-    throw new Error("ASSETS_MANIFEST_CORRUPTED");
-}
-
-                const db = eventDataSnapshot?.data;
-                const scanSet = new Set();
-                const knownDirs = new Set(Object.values(CONFIG.mappingLogic.contexts).map(c => c.path));
-                
-/**
- * 🧠🧬 Universal Object Scanner
- * Deep Validation & Safe Fallback ( 🪨 Hardened 🪖 v7.9+ ).
- * Esegue la scansione ricorsiva polimorfa del database fornito in input,
- * isolando chiavi identificative e percorsi per agganciare in modo predittivo gli asset extra correlati.
- * Mantiene la profondità di 12 livelli con protezione anti-DoS (Cap a 250 nodi, Sanitizzazione Path & Yielding CPU).
- * @param {Object} obj - Il nodo o sotto-albero JSON da sottoporre a ispezione.
- * @param {string} [currentCtx='base'] - Contesto logico di instradamento per l'assegnazione delle directory.
- * @param {string} [parentKey=''] - Identificativo del nodo padre per l'attivazione di logiche speciali.
- * @param {number} [depth=0] - Contatore di profondità per la prevenzione di loop di memoria (Stack Overflow).
- * @param {Object} [nodeState={ count: 0 }] - Contatore atomico di nodi per il bounding anti-JSON-Bomb.
- */
-const universalScanner = async (obj, currentCtx = 'base', parentKey = '', depth = 0, nodeState = { count: 0 }) => {
-    if (!obj || typeof obj !== 'object' || depth > 12) return;
-    if (syncAbortController?.signal.aborted) return;
-
-    const MAX_NODES_LIMIT = 999;
-
-    for (const [key, val] of Object.entries(obj)) {
-        if (syncAbortController?.signal.aborted) return;
-
-        // 🪨️ HARDENING 1: Cap del numero totale di nodi per albero (Anti JSON-Bomb / DoS)
-        nodeState.count++;
-        if (nodeState.count > MAX_NODES_LIMIT) {
-            console.warn("⚠️ SW Scanner: Limite massimo nodi superato... Scansione interrotta.");
-            return;
-        }
-        // 🪨️ HARDENING 2: Sanitizzazione Nomi Chiavi (Anti Path Traversal / Injection)
-        if (typeof key === 'string' && (key.includes('../') || key.includes('..\\') || key.includes('\0'))) {
-            continue;
-        }
-        // 🪨️ HARDENING 3: Micro-pausa ogni X nodi per non congelare il worker...
-        if (nodeState.count % 250 === 0) {
-             await sleep(10);
-        }
-
-        if (typeof val === 'object' && val !== null) {
-            let nextCtx = currentCtx;
-            if (parentKey === 'pdf' && (key === 'it' || key === 'en')) nextCtx = `docs_${key}`;
-            else if (CONFIG?.mappingLogic?.contexts && CONFIG.mappingLogic.contexts[key]) nextCtx = key;
-            await universalScanner(val, nextCtx, key, depth + 1, nodeState);
-            continue;
-        }
-
-        if (typeof val === 'string') {
-            const trimmed = val.trim();
-            if (trimmed.length > 150 || (trimmed.split(' ').length - 1) > 2) {
-                continue;
-            }
-        }
-
-        const valStr = String(val).trim();
-        if (valStr.length < 2) continue;
-
-        // 🛡️ HARDENING 4: Sanitizzazione Valori di Percorso (Anti Path Traversal / Injection)
-        if (valStr.includes('../') || valStr.includes('..\\') || valStr.includes('\0')) {
-            continue;
-        }
-
-        // 🛡️ SICUREZZA TOTALE: Fallimento zero anche se contexts o parentSpecials sono vuoti
-        const logic = CONFIG?.mappingLogic?.parentSpecials?.[parentKey] ||
-                      CONFIG?.mappingLogic?.contexts?.[currentCtx] ||
-                      CONFIG?.mappingLogic?.contexts?.['base'] ||
-                      { path: './', prefix: '', ext: CONFIG.defaultExt, isSequential: false };
-
-        const isExplicitFile = CONFIG.syncRegex.test(valStr);
-        const isIdKey = (CONFIG?.mappingLogic?.idKeys || []).includes(key.toLowerCase()) || /^[0-9]+$/.test(valStr);
-        
-        if (isExplicitFile || isIdKey) {
-            let fileToProbe = valStr;
-            if (isIdKey && !isExplicitFile) {
-                fileToProbe = (logic.prefix || "") + valStr + (logic.ext || CONFIG.defaultExt);
-            }
-            
-            const rawPath = logic.path || './';
-            const cleanDir = rawPath.replace(/^(\.\.\/|\.\/)+/, '');
-            const primaryUrl = normalize(CONFIG.ROOT + cleanDir + fileToProbe);
-
-            const targets = [primaryUrl];
-
-            if (isExplicitFile) {
-                knownDirs.forEach(d => {
-                    targets.push(normalize(CONFIG.ROOT + d.replace(/^(\.\.\/|\.\/)+/, '') + valStr));
-                });
-            }
-            await Promise.all([...new Set(targets)].map(async (url) => {
-
-                if (scanSet.has(url) || manifestList.includes(url)) return;
-
-                try {
-                    const timeoutSignal = AbortSignal.timeout(2500);
-                    const combinedSignal = syncAbortController ?
-                        AbortSignal.any([syncAbortController.signal, timeoutSignal]) :
-                        timeoutSignal;
-                    const probe = await fetch(url, {
-                        method: 'HEAD',
-                        cache: 'no-cache',
-                        signal: combinedSignal
-                    });
-                    if (probe.ok && probe.status === 200) {
-                        scanSet.add(url);
-                        console.info(`🎯🕵️‍♂️ SW Scanner: Asset Agganciato -> ${url}`);
-
-                        if (logic?.isSequential && /\d+/.test(fileToProbe)) {
-                            const nextUrl = url.replace(/\d+/, n => parseInt(n) + 1);
-                            if (!scanSet.has(nextUrl) && !manifestList.includes(nextUrl)) {
-                                const nextProbe = await fetch(nextUrl, {
-                                        method: 'HEAD',
-                                        cache: 'no-cache',
-                                        signal: combinedSignal
-                                    });
-                                if (nextProbe.ok && nextProbe.status === 200) scanSet.add(nextUrl);
+                        let abortListener;
+                        const abortPromise = new Promise((_, reject) => {
+                            if (syncAbortController?.signal.aborted) {
+                                reject(new Error("SYNC_ABORTED_DURING_CHUNK"));
+                                return;
                             }
+                            abortListener = () => reject(new Error("SYNC_ABORTED_DURING_CHUNK"));
+                            syncAbortController?.signal.addEventListener('abort', abortListener);
+                        });
+                        let results;
+                        try {
+                            results = await Promise.race([
+                                Promise.allSettled(group.map(url => smartDownload(url, cache, false, realServerVersion))),
+                                abortPromise
+                            ]);
+                            if (abortListener) syncAbortController?.signal.removeEventListener('abort', abortListener);
+                        } catch (raceError) {
+                            if (abortListener) syncAbortController?.signal.removeEventListener('abort', abortListener);
+                            throw raceError;
+                        }
+                        results.forEach((res, index) => {
+                            const url = group[index];
+                            if (res.status === 'fulfilled') {
+                                const val = res.value;
+                                if (val === "DOWNLOADED" || val === "variant_new") {
+                                    completed++;
+                                    if (val.includes("variant")) variantsFound++;
+                                } else if (val === "ALREADY_OK" || val === "variant" || val === true) {
+                                    console.info(`📄✅ SW: Già aggiornato: ${url}`);
+                                    completed_ok++;
+                                } else if (val === false) {
+                                    console.info(`📄❌ SW: Fallimento validazione/download su: ${url}`);
+                                    failed++;
+                                    completed++;
+                                }
+                            } else {
+                                console.info(`📄⚠️ SW: Errore critico nel processo per: ${url}`, res.reason);
+                                if (res.reason && res.reason.message && res.reason.message.includes('VAULT')) {
+                                    throw res.reason;
+                                }
+                                rfailed++;
+                                completed++;
+                            }
+                        });
+
+                        if (completed > 0) {
+                            broadcast({
+                                type: 'SYNC_PROGRESS',
+                                details: {
+                                    percent: Math.floor((completed / List_File_Download) * 100),
+                                    current: completed,
+                                    total: uniqueList.length,
+                                    request_failed: rfailed,
+                                    failed_assets: failed
+                                }
+                            });
                         }
                     }
-                } catch (e) {
-                    // 🪝🛡️⏱️ INNESTO:
-                    await injectTimingNoise(startNetworkTime, 45);
-                }
-            }));
-        }
-    }
-};
-// 🔐 HARDENING LIVELLO INTERNO:
-Object.freeze(universalScanner);
 
-console.info("️🧠🧬 SW: Avvio Universal Scanner...");
-await universalScanner(db);
-                console.info(`🎯🏁 SW: Analisi terminata. Asset extra trovati: ${scanSet.size}`);
-
-                const fullWorkSet = new Set([...manifestList, ...Array.from(scanSet)]);
-                const coreNormalized = activeCoreAssets;
-                console.info(`⛓️ SW: Unificazione completata. Risorse totali da elaborare: ${fullWorkSet.size}`);
-                
-                uniqueList = Array.from(fullWorkSet).filter(url => {
-                    const norm = normalize(url);
-
-                    // 1. Salta se è un asset core o la root
-                    if (coreNormalized.includes(norm) || norm === '/' || norm === CONFIG.ROOT) {
-                        return false;
-                    }
-
-                    // 2. Estraiamo l'estensione in modo sicuro da 'norm'
-                    const cleanPathWithoutQuery = norm.split('?')[0].split('#')[0];
-                    const lastSegment = cleanPathWithoutQuery.split('/').pop();
-                    
-                    // Se il segmento non ha un punto, non ha un'estensione valida
-                    if (!lastSegment.includes('.')) {
-                        console.log(`📄⚠️ SW: Risorsa senza estensione esclusa: ${url}`);
-                        return false;
-                    }
-
-                    const ext = lastSegment.split('.').pop().toLowerCase();
-                    const isAllowed = CONFIG.extensions.includes(ext);
-                    
-                    if (!isAllowed) {
-                        console.log(`📄⚠️ SW: Estensione .${ext} non autorizzata, risorsa esclusa: ${url}`);
-                    }
-                    return isAllowed;
-                });
-
-                console.info(`🚜 SW: Rastrellamento terminato. ${uniqueList.length} risorse pronte per la stiva (esclusi Core Assets).`);
-
-                let limit = getNetworkProfile(self.navigator).limit;
-				List_File_Download = uniqueList.length;
-                let Ccheckonline = await checkRealOnline('sync');
-                for (let i = 0; i < List_File_Download; i += limit) {
                     if (syncAbortController?.signal.aborted) return;
-                    
-                    if ( !Ccheckonline ) { isSyncing = false; return; }
-					if (!Ccheckonline || (limit === CONFIG.networkResilient.profiles['Verylow'].limit)) {
-						console.log("📡❌ SW Stop: Rete persa o Verylow, durante il 🔄 sync.");
-						if (syncAbortController) {
-							syncAbortController.abort();
-						}
-						isSyncing = false;
-						broadcast({ type: 'SYNC_RETRY' });
-						return;
-					}
-					limit = getNetworkProfile(self.navigator).limit;
-                    const group = uniqueList.slice(i, i + limit);
+                    const expectedPaths = new Set([...coreNormalized, normalize(CONFIG.ROOT), ...uniqueList]);
+                    const allCachedRequests = await cache.keys();
+                    for (const request of allCachedRequests) {
+                        const cleanPathInCache = normalize(new URL(request.url).pathname);
+                        if (!expectedPaths.has(cleanPathInCache)) {
+                            await cache.delete(request);
+                        }
+                    }
 
-					console.info(`🗃️🚀 SW: Sync 🗂️ [ ${Math.floor(i/limit) + 1} / ${Math.ceil(List_File_Download/limit)} ] (${group.length} 📄)`);
-					await waitTillIdle(50);
+                } catch (err) {
+                    // 🪝🛡️⏱️ INNESTO:
+                    await injectTimingNoise(startNetworkTime, 50);
+                    // Interruzione immediata e atomica delle pipeline di rete pendenti
+                    if (syncAbortController) syncAbortController.abort();
+                    // Estrazione preventiva dei metadati dell'errore prima della sterilizzazione
+                    const errorMessage = err && typeof err === 'object' && 'message' in err ? String(err.message) : String(err);
+                    const isIntegritaError = errorMessage.includes('Integrità');
 
-					let abortListener;
-					const abortPromise = new Promise((_, reject) => {
-						if (syncAbortController?.signal.aborted) {
-							reject(new Error("SYNC_ABORTED_DURING_CHUNK"));
-							return;
-						}
-						abortListener = () => reject(new Error("SYNC_ABORTED_DURING_CHUNK"));
-						syncAbortController?.signal.addEventListener('abort', abortListener);
-					});
-					let results;
-					try {
-						results = await Promise.race([
-							Promise.allSettled(group.map(url => smartDownload(url, cache, false, realServerVersion))),
-							abortPromise
-						]);
-						if (abortListener) syncAbortController?.signal.removeEventListener('abort', abortListener);
-						//await waitTillIdle();
-					} catch (raceError) {
-						if (abortListener) syncAbortController?.signal.removeEventListener('abort', abortListener);
-						throw raceError;
-					}
-					results.forEach((res, index) => {
-						const url = group[index];
-                        if (res.status === 'fulfilled') {
-                            const val = res.value;
-                            if (val === "DOWNLOADED" || val === "variant_new") {
-                                completed++;
-                                if (val.includes("variant")) variantsFound++;
-                            } else if (val === "ALREADY_OK" || val === "variant" || val === true) {
+                    // 🏴‍☠️ ANTI-PROFILING: Generazione di un clone d'errore asettico e privo di Stack Trace
+                    if (isIntegritaError) {
+                        console.error("🚨 SW: Errore di Integrità critico rilevato su un asset.", createCleanError("SyncError", "Errore di Integrità rilevato su un asset"));
+                    } else {
+                        console.warn("🔄⚠️ SW: Errore Sync", createCleanError("SyncError", "Errore operativo durante il Sync"));
+                    }
+                } finally {
+                    console.info(`✅ SW: SYNC Completata. Total file Download: ${completed} - Exclud(IsBunker): ${completed_ok}`);
+                    isNewInstallation = false;
+                    isSyncing = false;
+                    if (syncAbortController?.signal.aborted) {
+                        syncAbortController = null;
+                        broadcast({ type: 'SYNC_RETRY' });
+                        return;
+                    }
+                    syncAbortController = null;
+                    await sleep(500);
 
-								console.info(`📄✅ SW: Già aggiornato: ${url}`);
-								completed_ok++;
-                            } else if (val === false) {
-
-								console.info(`📄❌ SW: Fallimento validazione/download su: ${url}`);
-                                failed++;
-                                completed++;
-                            }
-                        } else {
-							console.info(`📄⚠️ SW: Errore critico nel processo per: ${url}`, res.reason);
-							if (res.reason && ( res.reason.message.includes('VAULT') )){
-								throw res.reason;
-							}
-                            rfailed++;
-                            completed++;
+                    broadcast({
+                        type: 'SYNC_END',
+                        hasChanged: hasActuallyChanged,
+                        serverVersion: realServerVersion,
+                        details: {
+                            total: (List_File_Download - completed_ok),
+                            completed: completed,
+                            failed: failed,
+                            request_failed: rfailed,
+                            FileVarExt: variantsFound
                         }
                     });
-
-					if(completed > 0){
-						broadcast({
-							type: 'SYNC_PROGRESS',
-							details: {
-								percent: Math.floor((completed / List_File_Download) * 100),
-								current: completed,
-								total: uniqueList.length,
-								request_failed: rfailed,
-								failed_assets: failed
-							}
-						});
-					}
                 }
+            };
+            // 🔐 HARDENING LIVELLO INTERNO:
+            Object.freeze(performSync);
+            await performSync(event);
+        }
 
-				if (syncAbortController?.signal.aborted) return;
-const expectedPaths = new Set([...coreNormalized, normalize(CONFIG.ROOT), ...uniqueList]);
-const allCachedRequests = await cache.keys();
-for (const request of allCachedRequests) {
-    const cleanPathInCache = normalize(new URL(request.url).pathname);
-    if (!expectedPaths.has(cleanPathInCache)) {
-        await cache.delete(request);
-    }
-}
-
-		} catch (err) {
-		    // 🪝🛡️⏱️ INNESTO:
-		    await injectTimingNoise(startNetworkTime, 50);
-		    // Interruzione immediata e atomica delle pipeline di rete pendenti
-		    if (syncAbortController) syncAbortController.abort();
-		    // Estrazione preventiva dei metadati dell'errore prima della sterilizzazione
-		    const errorMessage = err && typeof err === 'object' && 'message' in err ? String(err.message) : String(err);
-		    const isIntegritaError = errorMessage.includes('Integrità');
-
-		    // 🏴‍☠️ ANTI-PROFILING: Generazione di un clone d'errore asettico e privo di Stack Trace
-		    // Ispezione forense e logging differenziato in base alla severità
-		    if (isIntegritaError) {
-		        console.error("🚨 SW: Errore di Integrità critico rilevato su un asset.", createCleanError("SyncError", "Errore di Integrità rilevato su un asset"));
-		    } else {
-		        console.warn("🔄⚠️ SW: Errore Sync", createCleanError("SyncError", "Errore operativo durante il Sync"));
-		    }
-		} finally {
-				console.info(`✅ SW: SYNC Completata. Total file Download: ${completed} - Exclud(IsBunker): ${completed_ok}`);
-				isNewInstallation = false;
-                isSyncing = false;
-				if (syncAbortController?.signal.aborted) {
-					syncAbortController = null;
-					broadcast({ type: 'SYNC_RETRY' });
-					return;
-				}
-                syncAbortController = null;
-                await sleep(500);
-
-                broadcast({
-                    type: 'SYNC_END',
-                    hasChanged: hasActuallyChanged,
-                    serverVersion: realServerVersion,
-                    details: {
-                        total: ( List_File_Download - completed_ok ),
-                        completed: completed,
-                        failed: failed,
-                        request_failed: rfailed,
-                        FileVarExt: variantsFound
-                    }
-                });
-            }
-        };
-        // 🔐 HARDENING LIVELLO INTERNO:
-        Object.freeze(performSync);
-        event.waitUntil(performSync(event));
-    }
+    })().catch((err) => {
+        // 🛡️ Rete di sicurezza.
+        isSyncing = false;
+        console.warn("⚠️ SW: Errore IPC non gestito", createCleanError("IpcError", String(err?.message || err)));
+    }));
 });
 
 /**
