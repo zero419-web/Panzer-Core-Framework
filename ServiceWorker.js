@@ -1342,6 +1342,7 @@ const checkRealOnline = async (mode = 'fetch') => {
     } else {
         timeoutMs = (profileName === 'Fast' || profileName === 'Ultrafast') ? 2500 : 5500;
     }
+    
     try {
         const controller = new AbortController();
         const tId = setTimeout(() => controller.abort(), timeoutMs);
@@ -1351,14 +1352,17 @@ const checkRealOnline = async (mode = 'fetch') => {
             method: 'HEAD',
             cache: 'no-store',
             mode: 'no-cors',
-			signal: syncAbortController ?
-					AbortSignal.any([syncAbortController?.signal, controller?.signal]) :
-					controller?.signal
+            signal: syncAbortController ?
+                AbortSignal.any([syncAbortController?.signal, controller?.signal]) :
+                controller?.signal
         });
+        
         clearTimeout(tId);
+        
         return true;
+        
     } catch (e) {
-        console.log(`🌐❌ SW: Offline in ${mode} (Profilo: ${profileName})`);
+        console.log(`🌐❌ SW: Offline in ${mode} (Profilo: ${profileName}) - Errore: ${e.message}`);
         return false;
     }
 };
@@ -1674,25 +1678,25 @@ self.addEventListener('message', (event) => {
                                     const radarText = await radarRes.text();
                                     const match = radarText.match(/"version"\s*:\s*['"]([^'"]+)['"]/i);
                                     const serverV = match ? match[1] : null;
-
+                                    
                                     if (serverV) {
                                         radarSuccess = true;
-                                        if (serverV !== currentVersion) {
+                                        // ✅ verifica che currentVersion esista prima di confrontare i Major Update.
+                                        if (currentVersion && serverV !== currentVersion) {
                                             const vServer = serverV.split('.');
-                                            const vLocal = String(currentVersion || '').split('.');
+                                            const vLocal = String(currentVersion).split('.');
 
                                             if (vServer[0] !== vLocal[0] || vServer[1] !== vLocal[1]) {
                                                 console.info(`💥 SW Radar: Rilevato Major Update (${currentVersion} -> ${serverV}). Tabula Rasa Core File !`);
                                                 CoreAssets_Destroy_Caches(serverV);
                                                 return;
                                             }
-
-                                            console.info(`⚙️🎯 SW Radar: Patch rilevata (${serverV})`);
-                                            realServerVersion = serverV;
-                                            IsCFUD = true;
-                                            hasActuallyChanged = true;
                                         }
-                                        // 🎯 Trovato il file JSON con la versione corretta, interrompiamo il ciclo
+
+                                        console.info(`⚙️🎯 SW Radar: Patch rilevata (${serverV})`);
+                                        realServerVersion = serverV;
+                                        IsCFUD = true;
+                                        hasActuallyChanged = true;
                                         break;
                                     }
                                 }
