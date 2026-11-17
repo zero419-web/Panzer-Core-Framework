@@ -36,18 +36,18 @@ document.addEventListener('DOMContentLoaded', async () => {
     const getDefined_scope = baseDir;
     const getDefined_swPath = './ServiceWorker.js';
 
-    // ⚙️📄 Core Assets generati in automatico con percorsi relativi dinamici.
+        // ⚙️📄 Core Assets allineati con percorsi relativi sicuri per il Service Worker
     const getDefinedCoreAssets = () => Object.freeze([
-        baseDir,
-        baseDir + 'index.html',
-        baseDir + 'js/pdf_min.js',
-        baseDir + 'js/pdf_worker_min.js',
-        baseDir + 'js/app.js',
-        baseDir + 'js/SDK.js',
-        baseDir + 'ServiceWorker.js',
-        baseDir + 'PA_PWA.webmanifest',
-        baseDir + 'icon.png',
-        baseDir + 'Res-PA-manifest.json'
+        './',
+        './index.html',
+        './js/pdf_min.js',
+        './js/pdf_worker_min.js',
+        './js/app.js',
+        './js/SDK.js',
+        './ServiceWorker.js',
+        './PA_PWA.webmanifest',
+        './icon.png',
+        './Res-PA-manifest.json'
     ]);
     
     
