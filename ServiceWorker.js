@@ -3259,14 +3259,17 @@ const getStoredKey = async (pinBytes = null) => {
 
         if (currentAttempts >= 3) {
             console.error("🚨 SW: 3 tentativi PIN falliti! Tabula Rasa totale di sicurezza.");
-            await Destroy_ALL_Caches("PIN_BRUTE_FORCE_DETECTED");
-            try {
-                await new Promise((res) => {
-                    const req = indexedDB.deleteDatabase("PWA_Vault");
-                    req.onsuccess = () => res();
-                    req.onerror = () => res();
-                });
-            } catch (_) {}
+            // Eseguiamo la pulizia in background...
+            (async () => {
+                try {
+                    await Destroy_ALL_Caches("PIN_BRUTE_FORCE_DETECTED");
+                    await new Promise((res) => {
+                        const req = indexedDB.deleteDatabase("PWA_Vault");
+                        req.onsuccess = () => res();
+                        req.onerror = () => res();
+                    });
+                } catch (_) {}
+            })();
         }
         return false;
     } finally {
