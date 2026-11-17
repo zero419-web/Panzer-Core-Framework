@@ -1409,7 +1409,8 @@ self.addEventListener('message', (event) => {
             return;
         }
 
-                if (eventDataSnapshot.type === 'SUBMIT_PIN') {
+        if (eventDataSnapshot.type === 'SUBMIT_PIN') {
+            const startPinTime = performance.now(); // ⏱️ Marcatore temporale.
             const pinArrayBuffer = eventDataSnapshot.pinBuffer;
             const mode = eventDataSnapshot.mode || 'unlock';
             if (!pinArrayBuffer) {
@@ -1422,7 +1423,7 @@ self.addEventListener('message', (event) => {
                 let key = null;
 
                 if (mode === 'setup') {
-                    // 🛠️ SETUP...
+                    // 🛠️ SETUP:
                     let db = null;
                     try {
                         db = await new Promise((res, rej) => {
@@ -1435,36 +1436,49 @@ self.addEventListener('message', (event) => {
                             req.onerror = () => rej(req.error);
                         });
 
-                        // ⚙️🔑 Genera nuova Master Key
-                        key = await crypto.subtle.generateKey(
+                        const tempKey = await crypto.subtle.generateKey(
                             { name: "AES-GCM", length: 256 },
-                            false,
+                            true,
                             ["encrypt", "decrypt"]
                         );
 
                         const newSalt = crypto.getRandomValues(new Uint8Array(16));
-                        const wrapped = await wrapMasterKey(key, pinBytes, newSalt);
+                        const wrapped = await wrapMasterKey(tempKey, pinBytes, newSalt);
 
-                        // Scrittura pulita in transazione...
+                        const rawBytes = await crypto.subtle.exportKey("raw", tempKey);
+                        key = await crypto.subtle.importKey(
+                            "raw",
+                            rawBytes,
+                            { name: "AES-GCM", length: 256 },
+                            false,
+                            ["encrypt", "decrypt"]
+                        );
+                        rawBytes.fill(0);
+
                         await new Promise((res, rej) => {
                             const tx = db.transaction("keys", "readwrite");
                             const store = tx.objectStore("keys");
                             store.put(wrapped, "wrapped_master_key");
                             store.put(newSalt, "vault_salt");
-                            store.delete("master_key"); // Rimuove eventuali vecchie chiavi legacy...
+                            store.delete("master_key");
                             tx.oncomplete = () => res();
                             tx.onerror = () => rej(tx.error);
                         });
 
                         encryptionKey = key;
                         failedPinAttempts = 0;
-                        console.info("🔑 SW: Setup completato con successo, nuova chiave generata.");
+                        console.info("🔑 SW: Setup completato. Master Key protetta e caricata in RAM.");
                     } finally {
                         if (db) { try { db.close(); } catch (_) {} }
                     }
                 } else {
-                    // 🔓 UNLOCK: Sblocco standard con verifica della chiave esistente
+                    // 🔓 UNLOCK: Sblocco standard del caveau esistente
                     key = await getStoredKey(pinBytes);
+                }
+
+                // 🛡️🏴‍☠️ ANTI-PROFILING:
+                if (typeof injectTimingNoise === 'function') {
+                    await injectTimingNoise(startPinTime, 250);
                 }
 
                 if (key && key !== false) {
@@ -1478,8 +1492,12 @@ self.addEventListener('message', (event) => {
                     }
                 }
             } catch (err) {
-                console.error("❌ SW: Errore critico in SUBMIT_PIN:", err);
-                event.source?.postMessage({ type: 'PIN_RESULT', success: false, error: err.message || "Errore interno di cifratura" });
+                if (typeof injectTimingNoise === 'function') {
+                    await injectTimingNoise(startPinTime, 250);
+                }
+                const sterileErr = createCleanError("VaultSetupError", "Fallimento operativo durante la gestione del PIN");
+                console.error("❌ SW: Errore critico in SUBMIT_PIN:", sterileErr);
+                event.source?.postMessage({ type: 'PIN_RESULT', success: false, error: "Errore interno di cifratura della stiva" });
             } finally {
                 if (pinBytes) pinBytes.fill(0);
             }
