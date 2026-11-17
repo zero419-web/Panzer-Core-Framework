@@ -1426,15 +1426,7 @@ self.addEventListener('message', (event) => {
                     // 🛠️ SETUP:
                     let db = null;
                     try {
-                        db = await new Promise((res, rej) => {
-                            const req = indexedDB.open("PWA_Vault", 1);
-                            req.onupgradeneeded = (e) => {
-                                const d = e.target.result;
-                                if (!d.objectStoreNames.contains("keys")) d.createObjectStore("keys");
-                            };
-                            req.onsuccess = () => res(req.result);
-                            req.onerror = () => rej(req.error);
-                        });
+                        db = await openVaultDB();
 
                         const tempKey = await crypto.subtle.generateKey(
                             { name: "AES-GCM", length: 256 },
@@ -1474,7 +1466,7 @@ self.addEventListener('message', (event) => {
                         if (db) { try { db.close(); } catch (_) {} }
                     }
                 } else {
-                    // 🔓 UNLOCK: Sblocco standard del caveau esistente
+                    // 🔓 UNLOCK: Sblocco standard del caveau esistente tramite la logica centralizzata
                     key = await getStoredKey(pinBytes);
                 }
 
@@ -1486,20 +1478,16 @@ self.addEventListener('message', (event) => {
                 if (key && key !== false) {
                     event.source?.postMessage({ type: 'PIN_RESULT', success: true });
                 } else {
-                    // Leggi i tentativi reali persistiti nel DB in modo sicuro
+                    // Leggi i tentativi reali persistiti nel DB in modo sicuro tramite openVaultDB
                     let persistedAttempts = 1;
                     let checkDb = null;
                     try {
-                        checkDb = await new Promise((res, rej) => {
-                            const req = indexedDB.open("PWA_Vault", 1);
-                            req.onsuccess = () => res(req.result);
-                            req.onerror = () => rej(req.error);
-                        });
-                        const tx = checkDb.transaction("keys", "readonly");
+                        checkDb = await openVaultDB();
                         persistedAttempts = await new Promise((res) => {
+                            const tx = checkDb.transaction("keys", "readonly");
                             const r = tx.objectStore("keys").get("failed_pin_attempts");
-                            r.onsuccess = () => res(r.result !== undefined ? r.result : 1);
-                            r.onerror = () => res(1);
+                            tx.oncomplete = () => res(r.result !== undefined ? r.result : 1);
+                            tx.onerror = () => res(1);
                         });
                     } catch (_) {
                         persistedAttempts = failedPinAttempts;
@@ -3124,6 +3112,27 @@ const unwrapMasterKey = async (wrappedData, pinBytes, salt) => {
 Object.freeze(unwrapMasterKey);
 
 /**
+ * 🗄️🔓 APERTURA CAVEAU: Connessione e Inizializzazione Strutturata (IndexedDB Vault).
+ * Apre o aggiorna in modo asincrono l'istanza del database locale cifrato "PWA_Vault",
+ * provvedendo alla creazione automatica dello object store "keys" se assente.
+ * @returns {Promise<IDBDatabase>} L'istanza attiva del database IndexedDB per la stiva crittografica.
+ */
+const openVaultDB = () => {
+    return new Promise((resolve, reject) => {
+        const req = indexedDB.open("PWA_Vault", 1);
+        req.onupgradeneeded = (e) => {
+            const db = e.target.result;
+            if (!db.objectStoreNames.contains("keys")) {
+                db.createObjectStore("keys");
+            }
+        };
+        req.onsuccess = () => resolve(req.result);
+        req.onerror = () => reject(req.error);
+    });
+};
+Object.freeze(openVaultDB);
+
+/**
  * 🔑 GESTIONE STORAGE CHIAVI: Estrazione e Clonazione Strutturata (Key Wrapped & PIN Protected).
  * Recupera l'oggetto CryptoKey opaco da IndexedDB tramite sblocco PIN o provvede alla generazione via Web Crypto API.
  * @param {Uint8Array|null} pinBytes - Byte del PIN opzionali per setup o sblocco.
@@ -3131,183 +3140,154 @@ Object.freeze(unwrapMasterKey);
  */
 const getStoredKey = async (pinBytes = null) => {
     if (encryptionKey !== null) return encryptionKey;
-    return new Promise(async (resolve) => {
-        let dbRef = null;
-        try {
-            const request = indexedDB.open("PWA_Vault", 1);
-            request.onupgradeneeded = (e) => {
-                const db = e.target.result;
-                if (!db.objectStoreNames.contains("keys")) {
-                    db.createObjectStore("keys");
-                }
+    if (!pinBytes) return null;
+
+    let db = null;
+    try {
+        db = await openVaultDB();
+
+        let wrappedKey, salt, legacyKey;
+        await new Promise((resolve, reject) => {
+            const tx = db.transaction("keys", "readonly");
+            const store = tx.objectStore("keys");
+            const req1 = store.get("wrapped_master_key");
+            const req2 = store.get("vault_salt");
+            const req3 = store.get("master_key");
+
+            tx.oncomplete = () => {
+                wrappedKey = req1.result;
+                salt = req2.result;
+                legacyKey = req3.result;
+                resolve();
             };
-            request.onsuccess = (e) => {
-                const db = e.target.result;
-                dbRef = db;
-                const transaction = db.transaction("keys", "readwrite");
-                const store = transaction.objectStore("keys");
-                
-                const getWrappedReq = store.get("wrapped_master_key");
-                const getSaltReq = store.get("vault_salt");
-                
-                getWrappedReq.onsuccess = async () => {
-                    try {
-                        let wrappedKey = getWrappedReq.result;
-                        let salt = getSaltReq.result;
-                        
-                        // Fallback di retrocompatibilità con eventuali vecchie chiavi in chiaro
-                        const getLegacyReq = store.get("master_key");
-                        getLegacyReq.onsuccess = async () => {
-                            const legacyKey = getLegacyReq.result;
-                            
-                            if (!wrappedKey && legacyKey) {
-                                if (!pinBytes) {
-                                    if (dbRef) dbRef.close();
-                                    resolve(null);
-                                    return;
-                                }
-                                const newSalt = crypto.getRandomValues(new Uint8Array(16));
-                                wrappedKey = await wrapMasterKey(legacyKey, pinBytes, newSalt);
-                                salt = newSalt;
-                                store.put(wrappedKey, "wrapped_master_key");
-                                store.put(salt, "vault_salt");
-                                store.delete("master_key");
-                            }
+            tx.onerror = () => reject(tx.error);
+        });
 
-                            // 🛠️ Install...
-                            if (!wrappedKey || !salt) {
-                                // Se non viene passato alcun PIN (es. controllo di stato iniziale all'avvio), ritorniamo null
-                                if (!pinBytes) {
-                                    if (dbRef) dbRef.close();
-                                    resolve(null);
-                                    return;
-                                }
-                                console.info("🔑 SW: Primo avvio / Setup stiva, inizializzazione chiave...");
-                                const key = await crypto.subtle.generateKey(
-                                    { name: "AES-GCM", length: 256 },
-                                    false,
-                                    ["encrypt", "decrypt"]
-                                );
-                                
-                                const newSalt = crypto.getRandomValues(new Uint8Array(16));
-                                const wrapped = await wrapMasterKey(key, pinBytes, newSalt);
-                                
-                                store.put(wrapped, "wrapped_master_key");
-                                store.put(newSalt, "vault_salt");
-                                
-                                encryptionKey = key;
-                                failedPinAttempts = 0;
-                                transaction.oncomplete = () => { if (dbRef) dbRef.close(); };
-                                resolve(key);
-                                return;
-                            }
+        // Fallback di retrocompatibilità
+        if (!wrappedKey && legacyKey) {
+            const newSalt = crypto.getRandomValues(new Uint8Array(16));
+            wrappedKey = await wrapMasterKey(legacyKey, pinBytes, newSalt);
+            salt = newSalt;
 
-                            if (!pinBytes) {
-                                if (dbRef) dbRef.close();
-                                resolve(null);
-                                return;
-                            }
-
-                            try {
-                                const key = await unwrapMasterKey(wrappedKey, pinBytes, salt);
-                                
-                                // Test canarino di validazione isolato con chiave temporanea
-                                const canaryText = CONFIG.vaultCanaryText;
-                                const testBlob = new Blob([canaryText], { type: "text/plain" });
-                                
-                                const iv = crypto.getRandomValues(new Uint8Array(12));
-                                const buffer = await testBlob.arrayBuffer();
-                                const ciphertext = await crypto.subtle.encrypt({ name: "AES-GCM", iv: iv }, key, buffer);
-                                const combined = new Uint8Array(iv.length + ciphertext.byteLength);
-                                combined.set(iv);
-                                combined.set(new Uint8Array(ciphertext), iv.length);
-
-                                const decIv = combined.subarray(0, 12);
-                                const decCipher = combined.subarray(12);
-                                const decrypted = await crypto.subtle.decrypt({ name: "AES-GCM", iv: decIv }, key, decCipher);
-                                const decryptedText = new TextDecoder().decode(decrypted);
-
-                                if (decryptedText !== canaryText) {
-                                    throw new Error("CANARY_MISMATCH");
-                                }
-
-                                encryptionKey = key;
-                                failedPinAttempts = 0;
-                                
-                                // Resetta i tentativi falliti persistenti nello store
-                                try {
-                                    const resetTx = dbRef.transaction("keys", "readwrite");
-                                    resetTx.objectStore("keys").put(0, "failed_pin_attempts");
-                                } catch (_) {}
-
-                                if (dbRef) dbRef.close();
-                                resolve(key);
-                            } catch (cryptoErr) {
-                                encryptionKey = null;
-                                
-                                // Gestione persistente dei tentativi falliti tramite IndexedDB
-                                let currentAttempts = 1;
-                                try {
-                                    const attemptTx = dbRef.transaction("keys", "readwrite");
-                                    const attemptStore = attemptTx.objectStore("keys");
-                                    await new Promise((res) => {
-                                        const req = attemptStore.get("failed_pin_attempts");
-                                        req.onsuccess = () => {
-                                            currentAttempts = (req.result || 0) + 1;
-                                            attemptStore.put(currentAttempts, "failed_pin_attempts");
-                                            res();
-                                        };
-                                        req.onerror = () => res();
-                                    });
-                                } catch (_) {
-                                    failedPinAttempts++;
-                                    currentAttempts = failedPinAttempts;
-                                }
-
-                                if (dbRef) dbRef.close();
-
-                                if (currentAttempts >= 3) {
-                                    console.error("🚨 SW: 3 tentativi PIN falliti! Tabula Rasa totale di sicurezza.");
-                                    await Destroy_ALL_Caches("PIN_BRUTE_FORCE_DETECTED");
-                                    await new Promise((res) => {
-                                        const req = indexedDB.deleteDatabase("PWA_Vault");
-                                        req.onsuccess = () => res();
-                                        req.onerror = () => res();
-                                    });
-                                }
-                                resolve(false);
-                            }
-                        };
-                        getLegacyReq.onerror = async () => {
-                            if (dbRef) dbRef.close();
-                            resolve(null);
-                        };
-
-                    } catch (err) {
-                        if (dbRef) dbRef.close();
-                        encryptionKey = null;
-                        resolve(null);
-                    }
-                };
-                getWrappedReq.onerror = async () => {
-                    if (typeof injectTimingNoise === 'function') await injectTimingNoise(performance.now(), 40);
-                    console.info("❌ SW: Errore lettura store chiavi");
-                    if (dbRef) dbRef.close();
-                    resolve(null);
-                };
-            };
-            request.onerror = async (err) => {
-                if (typeof injectTimingNoise === 'function') await injectTimingNoise(performance.now(), 40);
-                console.info("❌ SW: Errore apertura IndexedDB Vault");
-                resolve(null);
-            };
-        } catch (criticalErr) {
-            if (typeof injectTimingNoise === 'function') await injectTimingNoise(performance.now(), 40);
-            console.error("❌ SW: Fallimento critico sistema Vault", createCleanError("Vault-Critical-Error", "Fallimento Critico Apertura del Vault"));
-            encryptionKey = null;
-            resolve(null);
+            await new Promise((resolve, reject) => {
+                const tx = db.transaction("keys", "readwrite");
+                const store = tx.objectStore("keys");
+                store.put(wrappedKey, "wrapped_master_key");
+                store.put(salt, "vault_salt");
+                store.delete("master_key");
+                tx.oncomplete = () => resolve();
+                tx.onerror = () => reject(tx.error);
+            });
         }
-    });
+
+        // Setup / Primo avvio
+        if (!wrappedKey || !salt) {
+            console.info("🔑 SW: Primo avvio / Setup stiva, inizializzazione chiave...");
+            const key = await crypto.subtle.generateKey(
+                { name: "AES-GCM", length: 256 },
+                false,
+                ["encrypt", "decrypt"]
+            );
+            
+            const newSalt = crypto.getRandomValues(new Uint8Array(16));
+            const wrapped = await wrapMasterKey(key, pinBytes, newSalt);
+            
+            await new Promise((resolve, reject) => {
+                const tx = db.transaction("keys", "readwrite");
+                const store = tx.objectStore("keys");
+                store.put(wrapped, "wrapped_master_key");
+                store.put(newSalt, "vault_salt");
+                store.put(0, "failed_pin_attempts");
+                tx.oncomplete = () => resolve();
+                tx.onerror = () => reject(tx.error);
+            });
+            
+            encryptionKey = key;
+            failedPinAttempts = 0;
+            return key;
+        }
+
+        // Sblocco e unwrapping
+        const key = await unwrapMasterKey(wrappedKey, pinBytes, salt);
+        
+        // Test canarino di validazione isolato
+        const canaryText = CONFIG.vaultCanaryText;
+        const testBlob = new Blob([canaryText], { type: "text/plain" });
+        
+        const iv = crypto.getRandomValues(new Uint8Array(12));
+        const buffer = await testBlob.arrayBuffer();
+        const ciphertext = await crypto.subtle.encrypt({ name: "AES-GCM", iv: iv }, key, buffer);
+        const combined = new Uint8Array(iv.length + ciphertext.byteLength);
+        combined.set(iv);
+        combined.set(new Uint8Array(ciphertext), iv.length);
+
+        const decrypted = await crypto.subtle.decrypt({ name: "AES-GCM", iv: combined.subarray(0, 12) }, key, combined.subarray(12));
+        const decryptedText = new TextDecoder().decode(decrypted);
+
+        if (decryptedText !== canaryText) {
+            throw new Error("CANARY_MISMATCH");
+        }
+
+        encryptionKey = key;
+        failedPinAttempts = 0;
+        
+        // Resetta i tentativi falliti persistenti nello store
+        await new Promise((resolve) => {
+            const tx = db.transaction("keys", "readwrite");
+            tx.objectStore("keys").put(0, "failed_pin_attempts");
+            tx.oncomplete = () => resolve();
+            tx.onerror = () => resolve();
+        });
+
+        return key;
+
+    } catch (cryptoErr) {
+        encryptionKey = null;
+        
+        // Gestione persistente dei tentativi falliti tramite IndexedDB
+        let currentAttempts = 1;
+        if (db) {
+            try {
+                currentAttempts = await new Promise((resolve, reject) => {
+                    const tx = db.transaction("keys", "readwrite");
+                    const store = tx.objectStore("keys");
+                    const getReq = store.get("failed_pin_attempts");
+                    getReq.onsuccess = () => {
+                        const next = (getReq.result || 0) + 1;
+                        store.put(next, "failed_pin_attempts");
+                        tx.oncomplete = () => resolve(next);
+                        tx.onerror = () => reject(tx.error);
+                    };
+                    getReq.onerror = () => reject(getReq.error);
+                });
+            } catch (_) {
+                failedPinAttempts++;
+                currentAttempts = failedPinAttempts;
+            }
+        } else {
+            failedPinAttempts++;
+            currentAttempts = failedPinAttempts;
+        }
+
+        failedPinAttempts = currentAttempts;
+
+        if (currentAttempts >= 3) {
+            console.error("🚨 SW: 3 tentativi PIN falliti! Tabula Rasa totale di sicurezza.");
+            await Destroy_ALL_Caches("PIN_BRUTE_FORCE_DETECTED");
+            try {
+                await new Promise((res) => {
+                    const req = indexedDB.deleteDatabase("PWA_Vault");
+                    req.onsuccess = () => res();
+                    req.onerror = () => res();
+                });
+            } catch (_) {}
+        }
+        return false;
+    } finally {
+        if (db) {
+            try { db.close(); } catch (_) {}
+        }
+    }
 };
 Object.freeze(getStoredKey);
 
