@@ -1491,10 +1491,11 @@ self.addEventListener('message', (event) => {
                     await injectTimingNoise(startPinTime, 250);
                 }
 
-                if (key && key !== false) {
+                if (key === "WIPED") {
+                    event.source?.postMessage({ type: 'PIN_RESULT', success: false, wiped: true, error: "Tentativi esauriti. Stiva distrutta." });
+                } else if (key && key !== false) {
                     event.source?.postMessage({ type: 'PIN_RESULT', success: true });
                 } else {
-                    // 🛡️ Sfruttiamo direttamente il contatore di tentativi aggiornato da getStoredKey
                     const persistedAttempts = failedPinAttempts;
                     const remaining = Math.max(0, 3 - persistedAttempts);
 
@@ -3289,7 +3290,8 @@ const getStoredKey = async (pinBytes = null) => {
 
         if (currentAttempts >= 3) {
             console.error("🚨 SW: 3 tentativi PIN falliti! Tabula Rasa totale di sicurezza.");
-            // Eseguiamo la pulizia in background...
+            
+            // 🚀 Esecuzione in background...
             (async () => {
                 try {
                     await Destroy_ALL_Caches("PIN_BRUTE_FORCE_DETECTED");
@@ -3300,6 +3302,7 @@ const getStoredKey = async (pinBytes = null) => {
                     });
                 } catch (_) {}
             })();
+            return "WIPED";
         }
         return false;
     } finally {
