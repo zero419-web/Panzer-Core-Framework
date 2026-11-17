@@ -211,6 +211,10 @@ document.addEventListener('DOMContentLoaded', async () => {
                     } else {
                         if (res && res.wiped) {
                             alert("🚨💣 3 tentativi falliti! La stiva è stata distrutta per sicurezza.");
+                            // 🧹 Pulisci i flag locali prima del reload
+                            localStorage.removeItem('panzer_has_ever_synced');
+                            localStorage.removeItem('panzer_vault_synced');
+                            sessionStorage.removeItem('panzer_active_session');
                             window.location.reload();
                         } else {
                             alert(`❌🔒 ${res?.error || "PIN errato. Riprova."}`);

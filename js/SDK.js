@@ -770,15 +770,20 @@ export class PanzerSDK {
                     this.lastUiUpdate = 0;
                     break;
 
-                case 'CORE_UPDATE_RELOAD':
-                    this.onLogMessage('warn', '🔄 SW: Aggiornamento critico ⚙️CORE rilevato. Ricaricamento in corso... 🔄');
-                    if (data.msg === 'DESTROY_ALL_CACHE') {
-                        this.onError(new Error("Vault compromesso - Tabula rasa eseguita"));
-                    }
-                    setTimeout(function() {
-                        window.location.reload();
-                    }, 5000);
-                    break;
+                    case 'CORE_UPDATE_RELOAD':
+                        this.onLogMessage('warn', '🔄 SW: Aggiornamento critico ⚙️CORE rilevato. Ricaricamento in corso... 🔄');
+                        if (data.msg === 'DESTROY_ALL_CACHE') {
+                            // 🧹 Pulizia totale dei flag locali di sessione e installazione
+                            sessionStorage.removeItem('panzer_active_session');
+                            localStorage.removeItem('panzer_has_ever_synced');
+                            localStorage.removeItem('panzer_vault_synced');
+                            this._isVaultArmed = false;
+                            this.onError(new Error("Vault compromesso - Tabula rasa eseguita"));
+                        }
+                        setTimeout(function() {
+                            window.location.reload();
+                        }, 5000);
+                        break;
 
                 default:
                     break;
