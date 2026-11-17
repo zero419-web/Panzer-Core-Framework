@@ -2832,6 +2832,16 @@ const Destroy_ALL_Caches = async (err = null) => {
 	console.error("💣 SW: Errore critico rilevato, Avvio Distruzione Totale!", err);
 	const keys = await caches.keys();
     await Promise.all(keys.map(k => caches.delete(k)));
+    
+    // 🧹 Elimina anche il database IndexedDB della stiva
+    try {
+        await new Promise((res) => {
+            const req = indexedDB.deleteDatabase("PWA_Vault");
+            req.onsuccess = () => res();
+            req.onerror = () => res();
+        });
+    } catch (_) {}
+
     const allClients = await self.clients.matchAll();
 	allClients.forEach(client => {
 		client.postMessage({ type: 'CORE_UPDATE_RELOAD', msg: 'DESTROY_ALL_CACHE', msg_err: err });
