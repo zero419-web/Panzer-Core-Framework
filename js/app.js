@@ -16,9 +16,6 @@ document.addEventListener('DOMContentLoaded', async () => {
     // 🛡️ Controllo chiusura scheda / nuova sessione
     if (!sessionStorage.getItem('panzer_tab_active')) {
         sessionStorage.setItem('panzer_tab_active', 'true');
-        if ('serviceWorker' in navigator && navigator.serviceWorker.controller) {
-            navigator.serviceWorker.controller.postMessage({ type: 'LOCK_VAULT' });
-        }
     }
     window.addEventListener('beforeunload', () => {
         sessionStorage.removeItem('panzer_tab_active');

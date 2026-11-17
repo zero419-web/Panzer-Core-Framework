@@ -838,7 +838,7 @@ export class PanzerSDK {
     /**
      * 🗑️ Esegue la purga volontaria della stiva.
      */
-    async purgeVault() {
+        async purgeVault() {
         if (!('caches' in window)) return;
         try {
             this.onLogMessage('warn', '🚨🗑️ SDK: Avvio purga volontaria e pulizia Cache & Caveau... 🗄️');
@@ -860,9 +860,9 @@ export class PanzerSDK {
                 req.onerror = () => res();
             });
 
-            // 🧹 Avvisa il Service Worker di azzerare la Master Key in RAM
+            // 🧹 Avvisa il Service Worker di azzerare la Master Key in RAM (sfrutta il comando esistente)
             if (navigator.serviceWorker && navigator.serviceWorker.controller) {
-                navigator.serviceWorker.controller.postMessage({ type: 'LOCK_VAULTS_AND_PURGE' });
+                navigator.serviceWorker.controller.postMessage({ type: 'LOCK_VAULT' });
             }
         } catch (err) {
             this.onLogMessage('error', `❌🗑️ SDK: Errore durante la purga: ${err.message}`);
