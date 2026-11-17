@@ -1400,11 +1400,27 @@ self.addEventListener('message', (event) => {
 
         if (eventDataSnapshot.type === 'CHECK_VAULT_STATUS') {
             const hasKey = encryptionKey !== null;
-            const key = await getStoredKey();
+            let db = null;
+            let isConfigured = false;
+            try {
+                db = await openVaultDB();
+                isConfigured = await new Promise((res) => {
+                    const tx = db.transaction("keys", "readonly");
+                    const store = tx.objectStore("keys");
+                    const req = store.get("wrapped_master_key");
+                    tx.oncomplete = () => res(!!req.result);
+                    tx.onerror = () => res(false);
+                });
+            } catch (_) {
+                isConfigured = false;
+            } finally {
+                if (db) { try { db.close(); } catch (_) {} }
+            }
+
             event.source?.postMessage({
                 type: 'VAULT_STATUS_RESULT',
                 unlocked: hasKey,
-                configured: (key !== null || failedPinAttempts > 0)
+                configured: isConfigured
             });
             return;
         }
@@ -2830,6 +2846,10 @@ const Destroy_ALL_Caches = async (err = null) => {
 	globalAbortController.abort();
     globalAbortController = new AbortController();
 	console.error("💣 SW: Errore critico rilevato, Avvio Distruzione Totale!", err);
+	 // 🧹 Reset dello stato in RAM
+    encryptionKey = null;
+    failedPinAttempts = 0;
+    
 	const keys = await caches.keys();
     await Promise.all(keys.map(k => caches.delete(k)));
     
