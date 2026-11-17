@@ -5,8 +5,9 @@
 <h1 align="center">🏗️ PANZER SDK & CORE FRAMEWORK</h1>
 
 <p align="center">
-  <img src="https://img.shields.io/badge/🌀_PANZER_SDK_BETA-v2.x-1f4e79" alt="SDK Badge">
-  <img src="https://img.shields.io/badge/⚙️🪖_CORE_PANZER-v7.9.11+-4f4f00" alt="Core Badge">
+  <img src="https://img.shields.io/badge/🌀_PANZER_SDK-v2.3.7-1f4e79" alt="SDK Badge">
+  <img src="https://img.shields.io/badge/📊_PANZER_APP-v2.4.2-2563eb" alt="App Badge">
+  <img src="https://img.shields.io/badge/⚙️🪖_CORE_PANZER-v7.9.16+-4f4f00" alt="Core Badge">
   <img src="https://img.shields.io/badge/PoC-📱_PWA_x_PA-af0000" alt="PoC Badge">
   <img src="https://img.shields.io/badge/Licenza-🇪🇺_EUPL_v1.2-0055a5" alt="License Badge">
 </p>
@@ -30,11 +31,11 @@
 
 ## 🚀 Obiettivi del Progetto
 
-- 🌀 **Proof of Concept (PoC):** <br> Architettura software sovrana per **Progressive Web App (📲 PWA)** basata sul **⚙️🪖 Core Panzer v7.x+**, progettata in modalità *🔐 Zero-Trust*.
+- 🌀 **Proof of Concept (PoC):** <br> Architettura software sovrana per **Progressive Web App (📲 PWA)** basata sul **⚙️🪖 Core Panzer v7.9.16+**, il client **SDK v2.3.7** e la Dashboard **App v2.4.2**, progettata in modalità *🔐 Zero-Trust*.
 
 - 🏛️ **Conformità Istituzionale:** <br> Il sistema garantisce **massima resilienza informatica**, continuità operativa *offline-first*, consultazione protetta di atti e documenti della **Pubblica Amministrazione (PA)**, nel pieno rispetto delle linee guida tecniche 📑 **AgID** e del **📜 Codice dell'Amministrazione Digitale (CAD)** per il riuso (*🇪🇺 EUPL v1.2*).
 
-- ⚙️ **Difesa Attiva & Tolleranza ai Guasti:** <br> Implementa strategie avanzate di computazione asincrona isolata, crittografia simmetrica client-side e tolleranza ai guasti di tipo militare. Garantisce che i dati sensibili rimangano protetti anche su reti degradate (*Lie-Fi 🤥🛜*) o assenti. In caso di manomissione fisica o *data breach* sul file system locale del client, tutti i file vengono eliminati per sicurezza e risincronizzati automaticamente con il server della PA.
+- ⚙️ **Difesa Attiva & Tolleranza ai Guasti:** <br> Implementa strategie avanzate di computazione asincrona isolata, crittografia simmetrica client-side con Key Wrapping basato su PIN utente e tolleranza ai guasti di tipo militare. Garantisce che i dati sensibili rimangano protetti anche su reti degradate (*Lie-Fi 🤥🛜*) o assenti. In caso di manomissione fisica o *data breach* sul file system locale del client, tutti i file vengono eliminati per sicurezza e risincronizzati automaticamente con il server della PA.
 
 <br>
 
@@ -42,13 +43,15 @@
 
 ## 🛠️ Architettura e Caratteristiche Principali
 
-Il sistema si compone di due livelli perfettamente integrati: il **Service Worker (`ServiceWorker.js`)** che agisce come entità autonoma di difesa, e l'**SDK Client (`SDK.js`)** che gestisce l'interfaccia, la memoria e i meccanismi di blocco.
+Il sistema si compone di due livelli perfettamente integrati: il **Service Worker (`ServiceWorker.js`)** che agisce come entità autonoma di difesa, e l'**SDK & Dashboard Client (`SDK.js` / `app.js`)** che gestisce l'interfaccia, la memoria e i meccanismi di blocco con gestione avanzata del caveau cifrato.
 
 <br>
 
-### 🔹 1. Core Engine (`ServiceWorker.js` - v7.x+)
+### 🔹 1. Core Engine ( `ServiceWorker.js` - v7.9.16+ )
 
-- **🔐🌡️🛡️ Jittered Thermal Shield Race:** <br> Ispezione forense profonda sul modulo `deepVaultValidation()`. Implementa una gara asincrona tra l'interrogazione a IndexedDB e lo **Scudo Termico Adattivo** (`waitTillIdle`).
+- **🔐🔑 Pin-Protected Key Wrapping (PBKDF2 + AES-GCM):** <br> Evoluzione radicale della sicurezza: la Master Key non è più solo non esportabile in RAM, ma viene cifrata a riposo su IndexedDB tramite un pacchetto protetto (`wrapped_master_key`) derivato dai byte del PIN dell'operatore ( *100.000 iterazioni PBKDF2, SHA-256* ).
+
+- **🔐🌡️🛡️ Jittered Thermal Shield Race:** <br> Ispezione forense profonda sul modulo `deepVaultValidation()`. Implementa una gara asincrona tra l'interrogazione al database della stiva e lo **Scudo Termico Adattivo** (`waitTillIdle`).
 
 - **🔄🌐🛡️🔗 Dynamic Adaptive Network Resiliency:** <br> Algoritmo proprietario che adatta dinamicamente i timeout di rete basandosi su 5 profili telemetrici hardware di velocità della connessione.
 
@@ -56,7 +59,7 @@ Il sistema si compone di due livelli perfettamente integrati: il **Service Worke
 
 - **🔬🧬 SW Forensics (DNA Check & Binary Validation):** <br> Controllo biometrico sequenziale (**🤯 Testa**, **👣 Coda**, **🪵 Corpo**) tramite `isValidBlob()` per prevenire attacchi di *☠️ Cache Poisoning*, bloccare file polyglot ed eradicare vettori malevoli (*Anti-PDF Scripting ❌📜*).
 
-- **🛡️📴 Offline Bunker Mode & Emergency Wipe:** <br> In caso di violazione rilevata, il Panzer attiva contromisure distruttive (*Tabula Rasa ☢️*): pialla il `Cache Storage` e il database locale (`indexedDB.deleteDatabase`), isolando il sistema per proteggere il dato sensibile.
+- **🛡️📴 Offline Bunker Mode & Emergency Wipe:** <br> In caso di violazione rilevata o 3 tentativi errati di inserimento PIN, il Panzer attiva contromisure distruttive (*Tabula Rasa ☢️*): pialla il `Cache Storage` e il database locale (`indexedDB.deleteDatabase`), isolando il sistema per proteggere il dato sensibile.
 
 - **🔀📡 Architettura di Instradamento a 5 Sezioni (Fetch Strict Layer 🚥):** <br> Ciclo di vita della richiesta compartimentato in perimetri rigidi per superare i capitolati di ispezione AgID (*Normalizzazione, Online Gateway, Cache Hit, Filtro Multimediale, Critical Fallback*).
 
@@ -64,7 +67,9 @@ Il sistema si compone di due livelli perfettamente integrati: il **Service Worke
 
 <br>
 
-### 🔹 2. Client SDK & Dashboard (`SDK.js` / `app.js` - v2.x)
+### 🔹 2. Client SDK & Dashboard ( `SDK.js` v2.3.7 & `app.js` v2.4.2 )
+
+- **🔏🛡️ PanzerVaultManager & Sblocco Forzato all'Avvio (`initVaultCheck`):** <br> Gestione governativa della sessione client con timer di inattività fissato a 10 minuti (auto-lock della RAM), modale unificato per Setup, Sblocco e Cambio PIN, e trigger automatico all'avvio o post-refresh per eliminare qualsiasi stallo sulla schermata di caricamento.
 
 - **🐺🗄️ Watchdog Integrità Stiva Anti-Wipe:** <br> Sistema di controllo costante sui dati della PWA per impedire che l'interfaccia rimanga attiva se la memoria viene svuotata inaspettatamente dal browser o dal sistema operativo, con popup di ripristino guidato.
 
@@ -137,7 +142,13 @@ Il sistema si compone di due livelli perfettamente integrati: il **Service Worke
 ## 📜 Changelog & Storico Versioni
 
 <details>
-<summary><strong>⚙️🪖 Espandi Changelog <br> CORE PANZER ( v7.6+ → v7.9.11+ )</strong></summary>
+<summary><strong>⚙️🪖 Espandi Changelog <br> CORE PANZER ( v7.6+ → v7.9.16+ )</strong></summary>
+
+<br>
+
+### 🪖 NOVITÀ v7.9.16+ ( `🪨🔑 PIN Key Wrapping` ) 
+
+- 🔑🎁 **Key Wrapping Nativo con PBKDF2 :** <br> Introduzione del meccanismo di protezione a riposo della Master Key tramite cifratura AES-GCM (256-bit) derivata dai byte del PIN inserito dall'utente ( *100.000 iterazioni PBKDF2* ).
 
 <br>
 
@@ -224,14 +235,22 @@ Il sistema si compone di due livelli perfettamente integrati: il **Service Worke
 
 ### 🪖 NOVITÀ v7.6+ (`➕ Funzionalità`)
 
-- 🏴‍☠️ **Protocolli Anti-Profiling:** <br> Conversione dei punti di errore in *Black Hole* informativi, sterilizzazione degli stack trace e iniezione di rumore temporale (`💉⏱️`) contro attacchi *side-channel*.
+- 🏴‍☠️ **Protocolli Anti-Profiling:** <br> Conversione dei punti di errore in *Black Hole* informatici, sterilizzazione degli stack trace e iniezione di rumore temporale (`💉⏱️`) contro attacchi *side-channel*.
 
 </details>
 
 <br>
 
 <details>
-<summary><strong>⚙️📦 Espandi Changelog <br> SDK & DASHBOARD ( v2.1 → v2.4.0 )</strong></summary>
+<summary><strong>⚙️📦 Espandi Changelog <br> SDK ( v2.3.7 ) & DASHBOARD APP ( v2.4.2 )</strong></summary>
+
+<br>
+
+### 📣 NOVITÀ SDK v2.3.7 & APP v2.4.2 ( `🔄📊 GUI DashBoard & PanzerVaultManager PIN Integration` )
+
+- 🔏🔒 **PanzerVaultManager & Gestione Sessione PIN ( SDK v2.3.7 ) :** <br> Implementazione del gestore di sicurezza per il timer di inattività a 10 minuti (con auto-lock della RAM), il bridge IPC asincrono e la gestione trasparente del wrapping della chiave basato su PIN (`wrapped_master_key`).
+
+- 🛡️ **Risoluzione Stallo Post-Refresh ( `initVaultCheck` & `app.js` v2.4.2 ) :** <br> Ottimizzazione del controllo dello stato del caveau all'avvio: se il sistema rileva che la stiva è configurata ma bloccata dopo un refresh ( `unlocked: false` ), forza l'apertura immediata del modale di sblocco PIN ( `showPinModal('unlock')` ), eliminando lo stallo indefinito sul log *"In attesa dell'avvio del modulo applicativo PA..."*.
 
 <br>
 
