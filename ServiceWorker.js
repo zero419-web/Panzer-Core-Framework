@@ -3030,8 +3030,6 @@ const getStoredKey = async (pinBytes = null) => {
     if (encryptionKey !== null) return encryptionKey;
     return new Promise(async (resolve) => {
         try {
-            const dbs = indexedDB.databases ? await indexedDB.databases() : [];
-            const vaultExists = dbs.some(db => db.name === "PWA_Vault");
             const request = indexedDB.open("PWA_Vault", 1);
             request.onupgradeneeded = (e) => {
                 const db = e.target.result;
@@ -3071,23 +3069,17 @@ const getStoredKey = async (pinBytes = null) => {
                                 store.delete("master_key");
                             }
 
+                            // 🛠️ CORRETTO: Se non ci sono chiavi salvate nel caveau
                             if (!wrappedKey || !salt) {
-                                if (vaultExists && !legacyKey) {
-                                    // 💥 FORENSIC ALERT: DB presente ma chiave assente. Possibile attacco di estrazione forzata. Blocco dell'istanza.
-                                    console.error("⚠️💣 ANOMALIA CRITICA: Vault compromesso, chiave sparita!");
-                                    encryptionKey = null;
-                                    db.close();
-                                    resolve(null);
-                                    return;
-                                }
-
+                                // Se non viene passato alcun PIN (es. controllo di stato iniziale all'avvio), ritorniamo null
                                 if (!pinBytes) {
                                     db.close();
                                     resolve(null);
                                     return;
                                 }
 
-                                console.info("🔑 SW: Primo avvio, inizializzazione chiave...");
+                                // Se viene passato il PIN (fase di setup / creazione iniziale), generiamo e salviamo la chiave
+                                console.info("🔑 SW: Primo avvio / Setup stiva, inizializzazione chiave...");
                                 const key = await crypto.subtle.generateKey(
                                     { name: "AES-GCM", length: 256 },
                                     false,
@@ -3160,7 +3152,6 @@ const getStoredKey = async (pinBytes = null) => {
                     }
                 };
                 getWrappedReq.onerror = async () => {
-                    // 🏴‍☠️ ANTI-PROFILING:
                     if (typeof injectTimingNoise === 'function') await injectTimingNoise(performance.now(), 40);
                     console.info("❌ SW: Errore lettura store chiavi");
                     db.close();
@@ -3169,14 +3160,12 @@ const getStoredKey = async (pinBytes = null) => {
                 };
             };
             request.onerror = async (err) => {
-                // 🏴‍☠️ ANTI-PROFILING:
                 if (typeof injectTimingNoise === 'function') await injectTimingNoise(performance.now(), 40);
                 console.info("❌ SW: Errore apertura IndexedDB Vault");
                 if (pinBytes) pinBytes.fill(0);
                 resolve(null);
             };
         } catch (criticalErr) {
-            // 🏴‍☠️ ANTI-PROFILING:
             if (typeof injectTimingNoise === 'function') await injectTimingNoise(performance.now(), 40);
             console.error("❌ SW: Fallimento critico sistema Vault", createCleanError("Vault-Critical-Error", "Fallimento Critico Apertura del Vault"));
             encryptionKey = null;
