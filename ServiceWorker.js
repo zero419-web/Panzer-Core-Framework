@@ -2888,10 +2888,15 @@ Object.freeze(Destroy_ALL_Caches);
 /**
  * 🗄🐺️🐤 WATCHDOG DI SICUREZZA: Ispezione Forense dell'Integrità Crittografica.
  * Esegue un test di cifratura/decrittazione simmetrica ( Canary Loopback ) per rilevare violazioni hardware.
- * Integra una gara asincrona adattiva ( Thermal Shield Race via waitTillIdle ) per isolare falsi positivi di I/O Con X tentativi prima di dichiarare l'Attacattacco reale !
+ * Integra una gara asincrona adattiva ( Thermal Shield Race via waitTillIdle ) per isolare falsi positivi di I/O Con X tentativi prima di dichiarare l'Attacco reale !
  * @throws {Error} VAULT_COMPROMISED_AND_CLEANED - Se viene rilevata una violazione strutturale dei DATI.
  */
 const deepVaultValidation = async () => {
+    // Se la chiave è già attiva in RAM, il caveau è sbloccato e sicuro
+    if (encryptionKey !== null) {
+        return;
+    }
+
     const MAX_RETRIES = 3;
     let attempt = 0;
 
@@ -2899,7 +2904,7 @@ const deepVaultValidation = async () => {
         attempt++;
         let db = null;
         try {
-            let realKey = null;
+            let hasKeyMaterial = false;
             let isIOStable = false;
              // 🎲 JITTERING: Calcola un tempo casuale tra 250ms e 600ms
             const randomTimeoutMs = (Math.random() * (600 - 250) + 250) * attempt;
@@ -2910,24 +2915,24 @@ const deepVaultValidation = async () => {
                 throw new Error("THERMAL_SHIELD_TIMEOUT");
             })();
 
-            // 🏁 GARA ADATTIVA: L'operazione sul disco contro il respiro della CPU
+            // 🏁 GARA ADATTIVA: L'operazione sul disco contro il respiro della CPU (Verifica wrapped_master_key)
             try {
-                realKey = await Promise.race([
+                hasKeyMaterial = await Promise.race([
                     (async () => {
                         db = await new Promise((resolve, reject) => {
                             const req = indexedDB.open("PWA_Vault", 1);
                             req.onsuccess = () => resolve(req.result);
                             req.onerror = () => reject(new Error("VAULT_DB_ACCESS_ERROR"));
                         });
-                        const resKey = await new Promise((resolve, reject) => {
+                        const hasWrapped = await new Promise((resolve, reject) => {
                             const tx = db.transaction("keys", "readonly");
-                            const req = tx.objectStore("keys").get("master_key");
-                            req.onsuccess = () => resolve(req.result);
+                            const req = tx.objectStore("keys").get("wrapped_master_key");
+                            req.onsuccess = () => resolve(!!req.result);
                             req.onerror = () => reject(new Error("VAULT_KEY_READ_ERROR"));
                         });
                         db.close();
                         db = null;
-                        return resKey;
+                        return hasWrapped;
                     })(),
                     thermalShieldRace
                 ]);
@@ -2945,18 +2950,17 @@ const deepVaultValidation = async () => {
                 }
             }
 
-            // --- 👨‍⚖️ VERDETTO SULL'ASSENZA DELLA CHIAVE ---
-            if (!realKey) {
+            // --- 👨‍⚖️ VERDETTO SULL'ASSENZA DEL PACCHETTO CHIAVE ---
+            if (!hasKeyMaterial) {
                 if (isIOStable) {
-                    // la chiave non c'è ?, potrebbe essere un ritardo di transazione: riproviamo prima di gridare all'attacco !!!
+                    // Potrebbe essere un ritardo di transazione: riproviamo prima di gridare all'attacco
                     if (attempt < MAX_RETRIES) {
-                        console.warn(`🗄️⚠️ SW: Chiave non ancora visibile al tentativo ${attempt}, Ritento.`);
-                        //await sleep(300 * attempt);
+                        console.warn(`🗄️⚠️ SW: Pacchetto chiave non ancora visibile al tentativo ${attempt}, Ritento.`);
                         await waitTillIdle(250, Math.ceil(randomTimeoutMs));
                         continue;
                     }
-                    // 🚨 SCENARIO ATTACCO (Test DevTools): Canale sano e reattivo, ma record rimosso dolosamente.
-                    console.error("🗄️🚨 SW: CANALE REATTIVO MA CHIAVE ASSENTE!\n Rilevata rimozione dolosa dal disco. 💾");
+                    // 🚨 SCENARIO ATTACCO: Canale sano ma record rimosso dolosamente dal disco.
+                    console.error("🗄️🚨 SW: CANALE REATTIVO MA PACCHETTO CHIAVE ASSENTE!\n Rilevata rimozione dolosa dal disco. 💾");
                     throw new Error("VAULT_SECURITY_BREACH_INTEGRITY");
                 } else {
                     // FALSO POSITIVO: La CPU o il disco erano bloccati. Attivazione Bunker Shield protettivo.
@@ -2964,11 +2968,15 @@ const deepVaultValidation = async () => {
                 }
             }
 
+            // Se la chiave non è ancora in RAM ma il pacchetto su disco c'è, richiede lo sblocco tramite PIN ma non blocca la stiva
+            if (encryptionKey === null) {
+                return; 
+            }
+
             // --- DECRITTAZIONE REGOLARE DEL CANARINO ---
             const canaryText = CONFIG.vaultCanaryText;
-            const testKey = realKey;
+            const testKey = encryptionKey;
             try {
-                encryptionKey = testKey;
                 const testBlob = new Blob([canaryText], { type: "text/plain" });
                 const encryptedBlob = await encryptBlob(testBlob);
                 const decryptedBuffer = await decryptBuffer(await encryptedBlob.arrayBuffer());
@@ -2995,7 +3003,6 @@ const deepVaultValidation = async () => {
             // Se l'errore è temporaneo o siamo sotto il limite dei tentativi...
             if (err.message !== "VAULT_SECURITY_BREACH_INTEGRITY" && attempt < MAX_RETRIES) {
                 console.warn(`🗄️🔄 SW: Tentativo ${attempt} - fallito, Riprovo !`);
-                //await sleep(400 * attempt);
                 await waitTillIdle(250, Math.ceil(randomTimeoutMs));
                 continue;
             }
@@ -3023,7 +3030,6 @@ const deepVaultValidation = async () => {
     }
 };
 Object.freeze(deepVaultValidation);
-
 
 /**
  * 🗄️⏳ VERIFICA: Controllo Temporizzato del Caveau.
