@@ -1466,7 +1466,7 @@ self.addEventListener('message', (event) => {
                         if (db) { try { db.close(); } catch (_) {} }
                     }
                 } else {
-                    // 🔓 UNLOCK: Sblocco standard del caveau esistente tramite la logica centralizzata
+                    // 🔓 UNLOCK: Sblocco standard gestito interamente da getStoredKey
                     key = await getStoredKey(pinBytes);
                 }
 
@@ -1478,24 +1478,10 @@ self.addEventListener('message', (event) => {
                 if (key && key !== false) {
                     event.source?.postMessage({ type: 'PIN_RESULT', success: true });
                 } else {
-                    // Leggi i tentativi reali persistiti nel DB in modo sicuro tramite openVaultDB
-                    let persistedAttempts = 1;
-                    let checkDb = null;
-                    try {
-                        checkDb = await openVaultDB();
-                        persistedAttempts = await new Promise((res) => {
-                            const tx = checkDb.transaction("keys", "readonly");
-                            const r = tx.objectStore("keys").get("failed_pin_attempts");
-                            tx.oncomplete = () => res(r.result !== undefined ? r.result : 1);
-                            tx.onerror = () => res(1);
-                        });
-                    } catch (_) {
-                        persistedAttempts = failedPinAttempts;
-                    } finally {
-                        if (checkDb) { try { checkDb.close(); } catch (_) {} }
-                    }
-
+                    // 🛡️ Sfruttiamo direttamente il contatore di tentativi aggiornato da getStoredKey
+                    const persistedAttempts = failedPinAttempts;
                     const remaining = Math.max(0, 3 - persistedAttempts);
+
                     if (persistedAttempts >= 3) {
                         event.source?.postMessage({ type: 'PIN_RESULT', success: false, wiped: true, error: "Tentativi esauriti. Stiva distrutta." });
                     } else {
