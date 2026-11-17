@@ -1409,24 +1409,79 @@ self.addEventListener('message', (event) => {
             return;
         }
 
-        if (eventDataSnapshot.type === 'SUBMIT_PIN') {
+                if (eventDataSnapshot.type === 'SUBMIT_PIN') {
             const pinArrayBuffer = eventDataSnapshot.pinBuffer;
+            const mode = eventDataSnapshot.mode || 'unlock';
             if (!pinArrayBuffer) {
                 event.source?.postMessage({ type: 'PIN_RESULT', success: false, error: "Buffer PIN non valido" });
                 return;
             }
             const pinBytes = new Uint8Array(pinArrayBuffer);
-            const key = await getStoredKey(pinBytes);
+            
+            try {
+                let key = null;
 
-            if (key && key !== false) {
-                event.source?.postMessage({ type: 'PIN_RESULT', success: true });
-            } else {
-                const remaining = Math.max(0, 3 - failedPinAttempts);
-                if (failedPinAttempts >= 3) {
-                    event.source?.postMessage({ type: 'PIN_RESULT', success: false, wiped: true, error: "Tentativi esauriti. Stiva distrutta." });
+                if (mode === 'setup') {
+                    // 🛠️ SETUP...
+                    let db = null;
+                    try {
+                        db = await new Promise((res, rej) => {
+                            const req = indexedDB.open("PWA_Vault", 1);
+                            req.onupgradeneeded = (e) => {
+                                const d = e.target.result;
+                                if (!d.objectStoreNames.contains("keys")) d.createObjectStore("keys");
+                            };
+                            req.onsuccess = () => res(req.result);
+                            req.onerror = () => rej(req.error);
+                        });
+
+                        // ⚙️🔑 Genera nuova Master Key
+                        key = await crypto.subtle.generateKey(
+                            { name: "AES-GCM", length: 256 },
+                            false,
+                            ["encrypt", "decrypt"]
+                        );
+
+                        const newSalt = crypto.getRandomValues(new Uint8Array(16));
+                        const wrapped = await wrapMasterKey(key, pinBytes, newSalt);
+
+                        // Scrittura pulita in transazione...
+                        await new Promise((res, rej) => {
+                            const tx = db.transaction("keys", "readwrite");
+                            const store = tx.objectStore("keys");
+                            store.put(wrapped, "wrapped_master_key");
+                            store.put(newSalt, "vault_salt");
+                            store.delete("master_key"); // Rimuove eventuali vecchie chiavi legacy...
+                            tx.oncomplete = () => res();
+                            tx.onerror = () => rej(tx.error);
+                        });
+
+                        encryptionKey = key;
+                        failedPinAttempts = 0;
+                        console.info("🔑 SW: Setup completato con successo, nuova chiave generata.");
+                    } finally {
+                        if (db) { try { db.close(); } catch (_) {} }
+                    }
                 } else {
-                    event.source?.postMessage({ type: 'PIN_RESULT', success: false, attemptsLeft: remaining, error: `PIN errato. Rimasti ${remaining} tentativi.` });
+                    // 🔓 UNLOCK: Sblocco standard con verifica della chiave esistente
+                    key = await getStoredKey(pinBytes);
                 }
+
+                if (key && key !== false) {
+                    event.source?.postMessage({ type: 'PIN_RESULT', success: true });
+                } else {
+                    const remaining = Math.max(0, 3 - failedPinAttempts);
+                    if (failedPinAttempts >= 3) {
+                        event.source?.postMessage({ type: 'PIN_RESULT', success: false, wiped: true, error: "Tentativi esauriti. Stiva distrutta." });
+                    } else {
+                        event.source?.postMessage({ type: 'PIN_RESULT', success: false, attemptsLeft: remaining, error: `PIN errato. Rimasti ${remaining} tentativi.` });
+                    }
+                }
+            } catch (err) {
+                console.error("❌ SW: Errore critico in SUBMIT_PIN:", err);
+                event.source?.postMessage({ type: 'PIN_RESULT', success: false, error: err.message || "Errore interno di cifratura" });
+            } finally {
+                if (pinBytes) pinBytes.fill(0);
             }
             return;
         }
