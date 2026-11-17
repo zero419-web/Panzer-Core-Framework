@@ -3110,6 +3110,7 @@ Object.freeze(unwrapMasterKey);
 const getStoredKey = async (pinBytes = null) => {
     if (encryptionKey !== null) return encryptionKey;
     return new Promise(async (resolve) => {
+        let dbRef = null;
         try {
             const request = indexedDB.open("PWA_Vault", 1);
             request.onupgradeneeded = (e) => {
@@ -3120,6 +3121,7 @@ const getStoredKey = async (pinBytes = null) => {
             };
             request.onsuccess = (e) => {
                 const db = e.target.result;
+                dbRef = db;
                 const transaction = db.transaction("keys", "readwrite");
                 const store = transaction.objectStore("keys");
                 
@@ -3138,7 +3140,7 @@ const getStoredKey = async (pinBytes = null) => {
                             
                             if (!wrappedKey && legacyKey) {
                                 if (!pinBytes) {
-                                    db.close();
+                                    if (dbRef) dbRef.close();
                                     resolve(null);
                                     return;
                                 }
@@ -3150,16 +3152,14 @@ const getStoredKey = async (pinBytes = null) => {
                                 store.delete("master_key");
                             }
 
-                            // 🛠️ CORRETTO: Se non ci sono chiavi salvate nel caveau
+                            // 🛠️ Install...
                             if (!wrappedKey || !salt) {
                                 // Se non viene passato alcun PIN (es. controllo di stato iniziale all'avvio), ritorniamo null
                                 if (!pinBytes) {
-                                    db.close();
+                                    if (dbRef) dbRef.close();
                                     resolve(null);
                                     return;
                                 }
-
-                                // Se viene passato il PIN (fase di setup / creazione iniziale), generiamo e salviamo la chiave
                                 console.info("🔑 SW: Primo avvio / Setup stiva, inizializzazione chiave...");
                                 const key = await crypto.subtle.generateKey(
                                     { name: "AES-GCM", length: 256 },
@@ -3175,14 +3175,13 @@ const getStoredKey = async (pinBytes = null) => {
                                 
                                 encryptionKey = key;
                                 failedPinAttempts = 0;
-                                transaction.oncomplete = () => db.close();
-                                if (pinBytes) pinBytes.fill(0);
+                                transaction.oncomplete = () => { if (dbRef) dbRef.close(); };
                                 resolve(key);
                                 return;
                             }
 
                             if (!pinBytes) {
-                                db.close();
+                                if (dbRef) dbRef.close();
                                 resolve(null);
                                 return;
                             }
@@ -3198,14 +3197,15 @@ const getStoredKey = async (pinBytes = null) => {
                                 await decryptBuffer(await encrypted.arrayBuffer());
 
                                 failedPinAttempts = 0;
-                                transaction.oncomplete = () => db.close();
-                                if (pinBytes) pinBytes.fill(0);
+                                if (dbRef) dbRef.close();
                                 resolve(key);
                             } catch (cryptoErr) {
                                 encryptionKey = null;
                                 failedPinAttempts++;
-                                db.close();
-                                if (pinBytes) pinBytes.fill(0);
+                                if (dbRef) dbRef.close();
+
+                                // 🔍 LOG DIAGNOSTICO: Tracciamento del fallimento e dei tentativi residui
+                                //console.error("❌🔑 SW: Decrittazione o validazione fallita nel recupero chiave dal Caveau.", cryptoErr);
 
                                 if (failedPinAttempts >= 3) {
                                     console.error("🚨 SW: 3 tentativi PIN falliti! Tabula Rasa totale di sicurezza.");
@@ -3220,14 +3220,12 @@ const getStoredKey = async (pinBytes = null) => {
                             }
                         };
                         getLegacyReq.onerror = async () => {
-                            db.close();
-                            if (pinBytes) pinBytes.fill(0);
+                            if (dbRef) dbRef.close();
                             resolve(null);
                         };
 
                     } catch (err) {
-                        db.close();
-                        if (pinBytes) pinBytes.fill(0);
+                        if (dbRef) dbRef.close();
                         encryptionKey = null;
                         resolve(null);
                     }
@@ -3235,22 +3233,19 @@ const getStoredKey = async (pinBytes = null) => {
                 getWrappedReq.onerror = async () => {
                     if (typeof injectTimingNoise === 'function') await injectTimingNoise(performance.now(), 40);
                     console.info("❌ SW: Errore lettura store chiavi");
-                    db.close();
-                    if (pinBytes) pinBytes.fill(0);
+                    if (dbRef) dbRef.close();
                     resolve(null);
                 };
             };
             request.onerror = async (err) => {
                 if (typeof injectTimingNoise === 'function') await injectTimingNoise(performance.now(), 40);
                 console.info("❌ SW: Errore apertura IndexedDB Vault");
-                if (pinBytes) pinBytes.fill(0);
                 resolve(null);
             };
         } catch (criticalErr) {
             if (typeof injectTimingNoise === 'function') await injectTimingNoise(performance.now(), 40);
             console.error("❌ SW: Fallimento critico sistema Vault", createCleanError("Vault-Critical-Error", "Fallimento Critico Apertura del Vault"));
             encryptionKey = null;
-            if (pinBytes) pinBytes.fill(0);
             resolve(null);
         }
     });
