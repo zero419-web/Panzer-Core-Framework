@@ -1005,19 +1005,30 @@ const normalize = (url) => {
     if (!url || typeof url !== 'string' || url.startsWith('data:')) return url;
 
     try {
+        // Pulizia preliminare: rimuove eventuali ./ superflui all'inizio per evitare conflitti nel resolver
+        let cleanInput = url.trim();
+        if (cleanInput.startsWith('./')) {
+            cleanInput = cleanInput.substring(2);
+        }
+
+        // Se il path è assoluto rispetto alla root o relativo, lo ancoriamo in modo sicuro a CONFIG.ROOT
         const baseSafe = new URL(CONFIG.ROOT, self.location.origin).href;
-        const resolved = new URL(url, baseSafe);
+        const resolved = new URL(cleanInput, baseSafe);
         let cleanPath = resolved.pathname.replace(/\/+/g, '/');
 
         const rootNormalized = CONFIG.ROOT.replace(/\/+/g, '/');
-        if (cleanPath === rootNormalized || cleanPath === rootNormalized + '/') {
-            // 🛡️ Protezione: verifica che activeCoreAssets esista.
+        
+        // Se punta alla root o è vuoto/solo slash, restituisce l'entrypoint principale (.html)
+        if (cleanPath === rootNormalized || cleanPath === rootNormalized + '/' || cleanPath === '/') {
             const coreList = (typeof activeCoreAssets !== 'undefined' && Array.isArray(activeCoreAssets)) 
                 ? activeCoreAssets 
                 : [CONFIG.ROOT, CONFIG.ROOT + 'index.html'];
             
             const mainEntry = coreList.find(asset => asset.toLowerCase().includes('.html')) || (CONFIG.ROOT + 'index.html');
-            cleanPath = normalize(mainEntry);
+            
+            // Risolviamo anche l'entrypoint principale in modo assoluto
+            const resolvedMain = new URL(mainEntry.startsWith('./') ? mainEntry.substring(2) : mainEntry, baseSafe);
+            return resolvedMain.pathname.replace(/\/+/g, '/');
         }
 
         return cleanPath;
