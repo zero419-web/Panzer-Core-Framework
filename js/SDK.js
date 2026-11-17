@@ -197,9 +197,9 @@ export class PanzerVaultManager {
             if (!resolved) {
                 resolved = true;
                 navigator.serviceWorker.removeEventListener('message', listener);
-                callback({ success: false, error: 'Timeout risposta dal Service Worker.' });
+                callback({ success: false, error: 'Timeout risposta dal Service-Worker.' });
             }
-        }, 4000);
+        }, 10000);
 
         const listener = (e) => {
             if (e.data && e.data.type === 'PIN_RESULT') {
