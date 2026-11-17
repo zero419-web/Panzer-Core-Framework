@@ -1,5 +1,5 @@
 /**
- * ⚙️🪖🛡️ PanzerSDK - v2.3.6.3
+ * ⚙️🪖🛡️ PanzerSDK - v2.3.7.0
  * 
  * * 👤 Autore: Valentino Aglianó
  * Perito Informatico / Idoneo ASMEL 2025
@@ -44,7 +44,163 @@
  * @property {Function} [onLogMessage] - 🪵 Callback di telemetria e log
  * @property {Function} [onOnline] - 🌐 Callback ripristino rete
  * @property {Function} [onOffline] - 📴 Callback assenza rete
+ * @property {Function} [onPromptPin] - 🔏 Callback richiesta PIN per sblocco o setup
  */
+
+/**
+ * 🪖 PANZER SDK - SECURE VAULT & SESSION MANAGER (v1.0.0)
+ * Gestisce la sicurezza di livello government-grade della stiva:
+ * - Timer di inattività (10 minuti) con auto-lock della RAM.
+ * - Key Wrapping tramite IPC e bonifica attiva della memoria.
+ * - Bridge di comunicazione asincrono con il Service Worker.
+ */
+export class PanzerVaultManager {
+    /**
+     * 🏗️ Inizializza il gestore della sessione e dei timer di sicurezza del Vault.
+     * @param {Function} [onLockCallback] - 🔒 Callback eseguita quando il caveau viene bloccato (es. svuotamento RAM/sandbox).
+     * @param {Function} [onPromptPinCallback] - 🔏 Callback eseguita per richiedere l'apertura del modale PIN (es. scadenza inattività).
+     */
+    constructor(onLockCallback, onPromptPinCallback) {
+        /** @private @type {number|null} */
+        this.inactivityTimer = null;
+        
+        /** @private @type {number} Limite di inattività fissato a 10 minuti (600.000 ms) */
+        this.INACTIVITY_LIMIT_MS = 10 * 60 * 1000;
+        
+        /** @private @type {Function|undefined} */
+        this.onLockCallback = onLockCallback;
+        
+        /** @private @type {Function|undefined} */
+        this.onPromptPinCallback = onPromptPinCallback;
+        
+        this._initListeners();
+    }
+
+    /**
+     * ⚙️ Inizializza i listener globali per il rilevamento dell'attività utente e del Service Worker.
+     * @private
+     */
+    _initListeners() {
+        ['mousemove', 'keydown', 'touchstart', 'click', 'scroll'].forEach(evt => {
+            window.addEventListener(evt, () => this.resetInactivityTimer(), { passive: true });
+        });
+        this.resetInactivityTimer();
+
+        if ('serviceWorker' in navigator) {
+            navigator.serviceWorker.addEventListener('message', (event) => {
+                if (!event.data) return;
+                const data = event.data;
+                if (data.type === 'VAULT_LOCKED') {
+                    if (this.onLockCallback) this.onLockCallback();
+                }
+            });
+        }
+    }
+
+    /**
+     * ⏱️ Azzera e riavvia il timer di inattività di 10 minuti.
+     */
+    resetInactivityTimer() {
+        clearTimeout(this.inactivityTimer);
+        this.inactivityTimer = setTimeout(() => {
+            this.lockSession();
+            if (this.onPromptPinCallback) {
+                this.onPromptPinCallback('unlock', 'Sessione scaduta per inattività (10 min). Inserisci il PIN:');
+            }
+        }, this.INACTIVITY_LIMIT_MS);
+    }
+
+    /**
+     * 🔒 Invia il comando di blocco al Service Worker per rimuovere la Master Key dalla RAM.
+     */
+    lockSession() {
+        if (navigator.serviceWorker && navigator.serviceWorker.controller) {
+            navigator.serviceWorker.controller.postMessage({ type: 'LOCK_VAULT' });
+        }
+    }
+
+    /**
+     * 🔎 Verifica lo stato di configurazione e sblocco del caveau presso il Service Worker.
+     * @param {Function} callback - 📞 Callback di risposta che riceve lo stato ({ configured: boolean, unlocked: boolean }).
+     */
+    checkStatus(callback) {
+        if (navigator.serviceWorker && navigator.serviceWorker.controller) {
+            navigator.serviceWorker.controller.postMessage({ type: 'CHECK_VAULT_STATUS' });
+            const listener = (e) => {
+                if (e.data && e.data.type === 'VAULT_STATUS_RESULT') {
+                    navigator.serviceWorker.removeEventListener('message', listener);
+                    callback(e.data);
+                }
+            };
+            navigator.serviceWorker.addEventListener('message', listener);
+        }
+    }
+
+    /**
+     * 🔏 Invia il PIN inserito dall'utente convertendolo in buffer binario protetto (zero-copy transfer).
+     * @param {string} pinString - 🔑 Stringa in chiaro del PIN digitato dall'operatore.
+     * @param {string} [mode='setup'] - ⚙️ Modalità operativa ('setup' o 'unlock').
+     * @param {Function} callback - 📞 Callback di risposta con il risultato dell'operazione.
+     */
+    submitPin(pinString, mode = 'setup', callback) {
+        const enc = new TextEncoder();
+        const pinBuffer = enc.encode(pinString).buffer;
+
+        if (navigator.serviceWorker && navigator.serviceWorker.controller) {
+            navigator.serviceWorker.controller.postMessage(
+                { type: 'SUBMIT_PIN', pinBuffer, mode },
+                [pinBuffer]
+            );
+
+            const listener = (e) => {
+                if (e.data && e.data.type === 'PIN_RESULT') {
+                    navigator.serviceWorker.removeEventListener('message', listener);
+                    if (e.data.success) this.resetInactivityTimer();
+                    callback(e.data);
+                }
+            };
+            navigator.serviceWorker.addEventListener('message', listener);
+        }
+    }
+
+    /**
+     * 🔑🔄 Esegue il cambio del PIN cifrato preservando la Master Key (zero impatto sulla stiva).
+     * @param {string} oldPinStr - 🔑 Vecchio PIN in chiaro.
+     * @param {string} newPinStr - 🔑 Nuovo PIN desiderato.
+     * @param {Function} callback - 📞 Callback di risposta con l'esito del cambio.
+     */
+    changePin(oldPinStr, newPinStr, callback) {
+        const enc = new TextEncoder();
+        const oldBuffer = enc.encode(oldPinStr).buffer;
+        const newBuffer = enc.encode(newPinStr).buffer;
+
+        if (navigator.serviceWorker && navigator.serviceWorker.controller) {
+            navigator.serviceWorker.controller.postMessage(
+                { type: 'CHANGE_PIN', oldPinBuffer: oldBuffer, newPinBuffer: newBuffer },
+                [oldBuffer, newBuffer]
+            );
+
+            const listener = (e) => {
+                if (e.data && e.data.type === 'CHANGE_PIN_RESULT') {
+                    navigator.serviceWorker.removeEventListener('message', listener);
+                    callback(e.data);
+                }
+            };
+            navigator.serviceWorker.addEventListener('message', listener);
+        }
+    }
+
+    /**
+     * 🛑 Rilascia tutte le risorse e i timer attivi del Vault Manager.
+     */
+    destroy() {
+        if (this.inactivityTimer) {
+            clearTimeout(this.inactivityTimer);
+            this.inactivityTimer = null;
+        }
+    }
+}
+Object.freeze(PanzerVaultManager);
 
 export class PanzerSDK {
     /**
@@ -141,6 +297,7 @@ export class PanzerSDK {
         }));
 
         // ⚙️ Hook di callback UI e Telemetria
+        this.onPromptPin = options.onPromptPin || (() => {});
         this.onProgress = options.onProgress || (() => {});
         this.onComplete = options.onComplete || (() => {});
         this.onError = options.onError || (() => {});
@@ -157,7 +314,7 @@ export class PanzerSDK {
     }
 
     /**
-     * 🚀 Inizializza i listener di rete, la registrazione del Service Worker, il bridge, il watchdog e il controllo ambiente PWA.
+     * 🚀 Inizializza i listener di rete, la registrazione del Service Worker, il bridge, il watchdog, il controllo ambiente PWA e il Vault Manager.
      */
     init() {
         this._registerSW();
@@ -168,15 +325,32 @@ export class PanzerSDK {
         this._setupNetworkListeners();
         this.initPwaEnvironmentCheck(this.checkTimeout);
         this._initCacheWatchdog();
+
+        // 🛡️ Inizializzazione automatica del Vault & Session Manager all'interno del SDK
+        this.vaultManager = new PanzerVaultManager(
+            () => {
+                this.onLogMessage('warn', '🛡️ SDK: Sessione terminata e RAM bonificata.');
+            },
+            (mode, msg) => {
+                if (typeof this.onPromptPin === 'function') {
+                    this.onPromptPin(mode, msg);
+                }
+            }
+        );
     }
 
     /**
-     * 🛑 Rilascia tutte le risorse attive (timer, event listener, blocker UI).
+     * 🛑 Rilascia tutte le risorse attive (timer, event listener, blocker UI, vault manager).
      */
     destroy() {
         if (this._watchdogInterval) {
             clearInterval(this._watchdogInterval);
             this._watchdogInterval = null;
+        }
+
+        if (this.vaultManager && typeof this.vaultManager.destroy === 'function') {
+            this.vaultManager.destroy();
+            this.vaultManager = null;
         }
 
         if (this._boundOnline) {
@@ -198,7 +372,6 @@ export class PanzerSDK {
             this._boundBeforeInstallPrompt = null;
         }
 
-        // 🧹 Rimuove eventuali blocker attivi e ripristina lo scroll
         [this.incognitoBlocker.ID, this.cacheWipeBlocker.ID, this.purgeSuccessBlocker.ID].forEach(id => {
             const el = document.getElementById(id);
             if (el) el.remove();
@@ -246,7 +419,6 @@ export class PanzerSDK {
         document.body.style.overflow = 'hidden';
         if (document.documentElement) document.documentElement.style.overflow = 'hidden';
 
-        // Creazione Overlay.
         const blocker = document.createElement('div');
         blocker.id = targetId;
         blocker.style.cssText = `
@@ -263,7 +435,6 @@ export class PanzerSDK {
             box-sizing: border-box !important;
         `;
 
-        // Creazione Card.
         const card = document.createElement('div');
         card.style.cssText = `
             width: 100% !important;
@@ -277,25 +448,21 @@ export class PanzerSDK {
             box-sizing: border-box !important;
         `;
 
-        // Icon.
         const iconDiv = document.createElement('div');
         iconDiv.style.cssText = 'font-size: 42px; margin-bottom: 12px;';
         iconDiv.textContent = cfg.Icons || '';
         card.appendChild(iconDiv);
 
-        // Title.
         const titleEl = document.createElement('h2');
         titleEl.style.cssText = `color: ${cfg.titleColor}; margin-bottom: 12px; font-size: 20px;`;
         titleEl.textContent = cfg.title || '';
         card.appendChild(titleEl);
 
-        // Messaggio...
         const msgEl = document.createElement('p');
         msgEl.style.cssText = `color: ${cfg.textColor}; font-size: 14px; line-height: 1.5; margin-bottom: 20px;`;
         msgEl.innerHTML = cfg.message || '';
         card.appendChild(msgEl);
 
-        // Pulsante.
         const button = document.createElement('button');
         button.textContent = cfg.buttonText || 'OK';
         button.style.cssText = `
@@ -319,7 +486,6 @@ export class PanzerSDK {
             }
         };
 
-        // Assemblaggio.
         card.appendChild(button);
         blocker.appendChild(card);
         (document.documentElement || document.body).appendChild(blocker);
@@ -350,12 +516,10 @@ export class PanzerSDK {
      */
     _setupNetworkListeners() {
         this._boundOnline = () => {
-            //this.onLogMessage('success', '🌐 SDK: Connessione di rete ripristinata ( ON-LINE ! ).');
             this.onOnline();
         };
 
         this._boundOffline = () => {
-            //this.onLogMessage('warn', '📴 SDK: Connessione di rete assente ( OFF-LINE ! ). Operatività in modalità Cache. 🗄️');
             this.onOffline();
         };
 
@@ -377,20 +541,17 @@ export class PanzerSDK {
         const runWatchdogCheck = async (isImmediate = false) => {
             if (!('caches' in window) || this._isSyncing) return;
             
-            // 🛡️ SYNC / PRIMA INSTALLAZIONE.
             const isSessionActive = sessionStorage.getItem('panzer_active_session');
             const hasEverSynced = localStorage.getItem('panzer_has_ever_synced');
             if (!this._sessionSynced && !this._isVaultArmed && !isSessionActive && !hasEverSynced) return;
 
             try {
-                // 🔎🗄️ Cerca cache attiva nel browser.
                 const keys = await caches.keys();
                 let targetCacheName = keys.find(k => k.startsWith(this.cacheNamePrefix));
                 if (!targetCacheName) {
                     targetCacheName = keys.find(k => k.startsWith('PA_PANZER_ENGINE_v'));
                 }
 
-                // 🚧 Se la cache è svanita...
                 if (!targetCacheName) {
                     throw new Error("Stiva Cache rimossa dal browser.");
                 }
@@ -398,19 +559,16 @@ export class PanzerSDK {
                 const cache = await caches.open(targetCacheName);
                 const cacheKeys = await cache.keys();
 
-                // 🛑 Cache ha 0 elementi.
                 if (cacheKeys.length === 0) {
                     throw new Error("Stiva_vuota.");
                 }
 
-                // ✅ Tutto ok, azzera i fallimenti
                 this._watchdogFailures = 0;
 
             } catch (e) {
                 this._watchdogFailures++;
                 this.onLogMessage('warn', `⚠️🐺 SDK: Anomalia ⚠️🗄 ️Retry (${this._watchdogFailures}/3) -> [${e.message}]`);
 
-                // 🚨 Se è un controllo immediato oppure raggiungiamo i 3 fallimenti consecutivi
                 if (isImmediate || this._watchdogFailures >= 3) {
                     this.onLogMessage('error', `🚨🐺 SDK: Cancellazione stiva confermata -> [${e.message}]`);
                     
@@ -423,10 +581,9 @@ export class PanzerSDK {
                 }
             }
         };
-        // ⏱️ 1. Controllo ogni 5s.
+
         this._watchdogInterval = setInterval(() => runWatchdogCheck(false), 5000);
 
-        // 👁️ 2. Risveglio al ritorno in primo piano.
         document.addEventListener('visibilitychange', () => {
             if (document.visibilityState === 'visible') {
                 this.onLogMessage('info', '👁️ SDK: PWA attiva. Verifica stiva...');
@@ -507,25 +664,23 @@ export class PanzerSDK {
             switch (data.type) {
                 case 'SYNC_START':
                     this._isSyncing = true;
-                    // ⏱️ Timeout.
                     if (this._syncTimeoutTimer) clearTimeout(this._syncTimeoutTimer);
                     this._syncTimeoutTimer = setTimeout(() => {
                         this._isSyncing = false;
                         this.onLogMessage('warn', '⚠️ SDK: Timeout di sicurezza sincronizzazione scaduto. Watchdog Wipecache riattivato.');
-                    }, 180000); // 3 minuti
+                    }, 180000);
                     
                     this.onSyncStart({ total: data.total || 0 });
                     this.onLogMessage('sync', '🚀 SW: Sincronizzazione e cifratura Bunker avviate...');
                     break;
 
                 case 'SYNC_PROGRESS':
-                    // 🔄 HEARTBEAT.
                     if (this._syncTimeoutTimer) {
                         clearTimeout(this._syncTimeoutTimer);
                         this._syncTimeoutTimer = setTimeout(() => {
                             this._isSyncing = false;
                             this.onLogMessage('warn', '⚠️ SDK: Timeout di sicurezza sincronizzazione scaduto. Watchdog Wipecache riattivato.');
-                        }, 180000); // +3m
+                        }, 180000);
                     }
 
                     if (data.details) {
@@ -584,7 +739,6 @@ export class PanzerSDK {
      */
     async initDB(version, manifestData, overrideCoreAssets = null) {
         this.onLogMessage('sync', `🚀 SDK: Invio comando INIT_DB al 🪖 Service-Worker ( Versione: ${version} )...`);
-        // 🎯 Aggiorna i coreAssets.
         if (overrideCoreAssets && Array.isArray(overrideCoreAssets)) {
             this.coreAssets = Object.freeze(overrideCoreAssets);
         }
@@ -604,7 +758,6 @@ export class PanzerSDK {
                 return;
             }
 
-             // 🛡️ Payload IPC sigillato e strutturato
             const safePayload = Object.freeze({
                 type: 'INIT_DB',
                 version: String(version),

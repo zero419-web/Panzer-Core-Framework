@@ -1,7 +1,7 @@
 /**
  * ⚙️⚡ App Controller 
  * Dashboard PA & Gestione UI
- * v2.4.0
+ * v2.4.2.0
  *
  * * 👤 Autore: Valentino Aglianó
  * Perito Informatico / Idoneo ASMEL 2025
@@ -100,6 +100,131 @@ document.addEventListener('DOMContentLoaded', async () => {
         statusBadge.className = `badge-status ${badgeClass}`;
     };
 
+    // 🔏 Modale Grafico Unificato per Gestione PIN (Setup, Sblocco, Cambio)
+    const showPinModal = (mode = 'unlock', messageText = 'Inserisci il PIN di sblocco:') => {
+        let pinModal = document.getElementById('PA-pin-manager-modal');
+        if (!pinModal) {
+            pinModal = document.createElement('div');
+            pinModal.id = 'PA-pin-manager-modal';
+            pinModal.style.cssText = `
+                position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+                background: rgba(15, 23, 42, 0.98); z-index: 99999;
+                display: flex; flex-direction: column; justify-content: center; align-items: center;
+                font-family: system-ui, sans-serif; color: #f8fafc; padding: 20px; box-sizing: border-box;
+            `;
+            document.body.appendChild(pinModal);
+        }
+
+        let innerFields = '';
+        let buttonText = 'Sblocca Caveau';
+
+        if (mode === 'setup') {
+            innerFields = `
+                <input type="password" id="pa-pin-1" placeholder="Crea PIN (min 4 cifre)" maxlength="8" style="width: 100%; padding: 12px; box-sizing: border-box; background: #0f172a; border: 1px solid #64748b; color: #fff; font-size: 1.1rem; border-radius: 6px; text-align: center; letter-spacing: 4px; margin-bottom: 12px;">
+                <input type="password" id="pa-pin-2" placeholder="Conferma PIN" maxlength="8" style="width: 100%; padding: 12px; box-sizing: border-box; background: #0f172a; border: 1px solid #64748b; color: #fff; font-size: 1.1rem; border-radius: 6px; text-align: center; letter-spacing: 4px; margin-bottom: 16px;">
+            `;
+            buttonText = 'Crea Caveau Cifrato';
+        } else if (mode === 'change') {
+            innerFields = `
+                <input type="password" id="pa-pin-old" placeholder="Vecchio PIN" maxlength="8" style="width: 100%; padding: 12px; box-sizing: border-box; background: #0f172a; border: 1px solid #64748b; color: #fff; font-size: 1.1rem; border-radius: 6px; text-align: center; letter-spacing: 4px; margin-bottom: 12px;">
+                <input type="password" id="pa-pin-1" placeholder="Nuovo PIN" maxlength="8" style="width: 100%; padding: 12px; box-sizing: border-box; background: #0f172a; border: 1px solid #64748b; color: #fff; font-size: 1.1rem; border-radius: 6px; text-align: center; letter-spacing: 4px; margin-bottom: 12px;">
+                <input type="password" id="pa-pin-2" placeholder="Conferma Nuovo PIN" maxlength="8" style="width: 100%; padding: 12px; box-sizing: border-box; background: #0f172a; border: 1px solid #64748b; color: #fff; font-size: 1.1rem; border-radius: 6px; text-align: center; letter-spacing: 4px; margin-bottom: 16px;">
+            `;
+            buttonText = 'Aggiorna PIN';
+        } else {
+            innerFields = `
+                <input type="password" id="pa-pin-1" placeholder="Inserisci PIN" maxlength="8" style="width: 100%; padding: 12px; box-sizing: border-box; background: #0f172a; border: 1px solid #64748b; color: #fff; font-size: 1.1rem; border-radius: 6px; text-align: center; letter-spacing: 4px; margin-bottom: 16px;">
+            `;
+            buttonText = 'Sblocca Caveau';
+        }
+
+        pinModal.innerHTML = `
+            <div style="background: #1e293b; border: 1px solid #475569; padding: 30px; border-radius: 12px; max-width: 380px; width: 100%; text-align: center; box-shadow: 0 10px 25px rgba(0,0,0,0.5);">
+                <div style="font-size: 36px; margin-bottom: 12px;">🔐🪖</div>
+                <h3 style="margin-top: 0; color: #38bdf8; font-size: 1.2rem;">SICUREZZA BUNKER PA</h3>
+                <p style="font-size: 0.9rem; color: #cbd5e1; margin-bottom: 20px;">${messageText}</p>
+                ${innerFields}
+                <button id="pa-pin-action-btn" style="
+                    width: 100%; padding: 12px; background: #2563eb; color: #fff; border: none; border-radius: 6px;
+                    font-weight: bold; cursor: pointer; font-size: 1rem; transition: background 0.2s;
+                ">${buttonText}</button>
+            </div>
+        `;
+        pinModal.style.display = 'flex';
+
+        const btn = document.getElementById('pa-pin-action-btn');
+        const pin1Input = document.getElementById('pa-pin-1');
+        if (pin1Input) pin1Input.focus();
+
+        const handleAction = () => {
+            if (!sdk || !sdk.vaultManager) return;
+
+            if (mode === 'setup' || mode === 'change') {
+                const p1El = document.getElementById('pa-pin-1');
+                const p2El = document.getElementById('pa-pin-2');
+                const p1Val = p1El.value.trim();
+                const p2Val = p2El.value.trim();
+
+                if (p1Val.length < 4) { alert("Il PIN deve essere di almeno 4 cifre."); return; }
+                if (p1Val !== p2Val) { alert("I PIN inseriti non coincidono."); return; }
+
+                p1El.value = '';
+                p2El.value = '';
+
+                if (mode === 'setup') {
+                    sdk.vaultManager.submitPin(p1Val, 'setup', (res) => {
+                        if (res.success) {
+                            pinModal.style.display = 'none';
+                            logToTerminal('success', '🔑 PIN configurato e caveau attivato.');
+                        } else {
+                            alert("Errore: " + res.error);
+                        }
+                    });
+                } else {
+                    const oldEl = document.getElementById('pa-pin-old');
+                    const oldVal = oldEl.value.trim();
+                    oldEl.value = '';
+
+                    sdk.vaultManager.changePin(oldVal, p1Val, (res) => {
+                        if (res.success) {
+                            pinModal.style.display = 'none';
+                            logToTerminal('success', '🔑 PIN modificato con successo.');
+                            alert("PIN aggiornato correttamente!");
+                        } else {
+                            alert("Errore cambio PIN: " + res.error);
+                        }
+                    });
+                }
+            } else {
+                const pinVal = pin1Input.value.trim();
+                if (pinVal.length < 4) { alert("Inserisci un PIN valido."); return; }
+                pin1Input.value = '';
+
+                sdk.vaultManager.submitPin(pinVal, 'unlock', (res) => {
+                    if (res.success) {
+                        pinModal.style.display = 'none';
+                        logToTerminal('success', '🔓 Caveau sbloccato correttamente.');
+                    } else {
+                        if (res.wiped) {
+                            alert("🚨 3 tentativi falliti! La stiva è stata distrutta per sicurezza.");
+                            window.location.reload();
+                        } else {
+                            alert(res.error || "PIN errato.");
+                            if (pin1Input) pin1Input.focus();
+                        }
+                    }
+                });
+            }
+        };
+
+        btn.addEventListener('click', handleAction);
+        if (pin1Input) {
+            pin1Input.addEventListener('keypress', (e) => {
+                if (e.key === 'Enter') handleAction();
+            });
+        }
+    };
+
     // 🔍❄️ Helper per MIME Type
     const CoreUtils = Object.freeze({
         detectMimeType(url, headerType) {
@@ -123,7 +248,6 @@ document.addEventListener('DOMContentLoaded', async () => {
     // 🔭 Zoom Universale...
     const applyZoom = () => {
         if (!activeRawBuffer) return;
-        //logToTerminal('vault', `🔍📄 Zoom: ${Math.round(currentZoom * 100)}%`);
         renderAndMountSandbox();
     };
 
@@ -212,7 +336,6 @@ document.addEventListener('DOMContentLoaded', async () => {
         if (activeViewerBlobUrl) {
             URL.revokeObjectURL(activeViewerBlobUrl);
         }
-         // 🫙 Incapsulamento pulito.
         const viewerBlob = new Blob([renderedContentHtml], { type: 'text/html' });
         activeViewerBlobUrl = URL.createObjectURL(viewerBlob);
         sandboxFrame.src = activeViewerBlobUrl;
@@ -224,7 +347,6 @@ document.addEventListener('DOMContentLoaded', async () => {
             currentZoom = 1.0;
             logToTerminal('vault', `🫙🔒 Apertura visore protetto per: ${fileName || url} ( Zoom: ${Math.round(currentZoom * 100)}% )`);
             
-            // 🚀 APERTURA DEL MODALE...
             sandboxTitle.textContent = `🔎🔒 ${fileName || url}`;
             
             if (btnZoomIn && btnZoomOut) {
@@ -239,7 +361,6 @@ document.addEventListener('DOMContentLoaded', async () => {
             if (activeObjectUrl) { URL.revokeObjectURL(activeObjectUrl); activeObjectUrl = null; }
             if (activeViewerBlobUrl) { URL.revokeObjectURL(activeViewerBlobUrl); activeViewerBlobUrl = null; }
 
-            // ⏳ Schermata di caricamento...
             const loadingHtml = `
                 <!DOCTYPE html>
                 <html>
@@ -264,7 +385,6 @@ document.addEventListener('DOMContentLoaded', async () => {
             sandboxFrame.src = activeViewerBlobUrl;
             sandboxModal.classList.add('active');
 
-            // 🌐 FETCH DELLA RISORSA IN BACKGROUND
             const response = await fetch(url);
             if (!response || !response.ok) throw new Error(`HTTP ${response?.status || 'Risorsa irreperibile'}`);
 
@@ -272,7 +392,6 @@ document.addEventListener('DOMContentLoaded', async () => {
             const rawMime = response.headers.get('Content-Type') || 'application/octet-stream';
             activeMimeType = CoreUtils.detectMimeType(url, rawMime);
 
-            // ℹ️ ELABORAZIONE DEL CONTENUTO...
             if (activeMimeType.startsWith('image/')) {
                 const bytes = new Uint8Array(activeRawBuffer);
                 let binary = '';
@@ -348,7 +467,6 @@ document.addEventListener('DOMContentLoaded', async () => {
                 activeImagesHtmlList = null;
             }
 
-            // ✨  Montaggio Finale.
             renderAndMountSandbox();
 
             sandboxTitle.textContent = `🔎🔒 ${fileName || url}`;
@@ -409,7 +527,12 @@ document.addEventListener('DOMContentLoaded', async () => {
         coreAssets: getDefinedCoreAssets(),
         cacheNamePrefix: getDefined_CacheNamePrefix,
         checkTimeout: 6660,
-    // 🛑 Config personalizzata dei popup.
+        
+        // 🔏 Hook per l'apertura del modale PIN gestito dall'App
+        onPromptPin: (mode, msg) => {
+            showPinModal(mode, msg);
+        },
+
         incognitoBlocker: {
             Icons: `⚠️ ❌🕵️`,
             blockerID: 'PA_popup_Incognite',
@@ -465,14 +588,12 @@ document.addEventListener('DOMContentLoaded', async () => {
         },
         onLogMessage: (level, msg) => logToTerminal(level, msg),
         
-        // 🌐 Evento di Ritorno On-line:
         onOnline: () => {
             setStatusBadge('🌐 Rete Online - Sincronizzazione...', 'badge-sync');
             logToTerminal('sync', '🛡️ SDK: 🌐 Connessione on-line ripristinata. ✅🔄 Avvio automatico sincronizzazione stiva...');
             btnSync.click();
         },
 
-        // 📴 Evento Off-line
         onOffline: () => {
             setStatusBadge('📴 Off-line - Modalità Cache 🗄️', 'badge-warn');
             logToTerminal('warn', '🛡️ SDK: 📴 Dispositivo offline. Operatività garantita in modalità 🗄️ Cache protetta.');
@@ -543,6 +664,28 @@ document.addEventListener('DOMContentLoaded', async () => {
         }
     }));
 
+    // 🚪 Tasto esplicito Termina Sessione (Lock Session) nella UI
+    const btnLockSession = document.getElementById('PA-btn-lock-session');
+    if (btnLockSession) {
+        btnLockSession.addEventListener('click', () => {
+            if (sdk && sdk.vaultManager) {
+                sdk.vaultManager.lockSession();
+                showPinModal('unlock', 'Sessione terminata manualmente. Inserisci il PIN per rientrare:');
+            }
+        });
+    }
+
+    // 🔎 Controllo iniziale dello stato del Caveau all'avvio
+    if (sdk && sdk.vaultManager) {
+        sdk.vaultManager.checkStatus((status) => {
+            if (!status.configured) {
+                showPinModal('setup', 'Prima installazione: Crea un PIN di sicurezza per cifrare la stiva:');
+            } else if (!status.unlocked) {
+                showPinModal('unlock', 'Inserisci il PIN per sbloccare il caveau della PA:');
+            }
+        });
+    }
+
     // 📊🔎🗄️ Rendering Tabella Ispezione Stiva.
     const renderStorageTable = async () => {
         const showCore = toggleCoreAssets ? toggleCoreAssets.checked : true;
@@ -574,19 +717,16 @@ document.addEventListener('DOMContentLoaded', async () => {
 
         const allAssets = Array.from(assetMap.values());
 
-    // 🛡️ Hardening: Catturiamo il valore grezzo e ripuliamolo dai caratteri di controllo o potenziali injection
-    const rawQuery = storageSearch.value || '';
-    const filterQuery = rawQuery.toLowerCase().replace(/[\u0000-\u001F\u007F-\u009F]/g, "").trim();
+        const rawQuery = storageSearch.value || '';
+        const filterQuery = rawQuery.toLowerCase().replace(/[\u0000-\u001F\u007F-\u009F]/g, "").trim();
 
-    const filteredAssets = allAssets.filter(asset => {
-        const url = (asset.url || '').toLowerCase();
-        const type = (asset.type || '').toLowerCase();
-        const category = (asset.category || '').toLowerCase();
-        return url.includes(filterQuery) || type.includes(filterQuery) || category.includes(filterQuery);
-    });
-    
+        const filteredAssets = allAssets.filter(asset => {
+            const url = (asset.url || '').toLowerCase();
+            const type = (asset.type || '').toLowerCase();
+            const category = (asset.category || '').toLowerCase();
+            return url.includes(filterQuery) || type.includes(filterQuery) || category.includes(filterQuery);
+        });
 
-    // 🗑️ Svuotamento contenitore precedente.
         storageTbody.innerHTML = '';
 
         if (filteredAssets.length === 0) {
@@ -608,83 +748,76 @@ document.addEventListener('DOMContentLoaded', async () => {
             })
         );
 
-    // 🏗️ Creazione contenitore virtuale.
-const fragment = document.createDocumentFragment();
+        const fragment = document.createDocumentFragment();
 
-for (const { asset, isCached } of assetsWithCacheState) {
-    const tr = document.createElement('tr');
-    const sizeFormatted = asset.size ? (asset.size / 1024).toFixed(1) + ' KB' : 'N/A ( Core ⚙️📄 )';
-    
-    const cacheBadge = isCached
-        ? `<span style="color: var(--accent-green); font-weight: bold;">🟢🗄️ Cifrato</span>`
-        : `<span style="color: var(--text-muted);">🔴🗄️ Non Presente</span>`;
+        for (const { asset, isCached } of assetsWithCacheState) {
+            const tr = document.createElement('tr');
+            const sizeFormatted = asset.size ? (asset.size / 1024).toFixed(1) + ' KB' : 'N/A ( Core ⚙️📄 )';
+            
+            const cacheBadge = isCached
+                ? `<span style="color: var(--accent-green); font-weight: bold;">🟢🗄️ Cifrato</span>`
+                : `<span style="color: var(--text-muted);">🔴🗄️ Non Presente</span>`;
 
-    const tdInfo = document.createElement('td');
-    const strongUrl = document.createElement('strong');
-    strongUrl.textContent = asset.url || '';
-    const br = document.createElement('br');
-    const smallCat = document.createElement('small');
-    smallCat.style.color = 'var(--text-muted)';
-    smallCat.textContent = `Cat: ${asset.category || 'N/A'}`;
-    tdInfo.appendChild(strongUrl);
-    tdInfo.appendChild(br);
-    tdInfo.appendChild(smallCat);
+            const tdInfo = document.createElement('td');
+            const strongUrl = document.createElement('strong');
+            strongUrl.textContent = asset.url || '';
+            const br = document.createElement('br');
+            const smallCat = document.createElement('small');
+            smallCat.style.color = 'var(--text-muted)';
+            smallCat.textContent = `Cat: ${asset.category || 'N/A'}`;
+            tdInfo.appendChild(strongUrl);
+            tdInfo.appendChild(br);
+            tdInfo.appendChild(smallCat);
 
-    const tdType = document.createElement('td');
-    const codeType = document.createElement('code');
-    codeType.textContent = asset.type || 'unknown';
-    tdType.appendChild(codeType);
+            const tdType = document.createElement('td');
+            const codeType = document.createElement('code');
+            codeType.textContent = asset.type || 'unknown';
+            tdType.appendChild(codeType);
 
-    const tdSize = document.createElement('td');
-    tdSize.textContent = sizeFormatted;
+            const tdSize = document.createElement('td');
+            tdSize.textContent = sizeFormatted;
 
-    const tdCache = document.createElement('td');
-    tdCache.innerHTML = cacheBadge; // I badge di stato interni rimangono sicuri
+            const tdCache = document.createElement('td');
+            tdCache.innerHTML = cacheBadge;
 
-    const tdAction = document.createElement('td');
-    const actionDiv = document.createElement('div');
-    actionDiv.style.cssText = 'display: flex; gap: 6px; flex-wrap: wrap;';
+            const tdAction = document.createElement('td');
+            const actionDiv = document.createElement('div');
+            actionDiv.style.cssText = 'display: flex; gap: 6px; flex-wrap: wrap;';
 
-    const btnSandbox = document.createElement('button');
-    btnSandbox.className = 'btn btn-sm btn-sandbox-trigger';
-    btnSandbox.setAttribute('data-url', asset.url || '');
-    btnSandbox.style.cssText = 'border-color: var(--accent-purple); color: var(--accent-purple); cursor: pointer;';
-    btnSandbox.textContent = '🔒👁 Visore ❌💾';
-    
-    actionDiv.appendChild(btnSandbox);
-    tdAction.appendChild(actionDiv);
+            const btnSandbox = document.createElement('button');
+            btnSandbox.className = 'btn btn-sm btn-sandbox-trigger';
+            btnSandbox.setAttribute('data-url', asset.url || '');
+            btnSandbox.style.cssText = 'border-color: var(--accent-purple); color: var(--accent-purple); cursor: pointer;';
+            btnSandbox.textContent = '🔒👁 Visore ❌💾';
+            
+            actionDiv.appendChild(btnSandbox);
+            tdAction.appendChild(actionDiv);
 
-    // Assemblaggio della riga
-    tr.appendChild(tdInfo);
-    tr.appendChild(tdType);
-    tr.appendChild(tdSize);
-    tr.appendChild(tdCache);
-    tr.appendChild(tdAction);
+            tr.appendChild(tdInfo);
+            tr.appendChild(tdType);
+            tr.appendChild(tdSize);
+            tr.appendChild(tdCache);
+            tr.appendChild(tdAction);
 
-// 🪝 Aggancio listener sul tr Nel DOM.
-    const attachedBtn = tr.querySelector('.btn-sandbox-trigger');
-    if (attachedBtn) {
-        attachedBtn.addEventListener('click', (e) => {
-            const targetUrl = e.currentTarget.getAttribute('data-url');
-            openInSandbox(targetUrl, targetUrl.split('/').pop());
-        });
-    }
-    fragment.appendChild(tr);
-}
+            const attachedBtn = tr.querySelector('.btn-sandbox-trigger');
+            if (attachedBtn) {
+                attachedBtn.addEventListener('click', (e) => {
+                    const targetUrl = e.currentTarget.getAttribute('data-url');
+                    openInSandbox(targetUrl, targetUrl.split('/').pop());
+                });
+            }
+            fragment.appendChild(tr);
+        }
 
-        // 🚀 Singola operazione atomica sul DOM.
         storageTbody.appendChild(fragment);
-
         logToTerminal('vault', `🔎🗄️ Ispezione stiva aggiornata: ${filteredAssets.length} risorse visualizzate via DocumentFragment.`);
     };
 
-    // 📥📜🛒 Caricamento del Manifesto
     try {
         logToTerminal('info', `📥📜🛒 Recupero file [ ${getDefined_Manifest_Assets} ] ...`);
         const res = await fetch(getDefined_Manifest_Assets);
         if (!res.ok) throw new Error(`HTTP ${res.status}`);
 
-        // ❄️ Congelamento Manifest assets.
         const deepFreeze = (obj) => {
             Object.getOwnPropertyNames(obj).forEach(name => {
                 const prop = obj[name];
@@ -708,7 +841,6 @@ for (const { asset, isCached } of assetsWithCacheState) {
         setStatusBadge('🚨📜🛒 Errore Manifesto', 'badge-error');
     }
 
-    // 🎮 Event Handlers
     btnSync.addEventListener('click', () => {
       setTimeout(() => {
         if (!manifestCache) {
