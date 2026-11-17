@@ -841,15 +841,29 @@ export class PanzerSDK {
     async purgeVault() {
         if (!('caches' in window)) return;
         try {
-            this.onLogMessage('warn', '🚨🗑️ SDK: Avvio purga volontaria e pulizia Cache... 🗄️');
+            this.onLogMessage('warn', '🚨🗑️ SDK: Avvio purga volontaria e pulizia Cache & Caveau... 🗄️');
             
             this._sessionSynced = false;
             this._isVaultArmed = false;
             sessionStorage.removeItem('panzer_active_session');
             localStorage.removeItem('panzer_has_ever_synced');
+            localStorage.removeItem('panzer_vault_synced');
             
+            // 🧹 Elimina tutte le cache
             const keys = await caches.keys();
             await Promise.all(keys.map(key => caches.delete(key)));
+
+            // 🧹 Elimina IndexedDB della stiva
+            await new Promise((res) => {
+                const req = indexedDB.deleteDatabase("PWA_Vault");
+                req.onsuccess = () => res();
+                req.onerror = () => res();
+            });
+
+            // 🧹 Avvisa il Service Worker di azzerare la Master Key in RAM
+            if (navigator.serviceWorker && navigator.serviceWorker.controller) {
+                navigator.serviceWorker.controller.postMessage({ type: 'LOCK_VAULTS_AND_PURGE' });
+            }
         } catch (err) {
             this.onLogMessage('error', `❌🗑️ SDK: Errore durante la purga: ${err.message}`);
             return;

@@ -12,6 +12,19 @@ import { PanzerSDK } from './SDK.js';
 
 document.addEventListener('DOMContentLoaded', async () => {
     'use strict';
+    
+    // 🛡️ Controllo chiusura scheda / nuova sessione
+    if (!sessionStorage.getItem('panzer_tab_active')) {
+        sessionStorage.setItem('panzer_tab_active', 'true');
+        if ('serviceWorker' in navigator && navigator.serviceWorker.controller) {
+            navigator.serviceWorker.controller.postMessage({ type: 'LOCK_VAULT' });
+        }
+    }
+    window.addEventListener('beforeunload', () => {
+        sessionStorage.removeItem('panzer_tab_active');
+    });
+    
+    
         // ⚙️📄 Funzione per definire i Core Assets (Sigillata con Object.freeze)
     const getDefinedCoreAssets = () => Object.freeze([
         './',
@@ -172,16 +185,24 @@ document.addEventListener('DOMContentLoaded', async () => {
                 p2El.value = '';
 
                 if (mode === 'setup') {
-                    sdk.vaultManager.submitPin(p1Val, 'setup', (res) => {
-                        if (res && res.success) {
-                            pinModal.style.display = 'none';
-                            logToTerminal('success', '🔑✅ PIN configurato e caveau attivato.');
+                    sdk.vaultManager.submitPin(pinVal, 'unlock', (res) => {
+                    if (res && res.success) {
+                        pinModal.style.display = 'none';
+                        logToTerminal('success', '🔓✅ Caveau sbloccato correttamente.');
+                    } else {
+                        if (res && (res.wiped || (res.attemptsLeft === 0) || (res.error && res.error.toLowerCase().includes("rimasti 0")))) {
+                            alert("🚨💣 3 tentativi falliti! La stiva è stata distrutta per sicurezza.");
+                            // 🧹 Pulizia totale dello storage client
+                            localStorage.removeItem('panzer_has_ever_synced');
+                            localStorage.removeItem('panzer_vault_synced');
+                            sessionStorage.removeItem('panzer_active_session');
+                            window.location.reload();
                         } else {
-                            const errMsg = res?.error || 'Errore sconosciuto nel Service Worker.';
-                            logToTerminal('error', `❌🔑 Errore creazione PIN: ${errMsg}`);
-                            alert(`❌🔑 Errore creazione PIN: ${errMsg}`);
+                            alert(`❌🔒 ${res?.error || "PIN errato. Riprova."}`);
+                            if (pin1Input) pin1Input.focus();
                         }
-                    });
+                    }
+                });
                 } else {
                     const oldEl = document.getElementById('pa-pin-old');
                     const oldVal = oldEl.value.trim();
