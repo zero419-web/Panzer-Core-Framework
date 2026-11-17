@@ -28,29 +28,34 @@ document.addEventListener('DOMContentLoaded', async () => {
     });
     
     
-        // ⚙️📄 Funzione per definire i Core Assets (Sigillata con Object.freeze)
+    // 🌍 Calcolo automatico della base URL e dello scope in base a dove è installata la PWA
+    const currentPath = window.location.pathname;
+    const baseDir = currentPath.substring(0, currentPath.lastIndexOf('/') + 1);
+    
+    // 🎯 Percorsi per lo scope e il Service-Worker
+    const getDefined_scope = baseDir;
+    const getDefined_swPath = './ServiceWorker.js';
+
+    // ⚙️📄 Core Assets generati in automatico con percorsi relativi dinamici.
     const getDefinedCoreAssets = () => Object.freeze([
-        './',
-        './index.html',
-        './js/pdf_min.js',
-        './js/pdf_worker_min.js',
-        './js/app.js',
-        './js/SDK.js',
-        './ServiceWorker.js',
-        './PA_PWA.webmanifest',
-        './icon.png',
-        './Res-PA-manifest.json'
+        baseDir,
+        baseDir + 'index.html',
+        baseDir + 'js/pdf_min.js',
+        baseDir + 'js/pdf_worker_min.js',
+        baseDir + 'js/app.js',
+        baseDir + 'js/SDK.js',
+        baseDir + 'ServiceWorker.js',
+        baseDir + 'PA_PWA.webmanifest',
+        baseDir + 'icon.png',
+        baseDir + 'Res-PA-manifest.json'
     ]);
+    
     
     // 🔎🏷️🗄️ Prefisso identificativo della cache scannerizzato dall'SDK (Immutabile)
     const getDefined_CacheNamePrefix = 'PA_PANZER_ENGINE_v';
 
     // 📜🛒 Il file del manifesto delle risorse della 🏛️ PA.
     const getDefined_Manifest_Assets = './Res-PA-manifest.json';
-    
-    // 🎯 Percorsi per lo scope e il Service-Worker
-    const getDefined_scope = '/Panzer-Core-Framework/';
-    const getDefined_swPath = './ServiceWorker.js';
 
     // ❄️ Sigilliamo l'intero perimetro di configurazione globale del client
     Object.freeze(getDefinedCoreAssets());
