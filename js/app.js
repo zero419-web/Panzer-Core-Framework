@@ -182,7 +182,7 @@ document.addEventListener('DOMContentLoaded', async () => {
                 p2El.value = '';
 
                 if (mode === 'setup') {
-                    sdk.vaultManager.submitPin(pinVal, 'unlock', (res) => {
+                    sdk.vaultManager.submitPin(p1Val, 'setup', (res) => {
                     if (res && res.success) {
                         pinModal.style.display = 'none';
                         logToTerminal('success', '🔓✅ Caveau sbloccato correttamente.');
