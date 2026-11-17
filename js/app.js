@@ -107,8 +107,8 @@ document.addEventListener('DOMContentLoaded', async () => {
             pinModal = document.createElement('div');
             pinModal.id = 'PA-pin-manager-modal';
             pinModal.style.cssText = `
-                position: fixed; top: 0; left: 0; width: 100%; height: 100%;
-                background: rgba(15, 23, 42, 0.98); z-index: 99999;
+                position: fixed; top: 0; left: 0; width: 100vw; height: 100vh;
+                background: rgba(15, 23, 42, 0.98); z-index: 2147483647;
                 display: flex; flex-direction: column; justify-content: center; align-items: center;
                 font-family: system-ui, sans-serif; color: #f8fafc; padding: 20px; box-sizing: border-box;
             `;
@@ -165,19 +165,21 @@ document.addEventListener('DOMContentLoaded', async () => {
                 const p1Val = p1El.value.trim();
                 const p2Val = p2El.value.trim();
 
-                if (p1Val.length < 4) { alert("Il PIN deve essere di almeno 4 cifre."); return; }
-                if (p1Val !== p2Val) { alert("I PIN inseriti non coincidono."); return; }
+                if (p1Val.length < 4) { alert("⚠️🔢 Il PIN deve essere di almeno 4 cifre."); return; }
+                if (p1Val !== p2Val) { alert("❌🔄 I PIN inseriti non coincidono. Riprova."); return; }
 
                 p1El.value = '';
                 p2El.value = '';
 
                 if (mode === 'setup') {
                     sdk.vaultManager.submitPin(p1Val, 'setup', (res) => {
-                        if (res.success) {
+                        if (res && res.success) {
                             pinModal.style.display = 'none';
-                            logToTerminal('success', '🔑 PIN configurato e caveau attivato.');
+                            logToTerminal('success', '🔑✅ PIN configurato e caveau attivato.');
                         } else {
-                            alert("Errore: " + res.error);
+                            const errMsg = res?.error || 'Errore sconosciuto nel Service Worker.';
+                            logToTerminal('error', `❌🔑 Errore creazione PIN: ${errMsg}`);
+                            alert(`❌🔑 Errore creazione PIN: ${errMsg}`);
                         }
                     });
                 } else {
@@ -186,30 +188,32 @@ document.addEventListener('DOMContentLoaded', async () => {
                     oldEl.value = '';
 
                     sdk.vaultManager.changePin(oldVal, p1Val, (res) => {
-                        if (res.success) {
+                        if (res && res.success) {
                             pinModal.style.display = 'none';
-                            logToTerminal('success', '🔑 PIN modificato con successo.');
-                            alert("PIN aggiornato correttamente!");
+                            logToTerminal('success', '🔑✅ PIN modificato con successo.');
+                            alert("✅🔑 PIN aggiornato correttamente!");
                         } else {
-                            alert("Errore cambio PIN: " + res.error);
+                            const errMsg = res?.error || 'Vecchio PIN errato o errore interno.';
+                            logToTerminal('error', `❌🔑 Errore cambio PIN: ${errMsg}`);
+                            alert(`❌🔑 Errore cambio PIN: ${errMsg}`);
                         }
                     });
                 }
             } else {
                 const pinVal = pin1Input.value.trim();
-                if (pinVal.length < 4) { alert("Inserisci un PIN valido."); return; }
+                if (pinVal.length < 4) { alert("⚠️🔢 Inserisci un PIN valido (min 4 cifre)."); return; }
                 pin1Input.value = '';
 
                 sdk.vaultManager.submitPin(pinVal, 'unlock', (res) => {
-                    if (res.success) {
+                    if (res && res.success) {
                         pinModal.style.display = 'none';
-                        logToTerminal('success', '🔓 Caveau sbloccato correttamente.');
+                        logToTerminal('success', '🔓✅ Caveau sbloccato correttamente.');
                     } else {
-                        if (res.wiped) {
-                            alert("🚨 3 tentativi falliti! La stiva è stata distrutta per sicurezza.");
+                        if (res && res.wiped) {
+                            alert("🚨💣 3 tentativi falliti! La stiva è stata distrutta per sicurezza.");
                             window.location.reload();
                         } else {
-                            alert(res.error || "PIN errato.");
+                            alert(`❌🔒 ${res?.error || "PIN errato. Riprova."}`);
                             if (pin1Input) pin1Input.focus();
                         }
                     }
@@ -674,30 +678,22 @@ document.addEventListener('DOMContentLoaded', async () => {
             }
         });
     }
-
+    
     // 🔎 Controllo iniziale dello stato del Caveau all'avvio
-    const initVaultCheck = async () => {
-        if ('serviceWorker' in navigator) {
-            // Se c'è un Service Worker in fase di attivazione, attendiamo che prenda il controllo
-            await navigator.serviceWorker.ready;
-            
-            // Diamo un micro-istante al bridge IPC per stabilizzarsi
-            setTimeout(() => {
-                if (sdk && sdk.vaultManager) {
-                    sdk.vaultManager.checkStatus((status) => {
-                        // Se il caveau non è configurato (prima installazione), apre subito il modale di setup
-                        if (!status || !status.configured) {
-                            showPinModal('setup', 'Prima installazione: Crea un PIN di sicurezza per cifrare la stiva:');
-                        } else if (!status.unlocked) {
-                            showPinModal('unlock', 'Inserisci il PIN per sbloccare il caveau della PA:');
-                        }
-                    });
+    const initVaultCheck = () => {
+        if (sdk && sdk.vaultManager) {
+            sdk.vaultManager.checkStatus((status) => {
+                // Se il caveau non è configurato (prima installazione), apre subito il modale di setup
+                if (!status || !status.configured) {
+                    showPinModal('setup', '🆕🔐 Prima installazione: Crea un PIN di sicurezza per cifrare la stiva:');
+                } else if (!status.unlocked) {
+                    showPinModal('unlock', '🔒🔑 Inserisci il PIN per sbloccare il caveau della PA:');
                 }
-            }, 300);
+            });
         }
     };
-
-    // Avvia il controllo in modo asincrono all'avvio
+    
+    // Avvia il controllo...
     initVaultCheck();
 
 

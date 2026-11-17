@@ -46,9 +46,9 @@
  * @property {Function} [onOffline] - 📴 Callback assenza rete
  * @property {Function} [onPromptPin] - 🔏 Callback richiesta PIN per sblocco o setup
  */
-
+ 
 /**
- * 🪖 PANZER SDK - SECURE VAULT & SESSION MANAGER (v1.0.0)
+ * 🪖 PANZER SDK - SECURE VAULT & SESSION MANAGER (v1.0.1)
  * Gestisce la sicurezza di livello government-grade della stiva:
  * - Timer di inattività (10 minuti) con auto-lock della RAM.
  * - Key Wrapping tramite IPC e bonifica attiva della memoria.
@@ -105,7 +105,7 @@ export class PanzerVaultManager {
         this.inactivityTimer = setTimeout(() => {
             this.lockSession();
             if (this.onPromptPinCallback) {
-                this.onPromptPinCallback('unlock', 'Sessione scaduta per inattività (10 min). Inserisci il PIN:');
+                this.onPromptPinCallback('unlock', '🔒 Sessione scaduta per inattività (10 min). Inserisci il PIN:');
             }
         }, this.INACTIVITY_LIMIT_MS);
     }
@@ -121,46 +121,103 @@ export class PanzerVaultManager {
 
     /**
      * 🔎 Verifica lo stato di configurazione e sblocco del caveau presso il Service Worker.
+     * Attende attivamente che il controller sia attivo (fondamentale al 1° avvio).
      * @param {Function} callback - 📞 Callback di risposta che riceve lo stato ({ configured: boolean, unlocked: boolean }).
      */
-    checkStatus(callback) {
-        if (navigator.serviceWorker && navigator.serviceWorker.controller) {
-            navigator.serviceWorker.controller.postMessage({ type: 'CHECK_VAULT_STATUS' });
-            const listener = (e) => {
-                if (e.data && e.data.type === 'VAULT_STATUS_RESULT') {
+    async checkStatus(callback) {
+        if (!('serviceWorker' in navigator)) return;
+
+        await navigator.serviceWorker.ready;
+
+        if (!navigator.serviceWorker.controller) {
+            await new Promise((resolve) => {
+                const onCtrlChange = () => {
+                    navigator.serviceWorker.removeEventListener('controllerchange', onCtrlChange);
+                    resolve();
+                };
+                navigator.serviceWorker.addEventListener('controllerchange', onCtrlChange);
+                setTimeout(resolve, 1500); // Fallback di sicurezza
+            });
+        }
+
+        if (!navigator.serviceWorker.controller) {
+            callback({ configured: false, unlocked: false });
+            return;
+        }
+
+        let resolved = false;
+        const timeoutId = setTimeout(() => {
+            if (!resolved) {
+                resolved = true;
+                navigator.serviceWorker.removeEventListener('message', listener);
+                callback({ configured: false, unlocked: false });
+            }
+        }, 2000);
+
+        const listener = (e) => {
+            if (e.data && e.data.type === 'VAULT_STATUS_RESULT') {
+                if (!resolved) {
+                    resolved = true;
+                    clearTimeout(timeoutId);
                     navigator.serviceWorker.removeEventListener('message', listener);
                     callback(e.data);
                 }
-            };
-            navigator.serviceWorker.addEventListener('message', listener);
-        }
+            }
+        };
+
+        navigator.serviceWorker.addEventListener('message', listener);
+        navigator.serviceWorker.controller.postMessage({ type: 'CHECK_VAULT_STATUS' });
     }
 
     /**
      * 🔏 Invia il PIN inserito dall'utente convertendolo in buffer binario protetto (zero-copy transfer).
+     * Attende attivamente che il controller sia pronto prima di inviare il postMessage.
      * @param {string} pinString - 🔑 Stringa in chiaro del PIN digitato dall'operatore.
      * @param {string} [mode='setup'] - ⚙️ Modalità operativa ('setup' o 'unlock').
      * @param {Function} callback - 📞 Callback di risposta con il risultato dell'operazione.
      */
-    submitPin(pinString, mode = 'setup', callback) {
+    async submitPin(pinString, mode = 'setup', callback) {
         const enc = new TextEncoder();
         const pinBuffer = enc.encode(pinString).buffer;
 
-        if (navigator.serviceWorker && navigator.serviceWorker.controller) {
-            navigator.serviceWorker.controller.postMessage(
-                { type: 'SUBMIT_PIN', pinBuffer, mode },
-                [pinBuffer]
-            );
+        if (!('serviceWorker' in navigator)) {
+            callback({ success: false, error: 'Service Worker non supportato dal browser.' });
+            return;
+        }
 
-            const listener = (e) => {
-                if (e.data && e.data.type === 'PIN_RESULT') {
+        await navigator.serviceWorker.ready;
+
+        if (!navigator.serviceWorker.controller) {
+            callback({ success: false, error: 'Controller Service Worker non ancora attivo. Ricarica la pagina.' });
+            return;
+        }
+
+        let resolved = false;
+        const timeoutId = setTimeout(() => {
+            if (!resolved) {
+                resolved = true;
+                navigator.serviceWorker.removeEventListener('message', listener);
+                callback({ success: false, error: 'Timeout risposta dal Service Worker.' });
+            }
+        }, 4000);
+
+        const listener = (e) => {
+            if (e.data && e.data.type === 'PIN_RESULT') {
+                if (!resolved) {
+                    resolved = true;
+                    clearTimeout(timeoutId);
                     navigator.serviceWorker.removeEventListener('message', listener);
                     if (e.data.success) this.resetInactivityTimer();
                     callback(e.data);
                 }
-            };
-            navigator.serviceWorker.addEventListener('message', listener);
-        }
+            }
+        };
+
+        navigator.serviceWorker.addEventListener('message', listener);
+        navigator.serviceWorker.controller.postMessage(
+            { type: 'SUBMIT_PIN', pinBuffer, mode },
+            [pinBuffer]
+        );
     }
 
     /**
