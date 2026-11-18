@@ -1574,7 +1574,7 @@ self.addEventListener('message', (event) => {
                     req.onerror = () => rej(req.error);
                 });
 
-                // 1️⃣ Lettura sicura in un'unica transazione con attesa di commit (tx.oncomplete)
+                // 1️⃣ Lettura sicura dei dati dallo store
                 let wrappedKey, salt;
                 await new Promise((res, rej) => {
                     const tx = db.transaction("keys", "readonly");
@@ -1582,28 +1582,28 @@ self.addEventListener('message', (event) => {
                     const req1 = store.get("wrapped_master_key");
                     const req2 = store.get("vault_salt");
                     
-                    tx.oncomplete = () => {
-                        wrappedKey = req1.result;
-                        salt = req2.result;
-                        res();
-                    };
+                    req1.onsuccess = () => { wrappedKey = req1.result; };
+                    req2.onsuccess = () => { salt = req2.result; };
+                    
+                    tx.oncomplete = () => res();
                     tx.onerror = () => rej(tx.error);
                     tx.onabort = () => rej(tx.error);
                 });
 
                 if (!wrappedKey || !salt) throw new Error("VAULT_NOT_CONFIGURED");
 
-                // 2️⃣ Operazioni crittografiche fuori da qualsiasi transazione
+                // 2️⃣ Operazioni crittografiche (unwrap e wrap del nuovo PIN)
                 const masterKey = await unwrapMasterKey(wrappedKey, oldPinBytes, salt);
                 const newSalt = crypto.getRandomValues(new Uint8Array(16));
                 const newWrappedKey = await wrapMasterKey(masterKey, newPinBytes, newSalt);
 
-                // 3️⃣ Scrittura in una NUOVA transazione, attesa fino al commit
+                // 3️⃣ Scrittura sicura in transazione readwrite con attesa di commit
                 await new Promise((res, rej) => {
                     const tx = db.transaction("keys", "readwrite");
                     const store = tx.objectStore("keys");
                     store.put(newWrappedKey, "wrapped_master_key");
                     store.put(newSalt, "vault_salt");
+                    
                     tx.oncomplete = () => res();
                     tx.onerror = () => rej(tx.error);
                     tx.onabort = () => rej(tx.error);
@@ -1613,13 +1613,13 @@ self.addEventListener('message', (event) => {
                 event.source?.postMessage({ type: 'CHANGE_PIN_RESULT', success: true });
                 console.info("🔑🔄 SW: PIN cambiato con successo senza alterare la stiva.");
             } catch (err) {
-                // ⚠️ Nota: Restituiamo un feedback pulito al client.
+                console.error("❌🔑 SW: Errore interno cambio PIN:", err);
                 const errorMsg = err.message === "VAULT_NOT_CONFIGURED" ? "Caveau non configurato." : "Vecchio PIN errato.";
                 event.source?.postMessage({ type: 'CHANGE_PIN_RESULT', success: false, error: errorMsg });
             } finally {
                 if (db) { try { db.close(); } catch (_) {} }
-                oldPinBytes.fill(0);
-                newPinBytes.fill(0);
+                try { oldPinBytes.fill(0); } catch (_) {}
+                try { newPinBytes.fill(0); } catch (_) {}
             }
             return;
         }
