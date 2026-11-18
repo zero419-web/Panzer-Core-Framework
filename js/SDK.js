@@ -649,6 +649,12 @@ export class PanzerSDK {
                 if (!hasVault) {
                     return;
                 }
+                
+                 // 🛡️ SALVAGUARDIA PRE-SYNC...
+                const hasEverSynced = localStorage.getItem('panzer_has_ever_synced');
+                if (!this._sessionSynced && hasEverSynced !== 'true') {
+                    return;
+                }
 
                 // 🔍 Controllo integrità stiva Cache
                 const keys = await caches.keys();
