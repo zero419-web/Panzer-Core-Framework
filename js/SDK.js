@@ -266,7 +266,7 @@ export class PanzerVaultManager {
      * @param {string} newPinStr - 🔑 Nuovo PIN desiderato.
      * @param {Function} callback - 📞 Callback di risposta con l'esito del cambio.
      */
-    changePin(oldPinStr, newPinStr, callback) {
+    async changePin(oldPinStr, newPinStr, callback) {
         const isIntact = await this._verifyVaultIntegrity();
         if (!isIntact) {
             this._isChangingPin = false;
