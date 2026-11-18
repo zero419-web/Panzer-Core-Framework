@@ -1454,9 +1454,18 @@ self.addEventListener('message', (event) => {
                 let key = null;
 
                 if (mode === 'setup') {
+                    encryptionKey = null;
+                    
                     // 🛠️ SETUP:
                     let db = null;
                     try {
+                        // 🛑 Bonifica...
+                        await new Promise((res) => {
+                            const req = indexedDB.deleteDatabase("PWA_Vault");
+                            req.onsuccess = () => res();
+                            req.onerror = () => res();
+                        });
+                        
                         db = await openVaultDB();
 
                         const tempKey = await crypto.subtle.generateKey(
