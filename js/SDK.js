@@ -655,8 +655,8 @@ export class PanzerSDK {
             this.onOffline();
         }
     }
-
-    /** v4.2
+    
+    /** v4.3
      * 🐺 Watchdog Wipe Cache.
      * @private
      */
@@ -664,18 +664,21 @@ export class PanzerSDK {
         this._watchdogFailures = 0;
 
         const runWatchdogCheck = async (isImmediate = false) => {
-            // 🛑 SCENARIO 1: Se siamo in fase di sync critica o cambio PIN, salta temporaneamente
             if (!('caches' in window) || this._isSyncing || this._isChangingPin) return;
 
             try {
-                // 🛑 SCENARIO 2: Verifica se il caveau è stato configurato. Se è il primo avvio assoluto o non c'è un PIN, il Watchdog non deve disturbare
+                const everSynced = localStorage.getItem('panzer_has_ever_synced') === 'true';
+
                 const db = await new Promise((res) => {
                     const req = indexedDB.open("PWA_Vault", 1);
                     req.onsuccess = () => res(req.result);
                     req.onerror = () => res(null);
                 });
 
-                if (!db) return;
+                if (!db) {
+                    if (everSynced) throw new Error("Database IndexedDB distrutto.");
+                    return;
+                }
                 
                 let hasVault = false;
                 await new Promise((res) => {
@@ -689,14 +692,15 @@ export class PanzerSDK {
                     finally { try { db.close(); } catch(_){} }
                 });
 
-                // Se non c'è ancora un caveau salvato (utente in fase di setup iniziale), il Watchdog si astiene
+                // 🛡️ Se non c'è il caveau MA l'app era già stata sincronizzata in passato, è un WIPE!
                 if (!hasVault) {
-                    return;
+                    if (everSynced || this._isVaultArmed) {
+                        throw new Error("Caveau IndexedDB svuotato o rimosso dopo la sincronizzazione.");
+                    }
+                    return; // Altrimenti è davvero il setup iniziale
                 }
                 
-                 // 🛡️ SALVAGUARDIA PRE-SYNC...
-                const hasEverSynced = localStorage.getItem('panzer_has_ever_synced');
-                if (!this._sessionSynced && hasEverSynced !== 'true') {
+                if (!this._sessionSynced && !everSynced) {
                     return;
                 }
 
@@ -718,16 +722,15 @@ export class PanzerSDK {
                     throw new Error("Stiva_vuota.");
                 }
 
-                // Tutto ok, azzeriamo i contatori di fallimento
                 this._watchdogFailures = 0;
 
             } catch (e) {
-                // Ignoriamo errori se l'app è in stato di transizione
                 if (this._isSyncing || this._isChangingPin) return;
 
                 this._watchdogFailures++;
                 this.onLogMessage('warn', `⚠️🐺 SDK: Anomalia Cache ⚠️🗄️ Retry (${this._watchdogFailures}/3) -> [${e.message}]`);
 
+                // 🛡️ Scatta solo se riceviamo l'input immediato OPPURE se si raggiungono esattamente 3 fallimenti consecutivi.
                 if (isImmediate || this._watchdogFailures >= 3) {
                     this.onLogMessage('error', `🚨🐺 SDK: Cancellazione stiva confermata -> [${e.message}]`);
                     
@@ -736,7 +739,6 @@ export class PanzerSDK {
                     this._isSyncing = false;
                     this._watchdogFailures = 0;
                     
-                     // 🧹 BONIFICA AUTOMATICA IMMEDIATA: Distrugge il database orfano in background
                     try {
                         await new Promise((res) => {
                             const req = indexedDB.deleteDatabase("PWA_Vault");
