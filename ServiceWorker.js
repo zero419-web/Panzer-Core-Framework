@@ -1,7 +1,7 @@
 /*
  * 📄 [ DISCIPLINARE TECNICO DI CONFORMITÀ ]
  *
- * ⚙️ CORE: 🪖 PANZER v7.9.16+ ( v2.x SDK ⛓️)
+ * ⚙️ CORE: 🪖 PANZER v7.9.20+ ( v2.x SDK ⛓️)
  *
  * 🛡️ REQUISITI OPERATIVI DI SISTEMA :
  *
@@ -70,8 +70,8 @@ const BASE_PATH = self.location.pathname.replace(/[^\/]+$/, "").replace(/\/+/g, 
 let globalAbortController = new AbortController();
 const CONFIG = {
     ROOT: BASE_PATH,
-        cacheName:      'PA_PANZER_ENGINE_v7.9.16',
-    userCacheName: 'user_PA_PANZER_ENGINE_v7.9.16',
+        cacheName:      'PA_PANZER_ENGINE_v7.9.20',
+    userCacheName: 'user_PA_PANZER_ENGINE_v7.9.20',
 	vaultCanaryText: 'KANARY_OK_PANZER_KEY',
 	MAX_PATH_LENGTH: 400,
     ALLOWED_SCHEMES: [
@@ -162,7 +162,7 @@ const CONFIG = {
             'firmato': 5000,
             'default': 10000,
             'maxHeaderBytes': 4096,
-            'maxFooterBytes': 8192,
+            'maxFooterBytes': 16384,
             'magicNumbers': {
                 'header': [
                     '25504446',
@@ -180,11 +180,9 @@ const CONFIG = {
                 '/javascript',
                 '/js',
                 '/launch',
-                '/embeddedfile',
-                '/openaction',
                 '/submitform',
                 '/importdata',
-                '/richmedia'
+                '/uricall'
             ],
             'compressedStreamPatterns': [
                 '/flatedecode',
@@ -419,9 +417,8 @@ const waitTillIdle = (minPauseMs = 50, timeoutMs = 8000) => {
 Object.freeze(waitTillIdle);
 
 /**
- * 🔬🧬 SW Forensics & DNA Check - v4.8
- *       ( 🪨 Hardened 🪖 v7.9.8+ ).
- *
+ * 🔬🧬 SW Forensics & DNA Check - v5.0
+ * 
  * @param {Response|Blob} input - Il flusso dati grezzo intercettato dal network o dal cache layer.
  * @param {string} contentType - Intestazione MIME-Type ufficiale dichiarata dal server.
  * @param {number} [expectedSize=0] - Dimensione nominale attesa (Content-Length) per verifica tolleranza.
@@ -506,7 +503,6 @@ const isValidBlob = async (input, contentType, expectedSize = 0, isEncrypted = f
         mainType = finalContentType.split('/')[0]?.toLowerCase() || '';
         subType = finalContentType.split('/')[1]?.split(';')[0]?.toLowerCase() || '';
 
-        // 🐛 Controllo robusto sull'encoding per evitare che undefined attivi falsamente il bypass
         const isTransformed = encoding !== null && encoding !== undefined && encoding !== '' && encoding.toLowerCase() !== 'identity';
 
         let minSize = section?.defaultMin || universal.minAbsoluteByte || 64;
@@ -536,7 +532,6 @@ const isValidBlob = async (input, contentType, expectedSize = 0, isEncrypted = f
                 .map(b => b.toString(16).padStart(2, '0'))
                 .join('').toUpperCase();
 
-            // Auto-rilevamento robusto: se il file inizia con la firma PDF (%PDF- / 255044462D), forza il contesto PDF
             if (headerHex.startsWith('255044462D') || headerText.startsWith('%PDF-')) {
                 isPdfContext = true;
             }
@@ -582,7 +577,6 @@ const isValidBlob = async (input, contentType, expectedSize = 0, isEncrypted = f
                 bodyText = null;
             }
 
-            // 🐛️ File di testo, codice o senza magic numbers espliciti non devono mai essere controllati con le firme binarie o i PDF
             const isTextOrCode = finalContentType.includes('text/') ||
                                  finalContentType.includes('json') ||
                                  finalContentType.includes('javascript') ||
@@ -631,13 +625,13 @@ const isValidBlob = async (input, contentType, expectedSize = 0, isEncrypted = f
             headerText = null;
         }
 
-        // 🛡️ FASE 2: ANALISI MARCATORI DI CODA...
+        // 🛡️ FASE 2: ANALISI MARCATORI DI CODA.
         const activeSectionFooter = isPdfContext ? pdfConfig : section;
         const magicSourceFooter = activeSectionFooter?.magicNumbers;
         if (!isEncrypted && !isTransformed && (magicSourceFooter?.footer?.length > 0 || isPdfContext)) {
             if (signal?.aborted) return result;
 
-            const maxFooterBytes = activeSectionFooter?.maxFooterBytes || universal?.maxFooterBytes || 8192;
+            const maxFooterBytes = activeSectionFooter?.maxFooterBytes || universal?.maxFooterBytes || 16384;
             const fetchSize = Math.min(blob.size, maxFooterBytes);
             tailBuffer = await blob.slice(-fetchSize).arrayBuffer();
             activeBuffers.push(tailBuffer);
@@ -676,16 +670,19 @@ const isValidBlob = async (input, contentType, expectedSize = 0, isEncrypted = f
 
             if (!hasValidFooter && !isCadesWrapper) {
                 await injectTimingNoise(startForensicTime, timingNoiseMs);
-                console.warn("⚠️ SW Security: Firma footer fallita", createCleanError("FooterCheckFailed", "Mismatch marcatore di coda %%EOF"));
+                console.warn("⚠️ SW Security: Firma footer fallita", createCleanError("FooterCheckFailed", "Marcatore %%EOF non trovato nella coda del file"));
                 return result;
             }
         }
 
-        // 🛡️ FASE 3: ANALISI PROFONDA PDF...
+        // 🛡️ FASE 3: ANALISI PROFONDA PDF.
         if (!isEncrypted && !isTransformed && isPdfContext) {
             if (signal?.aborted) return result;
 
-            const configPdfPatterns = (pdfConfig.pdfMaliciousPatterns || []).map(p => p.toLowerCase());
+            const configPdfPatterns = (pdfConfig.pdfMaliciousPatterns || [
+                '/javascript', '/js', '/launch', '/submitform', '/importdata', '/uricall'
+            ]).map(p => p.toLowerCase());
+            
             const MAX_DECOMPRESSED_STREAM_SIZE = 50 * 1024 * 1024; // 50 MB tetto massimo
 
             if (typeof waitTillIdle === 'function') {
@@ -696,7 +693,6 @@ const isValidBlob = async (input, contentType, expectedSize = 0, isEncrypted = f
 
             const CHUNK_SIZE = pdfConfig.chunkSize || (1024 * 1024);
             const OVERLAP_SIZE = pdfConfig.overlapSize || 4096;
-            const streamContextWindow = pdfConfig.streamContextWindow || 300;
             let offset = 0;
             let inStream = false;
             let chunkStartTime = performance.now();
@@ -704,7 +700,6 @@ const isValidBlob = async (input, contentType, expectedSize = 0, isEncrypted = f
             while (offset < blob.size) {
                 if (signal?.aborted) return result;
 
-                // Watchdog yielding per prevenire il kill del Service Worker
                 if (performance.now() - chunkStartTime > 50) {
                     await waitTillIdle(10, 500);
                     chunkStartTime = performance.now();
@@ -723,7 +718,6 @@ const isValidBlob = async (input, contentType, expectedSize = 0, isEncrypted = f
                     rawChunkText = new TextDecoder('iso-8859-1', { fatal: false }).decode(chunkArray);
 
                     let searchPos = 0;
-
                     while (searchPos < rawChunkText.length) {
                         if (inStream) {
                             const endStreamIdx = rawChunkText.toLowerCase().indexOf('endstream', searchPos);
@@ -759,15 +753,21 @@ const isValidBlob = async (input, contentType, expectedSize = 0, isEncrypted = f
 
                     for (const pattern of configPdfPatterns) {
                         if (pdfStructureOnly.includes(pattern)) {
-                            rawChunkText = null;
-                            pdfStructureOnly = null;
-                            await injectTimingNoise(startForensicTime, timingNoiseMs);
-                            console.warn("⚠️ SW Security: Pattern ostile nella struttura del PDF", createCleanError("PdfPatternDetected", `Pattern: ${pattern}`));
-                            return result;
+                            const patternIdx = pdfStructureOnly.indexOf(pattern);
+                            const surroundingContext = pdfStructureOnly.substring(Math.max(0, patternIdx - 15), Math.min(pdfStructureOnly.length, patternIdx + pattern.length + 15));
+                            
+                            const isStructuralCommand = surroundingContext.includes('/') || surroundingContext.includes('<<') || surroundingContext.includes('>>') || surroundingContext.includes('obj');
+
+                            if (isStructuralCommand) {
+                                rawChunkText = null;
+                                pdfStructureOnly = null;
+                                await injectTimingNoise(startForensicTime, timingNoiseMs);
+                                console.warn("⚠️ SW Security: Pattern ostile strutturale nel PDF", createCleanError("PdfPatternDetected", `Pattern strutturale: ${pattern}`));
+                                return result;
+                            }
                         }
                     }
 
-                    // Ricerca binaria nativa per la decompressione degli stream
                     let pos = 0;
                     while (pos < chunkArray.length) {
                         const streamMarkerIdx = rawChunkText.toLowerCase().indexOf('stream', pos);
@@ -793,10 +793,8 @@ const isValidBlob = async (input, contentType, expectedSize = 0, isEncrypted = f
                         if (rawChunkText[streamEndByte - 1] === '\n') streamEndByte--;
                         if (rawChunkText[streamEndByte - 1] === '\r') streamEndByte--;
 
-                        const streamContext = rawChunkText.substring(Math.max(0, streamMarkerIdx - streamContextWindow), streamMarkerIdx).toLowerCase();
-                        const isCompressedStream = pdfConfig.compressedStreamPatterns ?
-                            pdfConfig.compressedStreamPatterns.some(p => streamContext.includes(p.toLowerCase())) :
-                            streamContext.includes('/flatedecode');
+                        const streamContext = rawChunkText.substring(Math.max(0, streamMarkerIdx - 300), streamMarkerIdx).toLowerCase();
+                        const isCompressedStream = streamContext.includes('/flatedecode');
 
                         if (isCompressedStream && typeof DecompressionStream !== 'undefined' && streamEndByte > streamStartByte) {
                             let decompText = null;
@@ -815,51 +813,33 @@ const isValidBlob = async (input, contentType, expectedSize = 0, isEncrypted = f
                                         totalDecoded += value.length;
                                         if (totalDecoded > MAX_DECOMPRESSED_STREAM_SIZE) {
                                             reader.cancel();
-                                            throw new Error("DECOMPRESSION_BOMB_DETECTED");
+                                            break;
                                         }
                                         chunks.push(value);
                                     }
 
-                                    const decompressedBuffer = new Uint8Array(totalDecoded);
-                                    let pIdx = 0;
-                                    for (const chunk of chunks) {
-                                        decompressedBuffer.set(chunk, pIdx);
-                                        pIdx += chunk.length;
-                                    }
-                                    chunkBuffersToClean.push(decompressedBuffer.buffer);
+                                    if (totalDecoded > 0) {
+                                        const decompressedBuffer = new Uint8Array(totalDecoded);
+                                        let pIdx = 0;
+                                        for (const chunk of chunks) {
+                                            decompressedBuffer.set(chunk, pIdx);
+                                            pIdx += chunk.length;
+                                        }
+                                        chunkBuffersToClean.push(decompressedBuffer.buffer);
 
-                                    decompText = new TextDecoder('iso-8859-1', { fatal: false }).decode(decompressedBuffer).toLowerCase();
-                                    decompText = decompText.replace(/#([0-9a-f]{2})/g, (_, hex) => String.fromCharCode(parseInt(hex, 16)).toLowerCase());
-                                    
-                                    // Normalizzazione hex obfustation
-                                    decompText = decompText.replace(/<([0-9a-fA-F\s]+)>/g, (_, hexContent) => {
-                                        try {
-                                            const cleanHex = hexContent.replace(/\s+/g, '');
-                                            if (cleanHex.length % 2 === 0) {
-                                                let decoded = '';
-                                                for (let i = 0; i < cleanHex.length; i += 2) {
-                                                    decoded += String.fromCharCode(parseInt(cleanHex.substr(i, 2), 16));
-                                                }
-                                                return decoded.toLowerCase();
-                                            }
-                                        } catch (_) {}
-                                        return '';
-                                    });
-
-                                    decompText = decompText.replace(/\s+/g, ' ');
-
-                                    for (const pattern of configPdfPatterns) {
-                                        if (decompText.includes(pattern)) {
-                                            decompText = null;
+                                        decompText = new TextDecoder('iso-8859-1', { fatal: false }).decode(decompressedBuffer).toLowerCase();
+                                        
+                                        if (decompText.includes('/javascript') || decompText.includes('/launch')) {
                                             rawChunkText = null;
                                             pdfStructureOnly = null;
                                             await injectTimingNoise(startForensicTime, timingNoiseMs);
-                                            console.warn("⚠️ SW Security: Payload malevolo in stream decompresso", createCleanError("PdfPatternDetected", `Pattern: ${pattern}`));
+                                            console.warn("⚠️ SW Security: Payload attivo in stream decompresso", createCleanError("PdfPatternDetected", "Script attivo rilevato nello stream PDF"));
                                             return result;
                                         }
                                     }
                                 }
                             } catch (_) {
+                                // Resilienza...
                             } finally {
                                 decompText = null;
                             }
