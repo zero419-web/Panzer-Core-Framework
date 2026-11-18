@@ -711,25 +711,38 @@ document.addEventListener('DOMContentLoaded', async () => {
             }
         });
     }
+    // 🔄🔑 Tasto esplicito cambia PIN.
+    const btnChangePin = document.getElementById('PA-btn-change-pin');
+    if (btnChangePin) {
+        btnChangePin.addEventListener('click', () => {
+            if (typeof showPinModal === 'function') {
+                showPinModal('change', '🔑 Modifica il PIN di sicurezza del Caveau:');
+            }
+        });
+    }
     
     // 🔎 Controllo iniziale dello stato del Caveau all'avvio
     const initVaultCheck = () => {
-        if (sdk && sdk.vaultManager) {
-            sdk.vaultManager.checkStatus((status) => {
-                logToTerminal('vault', `🛡️ Stato Caveau all'avvio -> Configurato: ${status.configured}, Sbloccato: ${status.unlocked}`);
-                
-                // Se il caveau non è configurato (prima installazione), apre subito il modale di setup
-                if (!status || !status.configured) {
-                    showPinModal('setup', '🆕🔐 Prima installazione: Crea un PIN di sicurezza per cifrare la stiva:');
-                } else if (!status.unlocked) {
-                    // SE È CONFIGURATO MA BLOCCATO (es. dopo il refresh), apre forzatamente il modale di sblocco!
-                    showPinModal('unlock', '🔒🔑 Inserisci il PIN per sbloccare il caveau della PA e avviare il sistema:');
-                } else {
-                    logToTerminal('success', '🟢 Caveau già sbloccato in sessione. Avvio modulo PA...');
-                }
-            });
-        }
-    };
+    if (sdk && sdk.vaultManager) {
+        sdk.vaultManager.checkStatus((status) => {
+            logToTerminal('vault', `🛡️ Stato Caveau all'avvio -> Configurato: ${status.configured}, Sbloccato: ${status.unlocked}`);
+            
+            // SE IL CAVEAU È CONFIGURATO MA NON SBLOCCATO (es. sono passati i 10 min o la scheda è stata chiusa)
+            if (status.configured && !status.unlocked) {
+                logToTerminal('warn', '🔒 Caveau bloccato per inattività o riapertura sessione. Richiesta forzata sblocco PIN.');
+                showPinModal('unlock', '🔒🔑 Sessione scaduta. Inserisci il PIN per sbloccare il caveau e sbloccare la PWA:');
+            } 
+            // SE NON È MAI STATO CONFIGURATO (Primo avvio assoluto)
+            else if (!status.configured) {
+                showPinModal('setup', '🆕🔐 Prima installazione: Crea un PIN di sicurezza per cifrare la stiva:');
+            } 
+            // SE È GIÀ SBLOCCATO
+            else {
+                logToTerminal('success', '🟢 Caveau già sbloccato in sessione. Avvio modulo PA...');
+            }
+        });
+    }
+};
 
     // Avvia il controllo...
     initVaultCheck();
