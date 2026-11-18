@@ -1574,10 +1574,22 @@ self.addEventListener('message', (event) => {
                     req.onerror = () => rej(req.error);
                 });
 
-                // 1️⃣ Lettura in una transazione breve
-                const readStore = db.transaction("keys", "readonly").objectStore("keys");
-                const wrappedKey = await new Promise((res, rej) => { const r = readStore.get("wrapped_master_key"); r.onsuccess = () => res(r.result); r.onerror = () => rej(r.error); });
-                const salt = await new Promise((res, rej) => { const r = readStore.get("vault_salt"); r.onsuccess = () => res(r.result); r.onerror = () => rej(r.error); });
+                // 1️⃣ Lettura sicura in un'unica transazione con attesa di commit (tx.oncomplete)
+                let wrappedKey, salt;
+                await new Promise((res, rej) => {
+                    const tx = db.transaction("keys", "readonly");
+                    const store = tx.objectStore("keys");
+                    const req1 = store.get("wrapped_master_key");
+                    const req2 = store.get("vault_salt");
+                    
+                    tx.oncomplete = () => {
+                        wrappedKey = req1.result;
+                        salt = req2.result;
+                        res();
+                    };
+                    tx.onerror = () => rej(tx.error);
+                    tx.onabort = () => rej(tx.error);
+                });
 
                 if (!wrappedKey || !salt) throw new Error("VAULT_NOT_CONFIGURED");
 
@@ -1601,7 +1613,9 @@ self.addEventListener('message', (event) => {
                 event.source?.postMessage({ type: 'CHANGE_PIN_RESULT', success: true });
                 console.info("🔑🔄 SW: PIN cambiato con successo senza alterare la stiva.");
             } catch (err) {
-                event.source?.postMessage({ type: 'CHANGE_PIN_RESULT', success: false, error: "Vecchio PIN errato." });
+                // ⚠️ Nota: Restituiamo un feedback pulito al client.
+                const errorMsg = err.message === "VAULT_NOT_CONFIGURED" ? "Caveau non configurato." : "Vecchio PIN errato.";
+                event.source?.postMessage({ type: 'CHANGE_PIN_RESULT', success: false, error: errorMsg });
             } finally {
                 if (db) { try { db.close(); } catch (_) {} }
                 oldPinBytes.fill(0);
@@ -3151,8 +3165,9 @@ Object.freeze(wrapMasterKey);
  */
 const unwrapMasterKey = async (wrappedData, pinBytes, salt) => {
     const kek = await deriveKeyFromPinBytes(pinBytes, salt);
-    const iv = wrappedData.subarray(0, 12);
-    const ciphertext = wrappedData.subarray(12);
+    const data = wrappedData instanceof ArrayBuffer ? new Uint8Array(wrappedData) : wrappedData;
+    const iv = data.subarray(0, 12);
+    const ciphertext = data.subarray(12);
     
     const unwrappedRaw = await crypto.subtle.decrypt({ name: "AES-GCM", iv: iv }, kek, ciphertext);
     return await crypto.subtle.importKey(
