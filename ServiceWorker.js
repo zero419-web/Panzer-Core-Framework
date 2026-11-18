@@ -1619,9 +1619,11 @@ self.addEventListener('message', (event) => {
                 event.source?.postMessage({ type: 'CHANGE_PIN_RESULT', success: true });
                 console.info("🔑🔄 SW: PIN cambiato con successo.");
             } catch (err) {
-                console.error("❌🔑 SW Errore Cambio PIN:", err);
+                console.error("❌🔑 SW Errore Cambio PIN.");
                 const errorMsg = err.message === "VAULT_NOT_CONFIGURED" ? "Caveau non configurato." : "Vecchio PIN errato.";
-                event.source?.postMessage({ type: 'CHANGE_PIN_RESULT', success: false, error: errorMsg });
+                //event.source?.postMessage({ type: 'CHANGE_PIN_RESULT', success: false, error: errorMsg });
+                event.source?.postMessage({ type: 'CHANGE_PIN_RESULT', success: false, error: `Debug: ${err.message}` });
+            
             } finally {
                 if (db) { try { db.close(); } catch (_) {} }
                 try { oldPinBytes.fill(0); } catch (_) {}
