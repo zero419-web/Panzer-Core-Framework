@@ -48,7 +48,7 @@
  */
  
 /**
- * 🪖 PANZER SDK - SECURE VAULT & SESSION MANAGER (v1.0.1)
+ * 🪖 PANZER SDK - SECURE VAULT & SESSION MANAGER (v1.1.0)
  * Gestisce la sicurezza di livello government-grade della stiva:
  * - Timer di inattività (10 minuti) con auto-lock della RAM.
  * - Key Wrapping tramite IPC e bonifica attiva della memoria.
@@ -72,6 +72,9 @@ export class PanzerVaultManager {
         
         /** @private @type {Function|undefined} */
         this.onPromptPinCallback = onPromptPinCallback;
+        
+        /** @private @type {boolean} Flag di sicurezza per mettere in pausa il watchdog durante il cambio PIN */
+        this._isChangingPin = false;
         
         this._initListeners();
     }
@@ -219,7 +222,7 @@ export class PanzerVaultManager {
             [pinBuffer]
         );
     }
-
+    
     /**
      * 🔑🔄 Esegue il cambio del PIN cifrato preservando la Master Key (zero impatto sulla stiva).
      * @param {string} oldPinStr - 🔑 Vecchio PIN in chiaro.
@@ -227,6 +230,8 @@ export class PanzerVaultManager {
      * @param {Function} callback - 📞 Callback di risposta con l'esito del cambio.
      */
     changePin(oldPinStr, newPinStr, callback) {
+        this._isChangingPin = true;
+        
         const enc = new TextEncoder();
         const oldBuffer = enc.encode(oldPinStr).buffer;
         const newBuffer = enc.encode(newPinStr).buffer;
@@ -236,6 +241,7 @@ export class PanzerVaultManager {
             const timeoutId = setTimeout(() => {
                 if (!resolved) {
                     resolved = true;
+                    this._isChangingPin = false;
                     navigator.serviceWorker.removeEventListener('message', listener);
                     callback({ success: false, error: 'Timeout risposta cambio PIN dal Service-Worker.' });
                 }
@@ -246,14 +252,21 @@ export class PanzerVaultManager {
                     if (!resolved) {
                         resolved = true;
                         clearTimeout(timeoutId);
+                        this._isChangingPin = false;
                         navigator.serviceWorker.removeEventListener('message', listener);
                         callback(e.data);
                     }
                 }
             };
             navigator.serviceWorker.addEventListener('message', listener);
-            navigator.serviceWorker.controller.postMessage({ type: 'CHANGE_PIN', oldPinBuffer: oldBuffer, newPinBuffer: newBuffer },[oldBuffer, newBuffer]);
+
+            navigator.serviceWorker.controller.postMessage({ 
+                type: 'CHANGE_PIN', 
+                oldPinBuffer: oldBuffer, 
+                newPinBuffer: newBuffer 
+            });
         } else {
+            this._isChangingPin = false;
             callback({ success: false, error: 'Service Worker controller non attivo.' });
         }
     }
@@ -599,7 +612,7 @@ export class PanzerSDK {
         }
     }
 
-    /** v4.0
+    /** v4.2
      * 🐺 Watchdog Wipe Cache.
      * @private
      */
@@ -607,13 +620,37 @@ export class PanzerSDK {
         this._watchdogFailures = 0;
 
         const runWatchdogCheck = async (isImmediate = false) => {
-            if (!('caches' in window) || this._isSyncing) return;
-            
-            const isSessionActive = sessionStorage.getItem('panzer_active_session');
-            const hasEverSynced = localStorage.getItem('panzer_has_ever_synced');
-            if (!this._sessionSynced && !this._isVaultArmed && !isSessionActive && !hasEverSynced) return;
+            // 🛑 SCENARIO 1: Se siamo in fase di sync critica o cambio PIN, salta temporaneamente
+            if (!('caches' in window) || this._isSyncing || this._isChangingPin) return;
 
             try {
+                // 🛑 SCENARIO 2: Verifica se il caveau è stato configurato. Se è il primo avvio assoluto o non c'è un PIN, il Watchdog non deve disturbare
+                const db = await new Promise((res) => {
+                    const req = indexedDB.open("PWA_Vault", 1);
+                    req.onsuccess = () => res(req.result);
+                    req.onerror = () => res(null);
+                });
+
+                if (!db) return;
+                
+                let hasVault = false;
+                await new Promise((res) => {
+                    try {
+                        const tx = db.transaction("keys", "readonly");
+                        const store = tx.objectStore("keys");
+                        const req = store.get("wrapped_master_key");
+                        req.onsuccess = () => { hasVault = !!req.result; res(); };
+                        req.onerror = () => res();
+                    } catch (_) { res(); }
+                    finally { try { db.close(); } catch(_){} }
+                });
+
+                // Se non c'è ancora un caveau salvato (utente in fase di setup iniziale), il Watchdog si astiene
+                if (!hasVault) {
+                    return;
+                }
+
+                // 🔍 Controllo integrità stiva Cache
                 const keys = await caches.keys();
                 let targetCacheName = keys.find(k => k.startsWith(this.cacheNamePrefix));
                 if (!targetCacheName) {
@@ -631,11 +668,15 @@ export class PanzerSDK {
                     throw new Error("Stiva_vuota.");
                 }
 
+                // Tutto ok, azzeriamo i contatori di fallimento
                 this._watchdogFailures = 0;
 
             } catch (e) {
+                // Ignoriamo errori se l'app è in stato di transizione
+                if (this._isSyncing || this._isChangingPin) return;
+
                 this._watchdogFailures++;
-                this.onLogMessage('warn', `⚠️🐺 SDK: Anomalia ⚠️🗄 ️Retry (${this._watchdogFailures}/3) -> [${e.message}]`);
+                this.onLogMessage('warn', `⚠️🐺 SDK: Anomalia Cache ⚠️🗄️ Retry (${this._watchdogFailures}/3) -> [${e.message}]`);
 
                 if (isImmediate || this._watchdogFailures >= 3) {
                     this.onLogMessage('error', `🚨🐺 SDK: Cancellazione stiva confermata -> [${e.message}]`);
@@ -650,6 +691,7 @@ export class PanzerSDK {
             }
         };
 
+        // Avvio intervallo a 5 secondi
         this._watchdogInterval = setInterval(() => runWatchdogCheck(false), 5000);
 
         document.addEventListener('visibilitychange', () => {
