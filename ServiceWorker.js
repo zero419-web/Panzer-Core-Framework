@@ -1541,8 +1541,24 @@ self.addEventListener('message', (event) => {
                 event.source?.postMessage({ type: 'CHANGE_PIN_RESULT', success: false, error: "Buffer PIN non validi" });
                 return;
             }
+
             const oldPinBytes = new Uint8Array(oldBuffer);
             const newPinBytes = new Uint8Array(newBuffer);
+
+            // 🛑 CONTROLLO LATO SERVICE WORKER: Se i PIN sono identici, blocca subito
+            if (oldPinBytes.length === newPinBytes.length) {
+                let identical = true;
+                for (let i = 0; i < oldPinBytes.length; i++) {
+                    if (oldPinBytes[i] !== newPinBytes[i]) { identical = false; break; }
+                }
+                if (identical) {
+                    oldPinBytes.fill(0);
+                    newPinBytes.fill(0);
+                    event.source?.postMessage({ type: 'CHANGE_PIN_RESULT', success: false, error: "Il nuovo PIN deve essere diverso da quello attuale." });
+                    return;
+                }
+            }
+
             let db = null;
 
             try {
