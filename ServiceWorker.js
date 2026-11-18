@@ -1545,7 +1545,7 @@ self.addEventListener('message', (event) => {
             const oldPinBytes = new Uint8Array(oldBuffer);
             const newPinBytes = new Uint8Array(newBuffer);
 
-            // 🛑 CONTROLLO LATO SERVICE WORKER: Se i PIN sono identici, blocca subito
+            // 🛑 CONTROLLO: Se i PIN sono identici, blocca subito e restituisce l'errore
             if (oldPinBytes.length === newPinBytes.length) {
                 let identical = true;
                 for (let i = 0; i < oldPinBytes.length; i++) {
@@ -1574,7 +1574,7 @@ self.addEventListener('message', (event) => {
                     req.onerror = () => rej(req.error);
                 });
 
-                // 1️⃣ Lettura sicura dei dati dallo store
+                // 1️⃣ Lettura dei dati dallo store con attesa di completamento transazione
                 let wrappedKey, salt;
                 await new Promise((res, rej) => {
                     const tx = db.transaction("keys", "readonly");
@@ -1592,12 +1592,18 @@ self.addEventListener('message', (event) => {
 
                 if (!wrappedKey || !salt) throw new Error("VAULT_NOT_CONFIGURED");
 
-                // 2️⃣ Operazioni crittografiche (unwrap e wrap del nuovo PIN)
-                const masterKey = await unwrapMasterKey(wrappedKey, oldPinBytes, salt);
+                // 2️⃣ Conversione difensiva dei dati letti in Uint8Array...
+                const cleanWrappedKey = wrappedKey instanceof ArrayBuffer ? new Uint8Array(wrappedKey) : new Uint8Array(wrappedKey);
+                const cleanSalt = salt instanceof ArrayBuffer ? new Uint8Array(salt) : new Uint8Array(salt);
+
+                // 3️⃣ Decrittazione della Master Key con il vecchio PIN (unwrap)
+                const masterKey = await unwrapMasterKey(cleanWrappedKey, oldPinBytes, cleanSalt);
+                
+                // 4️⃣ Generazione nuovo salt e cifratura della Master Key con il nuovo PIN (wrap)
                 const newSalt = crypto.getRandomValues(new Uint8Array(16));
                 const newWrappedKey = await wrapMasterKey(masterKey, newPinBytes, newSalt);
 
-                // 3️⃣ Scrittura sicura in transazione readwrite con attesa di commit
+                // 5️⃣ Scrittura sicura nello store
                 await new Promise((res, rej) => {
                     const tx = db.transaction("keys", "readwrite");
                     const store = tx.objectStore("keys");
@@ -1611,9 +1617,9 @@ self.addEventListener('message', (event) => {
 
                 encryptionKey = masterKey;
                 event.source?.postMessage({ type: 'CHANGE_PIN_RESULT', success: true });
-                console.info("🔑🔄 SW: PIN cambiato con successo senza alterare la stiva.");
+                console.info("🔑🔄 SW: PIN cambiato con successo.");
             } catch (err) {
-                console.error("❌🔑 SW: Errore interno cambio PIN:", err);
+                console.error("❌🔑 SW Errore Cambio PIN:", err);
                 const errorMsg = err.message === "VAULT_NOT_CONFIGURED" ? "Caveau non configurato." : "Vecchio PIN errato.";
                 event.source?.postMessage({ type: 'CHANGE_PIN_RESULT', success: false, error: errorMsg });
             } finally {
