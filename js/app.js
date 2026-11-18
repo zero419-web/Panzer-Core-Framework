@@ -731,26 +731,35 @@ document.addEventListener('DOMContentLoaded', async () => {
     
     // 🔎 Controllo iniziale dello stato del Caveau all'avvio
     const initVaultCheck = () => {
-    if (sdk && sdk.vaultManager) {
-        sdk.vaultManager.checkStatus((status) => {
-            logToTerminal('vault', `🛡️ Stato Caveau all'avvio -> Configurato: ${status.configured}, Sbloccato: ${status.unlocked}`);
-            
-            // SE IL CAVEAU È CONFIGURATO MA NON SBLOCCATO (es. sono passati i 10 min o la scheda è stata chiusa)
-            if (status.configured && !status.unlocked) {
-                logToTerminal('warn', '🔒 Caveau bloccato per inattività o riapertura sessione. Richiesta forzata sblocco PIN.');
-                showPinModal('unlock', '🔒🔑 Sessione scaduta. Inserisci il PIN per sbloccare il caveau e sbloccare la PWA:');
-            } 
-            // SE NON È MAI STATO CONFIGURATO (Primo avvio assoluto)
-            else if (!status.configured) {
-                showPinModal('setup', '🆕🔐 Prima installazione: Crea un PIN di sicurezza per cifrare la stiva:');
-            } 
-            // SE È GIÀ SBLOCCATO
-            else {
-                logToTerminal('success', '🟢 Caveau già sbloccato in sessione. Avvio modulo PA...');
-            }
-        });
-    }
-};
+        if (sdk && sdk.vaultManager) {
+            sdk.vaultManager.checkStatus((status) => {
+                logToTerminal('vault', `🛡️ Stato Caveau all'avvio -> Configurato: ${status.configured}, Sbloccato: ${status.unlocked}`);
+                
+                const everSynced = localStorage.getItem('panzer_vault_synced') === 'true';
+
+                // SE IL CAVEAU È CONFIGURATO MA NON SBLOCCATO
+                if (status.configured && !status.unlocked) {
+                    logToTerminal('warn', '🔒 Caveau bloccato. Richiesta sblocco PIN.');
+                    showPinModal('unlock', '🔒🔑 Inserisci il PIN per sbloccare il caveau:');
+                } 
+                // SE NON È CONFIGURATO
+                else if (!status.configured) {
+                    if (everSynced) {
+                        showPinModal('unlock', '🔒 Caveau protetto. Inserisci il PIN per sbloccare:');
+                    } else {
+                        showPinModal('setup', '🆕🔐 Prima installazione: Crea un PIN di sicurezza:');
+                    }
+                } 
+                // SE È GIÀ SBLOCCATO MA NON HA MAI FATTO IL SYNC
+                else if (status.unlocked && !everSynced) {
+                    logToTerminal('warn', '⚠️ Caveau sbloccato, ma stiva non sincronizzata.');
+                }
+                else {
+                    logToTerminal('success', '🟢 Caveau sbloccato e stiva pronta.');
+                }
+            });
+        }
+    };
 
     // Avvia il controllo...
     initVaultCheck();

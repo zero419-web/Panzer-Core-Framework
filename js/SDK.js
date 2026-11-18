@@ -230,20 +230,31 @@ export class PanzerVaultManager {
         const enc = new TextEncoder();
         const oldBuffer = enc.encode(oldPinStr).buffer;
         const newBuffer = enc.encode(newPinStr).buffer;
-
+        
         if (navigator.serviceWorker && navigator.serviceWorker.controller) {
-            navigator.serviceWorker.controller.postMessage(
-                { type: 'CHANGE_PIN', oldPinBuffer: oldBuffer, newPinBuffer: newBuffer },
-                [oldBuffer, newBuffer]
-            );
-
+            let resolved = false;
+            const timeoutId = setTimeout(() => {
+                if (!resolved) {
+                    resolved = true;
+                    navigator.serviceWorker.removeEventListener('message', listener);
+                    callback({ success: false, error: 'Timeout risposta cambio PIN dal Service-Worker.' });
+                }
+            }, 10000);
+            
             const listener = (e) => {
                 if (e.data && e.data.type === 'CHANGE_PIN_RESULT') {
-                    navigator.serviceWorker.removeEventListener('message', listener);
-                    callback(e.data);
+                    if (!resolved) {
+                        resolved = true;
+                        clearTimeout(timeoutId);
+                        navigator.serviceWorker.removeEventListener('message', listener);
+                        callback(e.data);
+                    }
                 }
             };
             navigator.serviceWorker.addEventListener('message', listener);
+            navigator.serviceWorker.controller.postMessage({ type: 'CHANGE_PIN', oldPinBuffer: oldBuffer, newPinBuffer: newBuffer },[oldBuffer, newBuffer]);
+        } else {
+            callback({ success: false, error: 'Service Worker controller non attivo.' });
         }
     }
 
