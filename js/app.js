@@ -214,6 +214,14 @@ document.addEventListener('DOMContentLoaded', async () => {
                 } else {
                     const oldEl = document.getElementById('pa-pin-old');
                     const oldVal = oldEl.value.trim();
+                    
+                    // 🛑 CONTROLLO: Il nuovo PIN non può essere identico al vecchio
+                    if (oldVal === p1Val) {
+                        alert("⚠️ Il nuovo PIN non può essere identico al vecchio PIN. Scegline uno diverso.");
+                        if (pin1Input) pin1Input.focus();
+                        return;
+                    }
+
                     oldEl.value = '';
 
                     sdk.vaultManager.changePin(oldVal, p1Val, (res) => {
