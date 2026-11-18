@@ -171,6 +171,35 @@ export class PanzerVaultManager {
         navigator.serviceWorker.addEventListener('message', listener);
         navigator.serviceWorker.controller.postMessage({ type: 'CHECK_VAULT_STATUS' });
     }
+    
+    /**
+     * 🛡️ @private Metodo centralizzato di Sanity Check e bonifica IndexedDB/Cache.
+     * @returns {Promise<boolean>} - True se la stiva è integra, false se è stata pialata.
+     */
+    async _verifyVaultIntegrity() {
+        const dbExists = await new Promise((res) => {
+            const req = indexedDB.open("PWA_Vault", 1);
+            req.onsuccess = () => {
+                const db = req.result;
+                let hasStore = db.objectStoreNames.contains("keys");
+                db.close();
+                res(hasStore);
+            };
+            req.onerror = () => res(false);
+        });
+
+        if (!dbExists) {
+            sessionStorage.removeItem('panzer_active_session');
+            localStorage.removeItem('panzer_has_ever_synced');
+            localStorage.removeItem('panzer_vault_synced');
+            try {
+                const keys = await caches.keys();
+                await Promise.all(keys.map(key => caches.delete(key)));
+            } catch (e) {}
+            return false;
+        }
+        return true;
+    }
 
     /**
      * 🔏 Invia il PIN inserito dall'utente convertendolo in buffer binario protetto (zero-copy transfer).
@@ -180,6 +209,14 @@ export class PanzerVaultManager {
      * @param {Function} callback - 📞 Callback di risposta con il risultato dell'operazione.
      */
     async submitPin(pinString, mode = 'setup', callback) {
+        if (mode === 'unlock') {
+            const isIntact = await this._verifyVaultIntegrity();
+            if (!isIntact) {
+                callback({ success: false, error: 'Stiva compromessa o eliminata. Ricaricamento in corso...' });
+                setTimeout(() => window.location.reload(), 1500);
+                return;
+            }
+        }
         const enc = new TextEncoder();
         const pinBuffer = enc.encode(pinString).buffer;
 
@@ -230,6 +267,13 @@ export class PanzerVaultManager {
      * @param {Function} callback - 📞 Callback di risposta con l'esito del cambio.
      */
     changePin(oldPinStr, newPinStr, callback) {
+        const isIntact = await this._verifyVaultIntegrity();
+        if (!isIntact) {
+            this._isChangingPin = false;
+            callback({ success: false, error: 'Stiva non trovata o compromessa. Ricaricamento in corso...' });
+            setTimeout(() => window.location.reload(), 1500);
+            return;
+        }
         this._isChangingPin = true;
         
         const enc = new TextEncoder();
