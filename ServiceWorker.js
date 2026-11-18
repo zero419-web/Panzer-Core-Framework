@@ -1545,7 +1545,7 @@ self.addEventListener('message', (event) => {
             const oldPinBytes = new Uint8Array(oldBuffer);
             const newPinBytes = new Uint8Array(newBuffer);
 
-            // 🛑 CONTROLLO: Se i PIN sono identici, blocca subito e restituisce l'errore
+            // 🛑 CONTROLLO: Se i PIN sono identici, blocca subito
             if (oldPinBytes.length === newPinBytes.length) {
                 let identical = true;
                 for (let i = 0; i < oldPinBytes.length; i++) {
@@ -1564,17 +1564,10 @@ self.addEventListener('message', (event) => {
             try {
                 db = await new Promise((res, rej) => {
                     const req = indexedDB.open("PWA_Vault", 1);
-                    req.onupgradeneeded = (e) => {
-                        const d = e.target.result;
-                        if (!d.objectStoreNames.contains("keys")) {
-                            d.createObjectStore("keys");
-                        }
-                    };
                     req.onsuccess = () => res(req.result);
                     req.onerror = () => rej(req.error);
                 });
 
-                // 1️⃣ Lettura dei dati dallo store con attesa di completamento transazione
                 let wrappedKey, salt;
                 await new Promise((res, rej) => {
                     const tx = db.transaction("keys", "readonly");
@@ -1592,18 +1585,33 @@ self.addEventListener('message', (event) => {
 
                 if (!wrappedKey || !salt) throw new Error("VAULT_NOT_CONFIGURED");
 
-                // 2️⃣ Conversione difensiva dei dati letti in Uint8Array...
                 const cleanWrappedKey = wrappedKey instanceof ArrayBuffer ? new Uint8Array(wrappedKey) : new Uint8Array(wrappedKey);
                 const cleanSalt = salt instanceof ArrayBuffer ? new Uint8Array(salt) : new Uint8Array(salt);
 
-                // 3️⃣ Decrittazione della Master Key con il vecchio PIN (unwrap)
-                const masterKey = await unwrapMasterKey(cleanWrappedKey, oldPinBytes, cleanSalt);
-                
-                // 4️⃣ Generazione nuovo salt e cifratura della Master Key con il nuovo PIN (wrap)
-                const newSalt = crypto.getRandomValues(new Uint8Array(16));
-                const newWrappedKey = await wrapMasterKey(masterKey, newPinBytes, newSalt);
+                // 1️⃣ Deriviamo la KEY del VECCHIO PIN per decifrare i byte grezzi della Master Key
+                const oldKek = await deriveKeyFromPinBytes(oldPinBytes, cleanSalt);
+                const iv = cleanWrappedKey.subarray(0, 12);
+                const ciphertext = cleanWrappedKey.subarray(12);
 
-                // 5️⃣ Scrittura sicura nello store
+                const rawKeyBytes = await crypto.subtle.decrypt({ name: "AES-GCM", iv: iv }, oldKek, ciphertext);
+
+                // 2️⃣ Deriviamo la KEY del NUOVO PIN e cifriamo i byte per il salvataggio
+                const newSalt = crypto.getRandomValues(new Uint8Array(16));
+                const newKek = await deriveKeyFromPinBytes(newPinBytes, newSalt);
+                const newIv = crypto.getRandomValues(new Uint8Array(12));
+
+                const newCiphertext = await crypto.subtle.encrypt(
+                    { name: "AES-GCM", iv: newIv },
+                    newKek,
+                    rawKeyBytes
+                );
+
+                // Assembla il nuovo pacchetto unificato [12B IV + Ciphertext]
+                const newWrappedKey = new Uint8Array(newIv.length + newCiphertext.byteLength);
+                newWrappedKey.set(newIv);
+                newWrappedKey.set(new Uint8Array(newCiphertext), newIv.length);
+
+                // 3️⃣ Scrittura sicura nello store
                 await new Promise((res, rej) => {
                     const tx = db.transaction("keys", "readwrite");
                     const store = tx.objectStore("keys");
@@ -1615,15 +1623,24 @@ self.addEventListener('message', (event) => {
                     tx.onabort = () => rej(tx.error);
                 });
 
-                encryptionKey = masterKey;
+                // 4️⃣  AGGIORNAMENTO CHIAVE IN RAM:
+                encryptionKey = await crypto.subtle.importKey(
+                    "raw",
+                    rawKeyBytes,
+                    { name: "AES-GCM", length: 256 },
+                    false,
+                    ["encrypt", "decrypt"]
+                );
+
+                // Bonifica immediata dei byte grezzi temporanei in RAM
+                new Uint8Array(rawKeyBytes).fill(0);
+
                 event.source?.postMessage({ type: 'CHANGE_PIN_RESULT', success: true });
-                console.info("🔑🔄 SW: PIN cambiato con successo.");
+                console.info("🔑🔄 SW: PIN cambiato con successo !");
             } catch (err) {
-                console.error("❌🔑 SW Errore Cambio PIN.");
                 const errorMsg = err.message === "VAULT_NOT_CONFIGURED" ? "Caveau non configurato." : "Vecchio PIN errato.";
-                //event.source?.postMessage({ type: 'CHANGE_PIN_RESULT', success: false, error: errorMsg });
-                event.source?.postMessage({ type: 'CHANGE_PIN_RESULT', success: false, error: `Debug: ${err.message}` });
-            
+                console.error(`❌🔑 SW Errore Cambio PIN: ${errorMsg}`);
+                event.source?.postMessage({ type: 'CHANGE_PIN_RESULT', success: false, error: errorMsg });
             } finally {
                 if (db) { try { db.close(); } catch (_) {} }
                 try { oldPinBytes.fill(0); } catch (_) {}
