@@ -692,6 +692,15 @@ export class PanzerSDK {
                     this._isSyncing = false;
                     this._watchdogFailures = 0;
                     
+                     // 🧹 BONIFICA AUTOMATICA IMMEDIATA: Distrugge il database orfano in background
+                    try {
+                        await new Promise((res) => {
+                            const req = indexedDB.deleteDatabase("PWA_Vault");
+                            req.onsuccess = () => res();
+                            req.onerror = () => res();
+                        });
+                    } catch (err) {}
+                    
                     this._showCacheWipeBlocker();
                 }
             }
