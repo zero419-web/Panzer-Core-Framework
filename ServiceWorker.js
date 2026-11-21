@@ -1,7 +1,7 @@
 /*
  * 📄 [ DISCIPLINARE TECNICO DI CONFORMITÀ ]
  *
- * ⚙️ CORE: 🪖 PANZER v7.9.20+ ( v2.x SDK ⛓️)
+ * ⚙️ CORE: 🪖 PANZER v7.9.30+ ( v2.x SDK ⛓️)
  *
  * 🛡️ REQUISITI OPERATIVI DI SISTEMA :
  *
@@ -1387,6 +1387,7 @@ self.addEventListener('message', (event) => {
         if (eventDataSnapshot.type === 'LOCK_VAULT') {
             encryptionKey = null;
             lastVaultCheck = 0;
+            await sessionKeyStore.clear();
             const clientsList = await self.clients.matchAll();
             clientsList.forEach(c => c.postMessage({ type: 'VAULT_LOCKED' }));
             console.info("🔒 SW: Sessione terminata. Master Key rimossa dalla RAM.");
@@ -1480,6 +1481,7 @@ self.addEventListener('message', (event) => {
                         });
 
                         encryptionKey = key;
+                        await sessionKeyStore.set(encryptionKey);
                         failedPinAttempts = 0;
                         console.info("🔑 SW: Setup completato. Master Key protetta e caricata in RAM.");
                     } finally {
@@ -1620,6 +1622,7 @@ self.addEventListener('message', (event) => {
                     false,
                     ["encrypt", "decrypt"]
                 );
+                await sessionKeyStore.set(encryptionKey);
 
                 // Bonifica immediata dei byte grezzi temporanei in RAM
                 new Uint8Array(rawKeyBytes).fill(0);
@@ -2909,6 +2912,7 @@ const Destroy_ALL_Caches = async (err = null) => {
 	 // 🧹 Reset dello stato in RAM
     encryptionKey = null;
     failedPinAttempts = 0;
+    await sessionKeyStore.clear();
     
 	const keys = await caches.keys();
     await Promise.all(keys.map(k => caches.delete(k)));
@@ -3085,7 +3089,15 @@ let isCanaryLock = false;
 const CHECK_INTERVAL = 300000;
 const verifyVaultIntegrity = async () => {
     const now = Date.now();
-    if (encryptionKey !== null && (now - lastVaultCheck < CHECK_INTERVAL)) return true;
+    if (encryptionKey !== null) {
+        const activeSession = await sessionKeyStore.get();
+        if (!activeSession) {
+            encryptionKey = null;
+            lastVaultCheck = 0;
+            return false;
+        }
+        if (now - lastVaultCheck < CHECK_INTERVA) return true;
+    }
     // 🛡️ CONTROLLO ADATTIVO ANTI-CONCORRENZA
     if (isCanaryLock) {
         if (encryptionKey !== null) return true;
@@ -3215,6 +3227,85 @@ const openVaultDB = () => {
 };
 Object.freeze(openVaultDB);
 
+const SESSION_TTL_MS = 10 * 60 * 1000;
+/**
+ * 🔑⏳ GESTIONE CHIAVE DI SESSIONE: Stiva temporanea opaca con TTL in IndexedDB.
+ * Avvolge la CryptoKey attiva tramite AES-KW (extractable: false) associandole una
+ * scadenza temporale per sopravvivere all'ibernazione del Service Worker senza
+ * esporre chiavi in chiaro o estendere la sessione oltre il limite.
+ */
+const sessionKeyStore = {
+    /**
+     * Salva in IndexedDB la chiave di sessione avvolta con AES-KW e scadenza temporale.
+     * @param {CryptoKey} key - Chiave simmetrica non esportabile attiva in sessione.
+     * @param {number} [ttlMs=SESSION_TTL_MS] - Durata della validità in millisecondi (default 10 minuti).
+     * @returns {Promise<void>}
+     */
+    async set(key, ttlMs = SESSION_TTL_MS) {
+        if (!key) return;
+        let db = null;
+        try {
+            db = await openVaultDB();
+            const wrapKey = await crypto.subtle.generateKey({ name: "AES-KW", length: 256 }, false, ["wrapKey", "unwrapKey"]);
+            const wrapped = await crypto.subtle.wrapKey("raw", key, wrapKey, "AES-KW");
+            await new Promise((res, rej) => {
+                const tx = db.transaction("keys", "readwrite");
+                const store = tx.objectStore("keys");
+                store.put(wrapKey, "session_wrap_key");
+                store.put({ wrapped, expiresAt: Date.now() + ttlMs }, "session_wrapped_key");
+                tx.oncomplete = () => res();
+                tx.onerror = () => rej(tx.error);
+            });
+        } catch (_) {} finally { if (db) { try { db.close(); } catch (_) {} } }
+    },
+
+    /**
+     * Recupera e scompatta la chiave di sessione da IndexedDB se non ancora scaduta.
+     * Se il TTL è superato, elimina il record scaduto e restituisce null.
+     * @returns {Promise<CryptoKey|null>} Chiave AES-GCM non esportabile ripristinata, oppure null.
+     */
+    async get() {
+        let db = null;
+        try {
+            db = await openVaultDB();
+            const { wrapKey, rec } = await new Promise((res, rej) => {
+                const tx = db.transaction("keys", "readonly");
+                const store = tx.objectStore("keys");
+                const r1 = store.get("session_wrap_key");
+                const r2 = store.get("session_wrapped_key");
+                tx.oncomplete = () => res({ wrapKey: r1.result, rec: r2.result });
+                tx.onerror = () => rej(tx.error);
+            });
+            if (!wrapKey || !rec || !rec.wrapped) return null;
+            if (typeof rec.expiresAt === "number" && Date.now() > rec.expiresAt) {
+                await this.clear();
+                return null;
+            }
+            return await crypto.subtle.unwrapKey("raw", rec.wrapped, wrapKey, "AES-KW", { name: "AES-GCM", length: 256 }, false, ["encrypt", "decrypt"]);
+        } catch (_) { return null; } finally { if (db) { try { db.close(); } catch (_) {} } }
+    },
+
+    /**
+     * Cancella in modo esplicito chiave di wrapping e record di sessione da IndexedDB.
+     * @returns {Promise<void>}
+     */
+    async clear() {
+        let db = null;
+        try {
+            db = await openVaultDB();
+            await new Promise((res, rej) => {
+                const tx = db.transaction("keys", "readwrite");
+                const store = tx.objectStore("keys");
+                store.delete("session_wrapped_key");
+                store.delete("session_wrap_key");
+                tx.oncomplete = () => res();
+                tx.onerror = () => rej(tx.error);
+            });
+        } catch (_) {} finally { if (db) { try { db.close(); } catch (_) {} } }
+    }
+};
+Object.freeze(sessionKeyStore);
+
 /**
  * 🔑 GESTIONE STORAGE CHIAVI: Estrazione e Clonazione Strutturata (Key Wrapped & PIN Protected).
  * Recupera l'oggetto CryptoKey opaco da IndexedDB tramite sblocco PIN o provvede alla generazione via Web Crypto API.
@@ -3223,7 +3314,14 @@ Object.freeze(openVaultDB);
  */
 const getStoredKey = async (pinBytes = null) => {
     if (encryptionKey !== null) return encryptionKey;
-    if (!pinBytes) return null;
+    if (!pinBytes) {
+        const restored = await sessionKeyStore.get();
+        if (restored) {
+            encryptionKey = restored;
+            return encryptionKey;
+        }
+        return null;
+    }
 
     let db = null;
     try {
@@ -3286,6 +3384,7 @@ const getStoredKey = async (pinBytes = null) => {
             });
             
             encryptionKey = key;
+            await sessionKeyStore.set(encryptionKey);
             failedPinAttempts = 0;
             return key;
         }
@@ -3312,6 +3411,7 @@ const getStoredKey = async (pinBytes = null) => {
         }
 
         encryptionKey = key;
+        await sessionKeyStore.set(encryptionKey);
         failedPinAttempts = 0;
         
         // Resetta i tentativi falliti persistenti nello store
