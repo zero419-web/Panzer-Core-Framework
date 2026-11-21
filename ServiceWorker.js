@@ -70,8 +70,8 @@ const BASE_PATH = self.location.pathname.replace(/[^\/]+$/, "").replace(/\/+/g, 
 let globalAbortController = new AbortController();
 const CONFIG = {
     ROOT: BASE_PATH,
-        cacheName:      'PA_PANZER_ENGINE_v7.9.20',
-    userCacheName: 'user_PA_PANZER_ENGINE_v7.9.20',
+        cacheName:      'PA_PANZER_ENGINE_v7.9.30',
+    userCacheName: 'user_PA_PANZER_ENGINE_v7.9.30',
 	vaultCanaryText: 'KANARY_OK_PANZER_KEY',
 	MAX_PATH_LENGTH: 400,
     ALLOWED_SCHEMES: [
@@ -1328,7 +1328,7 @@ const checkRealOnline = async (mode = 'fetch') => {
 
     let timeoutMs = 3000;
     if (mode === 'sync') {
-        if (navigator.connection && navigator.connection.saveData) return false;
+        if (self.navigator.connection && self.navigator.connection.saveData) return false;
         timeoutMs = Math.min(netProfile.timeout * 1000, 15000);
     } else {
         timeoutMs = (profileName === 'Fast' || profileName === 'Ultrafast') ? 2500 : 5500;
@@ -1395,6 +1395,9 @@ self.addEventListener('message', (event) => {
         }
 
         if (eventDataSnapshot.type === 'CHECK_VAULT_STATUS') {
+            if (encryptionKey === null) {
+                await getStoredKey();
+            }
             const hasKey = encryptionKey !== null;
             let db = null;
             let isConfigured = false;
@@ -1553,11 +1556,7 @@ self.addEventListener('message', (event) => {
             let db = null;
 
             try {
-                db = await new Promise((res, rej) => {
-                    const req = indexedDB.open("PWA_Vault", 1);
-                    req.onsuccess = () => res(req.result);
-                    req.onerror = () => rej(req.error);
-                });
+                db = await openVaultDB();
 
                 let wrappedKey, salt;
                 await new Promise((res, rej) => {
@@ -3096,7 +3095,7 @@ const verifyVaultIntegrity = async () => {
             lastVaultCheck = 0;
             return false;
         }
-        if (now - lastVaultCheck < CHECK_INTERVA) return true;
+        if (now - lastVaultCheck < CHECK_INTERVAL) return true;
     }
     // 🛡️ CONTROLLO ADATTIVO ANTI-CONCORRENZA
     if (isCanaryLock) {
