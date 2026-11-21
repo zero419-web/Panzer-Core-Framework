@@ -1,5 +1,5 @@
 /**
- * ⚙️🪖🛡️ PanzerSDK - v2.3.7.0
+ * ⚙️🪖🛡️ PanzerSDK - v2.3.8.0
  * 
  * * 👤 Autore: Valentino Aglianó
  * Perito Informatico / Idoneo ASMEL 2025
@@ -88,6 +88,16 @@ export class PanzerVaultManager {
             window.addEventListener(evt, () => this.resetInactivityTimer(), { passive: true });
         });
         this.resetInactivityTimer();
+        document.addEventListener('visibilitychange', () => {
+            if (document.visibilityState === 'visible') {
+                this.checkStatus((status) => {
+                    if (status && status.configured && !status.unlocked && typeof this.onLockCallback === 'function') {
+                        this.onLockCallback();
+                    }
+                });
+            }
+        });
+        
 
         if ('serviceWorker' in navigator) {
             navigator.serviceWorker.addEventListener('message', (event) => {
@@ -277,9 +287,11 @@ export class PanzerVaultManager {
         this._isChangingPin = true;
         
         const enc = new TextEncoder();
-        const oldBuffer = enc.encode(oldPinStr).buffer;
-        const newBuffer = enc.encode(newPinStr).buffer;
-        
+        const oldBytes = enc.encode(oldPinStr);
+        const newBytes = enc.encode(newPinStr);
+        const oldBuffer = oldBytes.buffer;
+        const newBuffer = newBytes.buffer;
+
         if (navigator.serviceWorker && navigator.serviceWorker.controller) {
             let resolved = false;
             const timeoutId = setTimeout(() => {
@@ -304,11 +316,13 @@ export class PanzerVaultManager {
             };
             navigator.serviceWorker.addEventListener('message', listener);
 
-            navigator.serviceWorker.controller.postMessage({ 
-                type: 'CHANGE_PIN', 
-                oldPinBuffer: oldBuffer, 
-                newPinBuffer: newBuffer 
-            });
+            navigator.serviceWorker.controller.postMessage({
+                type: 'CHANGE_PIN',
+                oldPinBuffer: oldBuffer,
+                newPinBuffer: newBuffer
+            }, [oldBuffer, newBuffer] );
+            oldBytes.fill(0);
+            newBytes.fill(0);
         } else {
             this._isChangingPin = false;
             callback({ success: false, error: 'Service Worker controller non attivo.' });
