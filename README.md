@@ -5,9 +5,9 @@
 <h1 align="center">🏗️ PANZER SDK & CORE FRAMEWORK</h1>
 
 <p align="center">
-  <img src="https://img.shields.io/badge/🌀_PANZER_SDK-v2.3.7-1f4e79" alt="SDK Badge">
+  <img src="https://img.shields.io/badge/🌀_PANZER_SDK-v2.3.8-1f4e79" alt="SDK Badge">
   <img src="https://img.shields.io/badge/📊_PANZER_APP-v2.4.2-2563eb" alt="App Badge">
-  <img src="https://img.shields.io/badge/⚙️🪖_CORE_PANZER-v7.9.16+-4f4f00" alt="Core Badge">
+  <img src="https://img.shields.io/badge/⚙️🪖_CORE_PANZER-v7.9.30+-4f4f00" alt="Core Badge">
   <img src="https://img.shields.io/badge/PoC-📱_PWA_x_PA-af0000" alt="PoC Badge">
   <img src="https://img.shields.io/badge/Licenza-🇪🇺_EUPL_v1.2-0055a5" alt="License Badge">
 </p>
@@ -31,7 +31,7 @@
 
 ## 🚀 Obiettivi del Progetto
 
-- 🌀 **Proof of Concept (PoC):** <br> Architettura software sovrana per **Progressive Web App (📲 PWA)** basata sul **⚙️🪖 Core Panzer v7.9.16+**, il client **SDK v2.3.7** e la Dashboard **App v2.4.2**, progettata in modalità *🔐 Zero-Trust*.
+- 🌀 **Proof of Concept (PoC):** <br> Architettura software sovrana per **Progressive Web App (📲 PWA)** basata sul **⚙️🪖 Core Panzer v7.9.30+**, il client **SDK v2.3.8** e la Dashboard **App v2.4.2**, progettata in modalità *🔐 Zero-Trust*.
 
 - 🏛️ **Conformità Istituzionale:** <br> Il sistema garantisce **massima resilienza informatica**, continuità operativa *offline-first*, consultazione protetta di atti e documenti della **Pubblica Amministrazione (PA)**, nel pieno rispetto delle linee guida tecniche 📑 **AgID** e del **📜 Codice dell'Amministrazione Digitale (CAD)** per il riuso (*🇪🇺 EUPL v1.2*).
 
@@ -142,7 +142,16 @@ Il sistema si compone di due livelli perfettamente integrati: il **Service Worke
 ## 📜 Changelog & Storico Versioni
 
 <details>
-<summary><strong>⚙️🪖 Espandi Changelog <br> CORE PANZER ( v7.6+ → v7.9.16+ )</strong></summary>
+<summary><strong>⚙️🪖 Espandi Changelog <br> CORE PANZER ( v7.6+ → v7.9.30+ )</strong></summary>
+
+<br>
+
+### 🪖 NOVITÀ v7.9.30+ (`🐛 BUG Fix`)
+- 🔬🧬 **Bug fix, scansione ( 🪵 Corpo ) modificata per escludere falsi positivi...**
+
+- 🪳🔑 **Creata Key sessione con scadenza 10min, per argirare il riposo del ServiceWorker dopo 30s.**
+
+- 🪳📥 **Bug fix, Sync Download.**
 
 <br>
 
@@ -242,7 +251,13 @@ Il sistema si compone di due livelli perfettamente integrati: il **Service Worke
 <br>
 
 <details>
-<summary><strong>⚙️📦 Espandi Changelog <br> SDK ( v2.3.7 ) & DASHBOARD APP ( v2.4.2 )</strong></summary>
+<summary><strong>⚙️📦 Espandi Changelog <br> SDK ( v2.3.8 ) & DASHBOARD APP ( v2.4.2 )</strong></summary>
+
+<br>
+
+### 📣 NOVITÀ SDK v2.3.8 (`🐛 BUG Fix`)
+
+- 🪳🔑 **Bug fix, gestione chiave di sessione, allineata al SW.**
 
 <br>
 
