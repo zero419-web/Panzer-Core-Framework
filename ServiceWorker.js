@@ -90,7 +90,8 @@ const CONFIG = {
         'CHANGE_PIN',
         'CHECK_VAULT_STATUS',
         'GET_PRF_CONFIG',
-        'UNLOCK_PRF'
+        'UNLOCK_PRF',
+        'REGISTER_PRF'
     ],
     userCacheTTL: 7,
     networkResilient: {
@@ -1642,7 +1643,7 @@ self.addEventListener('message', (event) => {
             return;
         }
         
-                // 🔐🧬 Lettura configurazione WebAuthn PRF dal caveau (senza esporre chiavi)
+        // 🔐🧬 Lettura configurazione WebAuthn PRF dal caveau (senza esporre chiavi)
         if (eventDataSnapshot.type === 'GET_PRF_CONFIG') {
             let db = null;
             try {
@@ -1806,6 +1807,121 @@ self.addEventListener('message', (event) => {
                     try { new Uint8Array(rawMasterBytes).fill(0); } catch (_) {}
                 }
                 try { prfBytes.fill(0); } catch (_) {}
+                if (db) { try { db.close(); } catch (_) {} }
+            }
+            return;
+        }
+        
+        // 🔐📝 Registrazione e associazione credenziale WebAuthn PRF al caveau esistente
+        if (eventDataSnapshot.type === 'REGISTER_PRF') {
+            const startRegTime = performance.now();
+            const credBuffer = eventDataSnapshot.credentialIdBuffer;
+            const saltBuffer = eventDataSnapshot.prfSaltBuffer;
+            const prfBuffer = eventDataSnapshot.prfBuffer;
+            const pinBuffer = eventDataSnapshot.pinBuffer;
+
+            if (!credBuffer || !saltBuffer || !prfBuffer || !pinBuffer) {
+                event.source?.postMessage({
+                    type: 'PRF_REGISTER_RESULT',
+                    success: false,
+                    error: "Parametri di registrazione PRF incompleti o PIN mancante"
+                });
+                return;
+            }
+
+            const credIdBytes = new Uint8Array(credBuffer);
+            const prfSaltBytes = new Uint8Array(saltBuffer);
+            const prfBytes = new Uint8Array(prfBuffer);
+            const pinBytes = new Uint8Array(pinBuffer);
+            let rawMasterBytes = null;
+            let wrappedForPrf = null;
+            let db = null;
+
+            try {
+                if (credIdBytes.byteLength === 0 || prfSaltBytes.byteLength === 0 || prfBytes.byteLength === 0 || pinBytes.byteLength === 0) {
+                    event.source?.postMessage({
+                        type: 'PRF_REGISTER_RESULT',
+                        success: false,
+                        error: "Buffer PRF o PIN vuoti"
+                    });
+                    return;
+                }
+
+                db = await openVaultDB();
+                const { wrappedKey, vaultSalt } = await new Promise((res, rej) => {
+                    const tx = db.transaction("keys", "readonly");
+                    const store = tx.objectStore("keys");
+                    const r1 = store.get("wrapped_master_key");
+                    const r2 = store.get("vault_salt");
+                    tx.oncomplete = () => res({ wrappedKey: r1.result, vaultSalt: r2.result });
+                    tx.onerror = () => rej(tx.error);
+                });
+
+                if (!wrappedKey || !vaultSalt) {
+                    event.source?.postMessage({
+                        type: 'PRF_REGISTER_RESULT',
+                        success: false,
+                        error: "Caveau non inizializzato: esegui prima il setup con PIN"
+                    });
+                    return;
+                }
+
+                const cleanWrappedKey = wrappedKey instanceof ArrayBuffer ? new Uint8Array(wrappedKey) : new Uint8Array(wrappedKey);
+                const cleanVaultSalt = vaultSalt instanceof ArrayBuffer ? new Uint8Array(vaultSalt) : new Uint8Array(vaultSalt);
+                const pinKek = await deriveKeyFromPinBytes(pinBytes, cleanVaultSalt);
+                const iv = cleanWrappedKey.subarray(0, 12);
+                const ciphertext = cleanWrappedKey.subarray(12);
+
+                rawMasterBytes = await crypto.subtle.decrypt(
+                    { name: "AES-GCM", iv },
+                    pinKek,
+                    ciphertext
+                );
+
+                wrappedForPrf = await wrapMasterKeyWithPrf(rawMasterBytes, prfBytes, prfSaltBytes);
+
+                const credIdCopy = new Uint8Array(credIdBytes);
+                const saltCopy = new Uint8Array(prfSaltBytes);
+
+                await new Promise((res, rej) => {
+                    const tx = db.transaction("keys", "readwrite");
+                    const store = tx.objectStore("keys");
+                    store.put(credIdCopy, "prf_credential_id");
+                    store.put(saltCopy, "prf_salt");
+                    store.put(wrappedForPrf, "prf_wrapped_master_key");
+                    tx.oncomplete = () => res();
+                    tx.onerror = () => rej(tx.error);
+                });
+
+                if (typeof injectTimingNoise === 'function') {
+                    await injectTimingNoise(startRegTime, 200);
+                }
+
+                event.source?.postMessage({
+                    type: 'PRF_REGISTER_RESULT',
+                    success: true
+                });
+                console.info("🔐✅ SW: Credenziale WebAuthn PRF associata al caveau.");
+            } catch (_) {
+                if (typeof injectTimingNoise === 'function') {
+                    await injectTimingNoise(startRegTime, 200);
+                }
+                event.source?.postMessage({
+                    type: 'PRF_REGISTER_RESULT',
+                    success: false,
+                    error: "Impossibile associare la credenziale PRF (verifica PIN o supporto authenticator)"
+                });
+            } finally {
+                if (rawMasterBytes) {
+                    try { new Uint8Array(rawMasterBytes).fill(0); } catch (_) {}
+                }
+                if (wrappedForPrf) {
+                    try { wrappedForPrf.fill(0); } catch (_) {}
+                }
+                try { prfBytes.fill(0); } catch (_) {}
+                try { prfSaltBytes.fill(0); } catch (_) {}
+                try { credIdBytes.fill(0); } catch (_) {}
+                try { pinBytes.fill(0); } catch (_) {}
                 if (db) { try { db.close(); } catch (_) {} }
             }
             return;
