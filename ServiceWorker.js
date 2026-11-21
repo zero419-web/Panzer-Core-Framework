@@ -1484,7 +1484,7 @@ self.addEventListener('message', (event) => {
                         });
 
                         encryptionKey = key;
-                        await sessionKeyStore.set(encryptionKey);
+                        await sessionKeyStore.set(encryptionKey, SESSION_TTL_MS, rawBytes);
                         failedPinAttempts = 0;
                         console.info("🔑 SW: Setup completato. Master Key protetta e caricata in RAM.");
                     } finally {
@@ -1621,7 +1621,7 @@ self.addEventListener('message', (event) => {
                     false,
                     ["encrypt", "decrypt"]
                 );
-                await sessionKeyStore.set(encryptionKey);
+                await sessionKeyStore.set(encryptionKey, SESSION_TTL_MS, rawKeyBytes);
 
                 // Bonifica immediata dei byte grezzi temporanei in RAM
                 new Uint8Array(rawKeyBytes).fill(0);
@@ -1690,6 +1690,7 @@ self.addEventListener('message', (event) => {
             const performSync = async (event) => {
                 // ⏱️ Marcatore di rete.
                 const startNetworkTime = performance.now();
+                let vaultLockedAbort = false;
                 let hasActuallyChanged = false;
                 let realServerVersion = currentVersion;
                 const clients = await self.clients.matchAll();
@@ -2127,6 +2128,10 @@ self.addEventListener('message', (event) => {
                     if (syncAbortController) syncAbortController.abort();
                     // Estrazione preventiva dei metadati dell'errore prima della sterilizzazione
                     const errorMessage = err && typeof err === 'object' && 'message' in err ? String(err.message) : String(err);
+                    if (errorMessage.includes('VAULT_LOCKED_NO_KEY') || errorMessage.includes('VAULT')) {
+                        vaultLockedAbort = true;
+                        if (syncAbortController) syncAbortController.abort();
+                    }
                     const isIntegritaError = errorMessage.includes('Integrità');
 
                     // 🏴‍☠️ ANTI-PROFILING: Generazione di un clone d'errore asettico e privo di Stack Trace
@@ -2139,7 +2144,7 @@ self.addEventListener('message', (event) => {
                     console.info(`✅ SW: SYNC Completata. Total file Download: ${completed} - Exclud(IsBunker): ${completed_ok}`);
                     isNewInstallation = false;
                     isSyncing = false;
-                    if (syncAbortController?.signal.aborted) {
+                    if (syncAbortController?.signal.aborted || vaultLockedAbort) {
                         syncAbortController = null;
                         broadcast({ type: 'SYNC_RETRY' });
                         return;
@@ -3240,22 +3245,37 @@ const sessionKeyStore = {
      * @param {number} [ttlMs=SESSION_TTL_MS] - Durata della validità in millisecondi (default 10 minuti).
      * @returns {Promise<void>}
      */
-    async set(key, ttlMs = SESSION_TTL_MS) {
-        if (!key) return;
+    async set(key, ttlMs = SESSION_TTL_MS, rawBytes = null) {
+        if (!key && !rawBytes) return;
         let db = null;
+        let plainCopy = null;
         try {
+            if (!rawBytes) return;
+            plainCopy = new Uint8Array(rawBytes instanceof ArrayBuffer ? rawBytes : rawBytes.buffer);
+            if (plainCopy.byteLength === 0) return;
+
             db = await openVaultDB();
-            const wrapKey = await crypto.subtle.generateKey({ name: "AES-KW", length: 256 }, false, ["wrapKey", "unwrapKey"]);
-            const wrapped = await crypto.subtle.wrapKey("raw", key, wrapKey, "AES-KW");
+            const encKey = await crypto.subtle.generateKey({ name: "AES-GCM", length: 256 }, false, ["encrypt", "decrypt"]);
+            const iv = crypto.getRandomValues(new Uint8Array(12));
+            const cipher = await crypto.subtle.encrypt({ name: "AES-GCM", iv }, encKey, plainCopy);
+
+            const packed = new Uint8Array(iv.length + cipher.byteLength);
+            packed.set(iv);
+            packed.set(new Uint8Array(cipher), iv.length);
+
             await new Promise((res, rej) => {
                 const tx = db.transaction("keys", "readwrite");
                 const store = tx.objectStore("keys");
-                store.put(wrapKey, "session_wrap_key");
-                store.put({ wrapped, expiresAt: Date.now() + ttlMs }, "session_wrapped_key");
+                store.put(encKey, "session_wrap_key");
+                store.put({ wrapped: packed, expiresAt: Date.now() + ttlMs }, "session_wrapped_key");
                 tx.oncomplete = () => res();
                 tx.onerror = () => rej(tx.error);
             });
-        } catch (_) {} finally { if (db) { try { db.close(); } catch (_) {} } }
+            packed.fill(0);
+        } catch (_) {} finally {
+            if (plainCopy) { try { plainCopy.fill(0); } catch (_) {} }
+            if (db) { try { db.close(); } catch (_) {} }
+        }
     },
 
     /**
@@ -3280,7 +3300,19 @@ const sessionKeyStore = {
                 await this.clear();
                 return null;
             }
-            return await crypto.subtle.unwrapKey("raw", rec.wrapped, wrapKey, "AES-KW", { name: "AES-GCM", length: 256 }, false, ["encrypt", "decrypt"]);
+            const rawArr = rec.wrapped instanceof ArrayBuffer ? new Uint8Array(rec.wrapped) : new Uint8Array(rec.wrapped);
+            const iv = rawArr.subarray(0, 12);
+            const ct = rawArr.subarray(12);
+            const decryptedRaw = await crypto.subtle.decrypt({ name: "AES-GCM", iv }, wrapKey, ct);
+            const imported = await crypto.subtle.importKey(
+                "raw",
+                decryptedRaw,
+                { name: "AES-GCM", length: 256 },
+                false,
+                ["encrypt", "decrypt"]
+            );
+            new Uint8Array(decryptedRaw).fill(0);
+            return imported;
         } catch (_) { return null; } finally { if (db) { try { db.close(); } catch (_) {} } }
     },
 
@@ -3368,10 +3400,10 @@ const getStoredKey = async (pinBytes = null) => {
                 false,
                 ["encrypt", "decrypt"]
             );
-            
+
             const newSalt = crypto.getRandomValues(new Uint8Array(16));
             const wrapped = await wrapMasterKey(key, pinBytes, newSalt);
-            
+
             await new Promise((resolve, reject) => {
                 const tx = db.transaction("keys", "readwrite");
                 const store = tx.objectStore("keys");
@@ -3381,38 +3413,61 @@ const getStoredKey = async (pinBytes = null) => {
                 tx.oncomplete = () => resolve();
                 tx.onerror = () => reject(tx.error);
             });
-            
+
             encryptionKey = key;
             await sessionKeyStore.set(encryptionKey);
             failedPinAttempts = 0;
             return key;
         }
 
-        // Sblocco e unwrapping
-        const key = await unwrapMasterKey(wrappedKey, pinBytes, salt);
-        
-        // Test canarino di validazione isolato
-        const canaryText = CONFIG.vaultCanaryText;
-        const testBlob = new Blob([canaryText], { type: "text/plain" });
-        
-        const iv = crypto.getRandomValues(new Uint8Array(12));
-        const buffer = await testBlob.arrayBuffer();
-        const ciphertext = await crypto.subtle.encrypt({ name: "AES-GCM", iv: iv }, key, buffer);
-        const combined = new Uint8Array(iv.length + ciphertext.byteLength);
-        combined.set(iv);
-        combined.set(new Uint8Array(ciphertext), iv.length);
+        // Sblocco e unwrapping con bonifica immediata dei byte grezzi
+        const kek = await deriveKeyFromPinBytes(pinBytes, salt);
+        const data = wrappedKey instanceof ArrayBuffer ? new Uint8Array(wrappedKey) : wrappedKey;
+        const iv = data.subarray(0, 12);
+        const ciphertext = data.subarray(12);
+        const unwrappedRaw = await crypto.subtle.decrypt({ name: "AES-GCM", iv: iv }, kek, ciphertext);
 
-        const decrypted = await crypto.subtle.decrypt({ name: "AES-GCM", iv: combined.subarray(0, 12) }, key, combined.subarray(12));
-        const decryptedText = new TextDecoder().decode(decrypted);
+        let key = null;
+        try {
+            key = await crypto.subtle.importKey(
+                "raw",
+                unwrappedRaw,
+                { name: "AES-GCM", length: 256 },
+                false,
+                ["encrypt", "decrypt"]
+            );
 
-        if (decryptedText !== canaryText) {
-            throw new Error("CANARY_MISMATCH");
+            // Test canarino di validazione isolato
+            const canaryText = CONFIG.vaultCanaryText;
+            const testBlob = new Blob([canaryText], { type: "text/plain" });
+
+            const canaryIv = crypto.getRandomValues(new Uint8Array(12));
+            const buffer = await testBlob.arrayBuffer();
+            const canaryCiphertext = await crypto.subtle.encrypt({ name: "AES-GCM", iv: canaryIv }, key, buffer);
+            new Uint8Array(buffer).fill(0);
+
+            const combined = new Uint8Array(canaryIv.length + canaryCiphertext.byteLength);
+            combined.set(canaryIv);
+            combined.set(new Uint8Array(canaryCiphertext), canaryIv.length);
+
+            const decrypted = await crypto.subtle.decrypt({ name: "AES-GCM", iv: combined.subarray(0, 12) }, key, combined.subarray(12));
+            combined.fill(0);
+
+            const decryptedText = new TextDecoder().decode(decrypted);
+            new Uint8Array(decrypted).fill(0);
+
+            if (decryptedText !== canaryText) {
+                throw new Error("CANARY_MISMATCH");
+            }
+
+            encryptionKey = key;
+            await sessionKeyStore.set(encryptionKey, SESSION_TTL_MS, unwrappedRaw);
+        } finally {
+            try { new Uint8Array(unwrappedRaw).fill(0); } catch (_) {}
         }
 
-        encryptionKey = key;
-        await sessionKeyStore.set(encryptionKey);
         failedPinAttempts = 0;
-        
+
         // Resetta i tentativi falliti persistenti nello store
         await new Promise((resolve) => {
             const tx = db.transaction("keys", "readwrite");
@@ -3425,7 +3480,7 @@ const getStoredKey = async (pinBytes = null) => {
 
     } catch (cryptoErr) {
         encryptionKey = null;
-        
+
         // Gestione persistente dei tentativi falliti tramite IndexedDB
         let currentAttempts = 1;
         if (db) {
@@ -3455,7 +3510,7 @@ const getStoredKey = async (pinBytes = null) => {
 
         if (currentAttempts >= 3) {
             console.error("🚨 SW: 3 tentativi PIN falliti! Tabula Rasa totale di sicurezza.");
-            
+
             // 🚀 Esecuzione in background...
             (async () => {
                 try {
