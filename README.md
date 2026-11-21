@@ -5,9 +5,9 @@
 <h1 align="center">🏗️ PANZER SDK & CORE FRAMEWORK</h1>
 
 <p align="center">
-  <img src="https://img.shields.io/badge/🌀_PANZER_SDK-v2.3.8-1f4e79" alt="SDK Badge">
-  <img src="https://img.shields.io/badge/📊_PANZER_APP-v2.4.2-2563eb" alt="App Badge">
-  <img src="https://img.shields.io/badge/⚙️🪖_CORE_PANZER-v7.9.30+-4f4f00" alt="Core Badge">
+  <img src="https://img.shields.io/badge/🌀_PANZER_SDK-v2.3.8.1-1f4e79" alt="SDK Badge">
+  <img src="https://img.shields.io/badge/📊_PANZER_APP-v2.4.3.1-2563eb" alt="App Badge">
+  <img src="https://img.shields.io/badge/⚙️🪖_CORE_PANZER-v7.9.40+-4f4f00" alt="Core Badge">
   <img src="https://img.shields.io/badge/PoC-📱_PWA_x_PA-af0000" alt="PoC Badge">
   <img src="https://img.shields.io/badge/Licenza-🇪🇺_EUPL_v1.2-0055a5" alt="License Badge">
 </p>
@@ -23,7 +23,7 @@
 <br>
 
 > [!NOTE]
-> 💡 **La demo live permette di testare immediatamente:** la Resilienza di rete, la Modalità Bunker 🗄️, la simulazione Lie-Fi 🤥🛜 e il Download 📥 simultaneo delle risorse dal Manifesto.
+> 💡 **La demo live permette di testare immediatamente:** la Resilienza di rete, la Modalità Bunker 🗄️, la simulazione Lie-Fi 🤥🛜, lo sblocco tramite **PIN o WebAuthn PRF / Passkey** 🔐🧬 e il Download 📥 simultaneo delle risorse dal Manifesto.
 
 <br>
 
@@ -31,11 +31,11 @@
 
 ## 🚀 Obiettivi del Progetto
 
-- 🌀 **Proof of Concept (PoC):** <br> Architettura software sovrana per **Progressive Web App (📲 PWA)** basata sul **⚙️🪖 Core Panzer v7.9.30+**, il client **SDK v2.3.8** e la Dashboard **App v2.4.2**, progettata in modalità *🔐 Zero-Trust*.
+- 🌀 **Proof of Concept (PoC):** <br> Architettura software sovrana per **Progressive Web App (📲 PWA)** basata sul **⚙️🪖 Core Panzer v7.9.40+**, il client **PanzerSDK v2.3.8.1** e la Dashboard **App Controller v2.4.3.1**, progettata in modalità *🔐 Zero-Trust*.
 
 - 🏛️ **Conformità Istituzionale:** <br> Il sistema garantisce **massima resilienza informatica**, continuità operativa *offline-first*, consultazione protetta di atti e documenti della **Pubblica Amministrazione (PA)**, nel pieno rispetto delle linee guida tecniche 📑 **AgID** e del **📜 Codice dell'Amministrazione Digitale (CAD)** per il riuso (*🇪🇺 EUPL v1.2*).
 
-- ⚙️ **Difesa Attiva & Tolleranza ai Guasti:** <br> Implementa strategie avanzate di computazione asincrona isolata, crittografia simmetrica client-side con Key Wrapping basato su PIN utente e tolleranza ai guasti di tipo militare. Garantisce che i dati sensibili rimangano protetti anche su reti degradate (*Lie-Fi 🤥🛜*) o assenti. In caso di manomissione fisica o *data breach* sul file system locale del client, tutti i file vengono eliminati per sicurezza e risincronizzati automaticamente con il server della PA.
+- ⚙️ **Difesa Attiva & Tolleranza ai Guasti:** <br> Implementa strategie avanzate di computazione asincrona isolata, crittografia simmetrica client-side (`AES-GCM 256-bit`) con Key Wrapping basato su PIN (`PBKDF2` + `SHA-256`) o Passkey (`WebAuthn PRF` + `HKDF-SHA256`) e tolleranza ai guasti di tipo militare. Garantisce che i dati sensibili rimangano protetti anche su reti degradate (*Lie-Fi 🤥🛜*) o assenti. In caso di manomissione o *data breach* sul file system locale del client, vengono attivate contromisure distruttive di sicurezza e risincronizzazione.
 
 <br>
 
@@ -43,43 +43,47 @@
 
 ## 🛠️ Architettura e Caratteristiche Principali
 
-Il sistema si compone di due livelli perfettamente integrati: il **Service Worker (`ServiceWorker.js`)** che agisce come entità autonoma di difesa, e l'**SDK & Dashboard Client (`SDK.js` / `app.js`)** che gestisce l'interfaccia, la memoria e i meccanismi di blocco con gestione avanzata del caveau cifrato.
+Il sistema si compone di due livelli perfettamente integrati: il **Service Worker (`ServiceWorker.js` - `v7.9.40+`)** che agisce come entità autonoma di difesa, e l'**SDK & Dashboard Client (`SDK.js` `v2.3.8.1` / `app.js` `v2.4.3.1`)** che gestisce l'interfaccia, la memoria, i flussi PIN/Passkey PRF e i meccanismi di blocco con gestione avanzata del caveau cifrato.
 
 <br>
 
-### 🔹 1. Core Engine ( `ServiceWorker.js` - v7.9.16+ )
+### 🔹 1. Core Engine ( `ServiceWorker.js` - v7.9.40+ )
 
-- **🔐🔑 Pin-Protected Key Wrapping (PBKDF2 + AES-GCM):** <br> Evoluzione radicale della sicurezza: la Master Key non è più solo non esportabile in RAM, ma viene cifrata a riposo su IndexedDB tramite un pacchetto protetto (`wrapped_master_key`) derivato dai byte del PIN dell'operatore ( *100.000 iterazioni PBKDF2, SHA-256* ).
+- **🔐🔑 Pin-Protected & PRF Key Wrapping (`PBKDF2` / `HKDF` + `AES-GCM 256-bit`):** <br> La Master Key è protetta a riposo su IndexedDB (`PWA_Vault`) tramite `wrapped_master_key` derivato dal PIN (`100.000 iterazioni PBKDF2, SHA-256`) e supporta l'associazione opzionale di una credenziale **WebAuthn PRF** (`prf_wrapped_master_key` derivata via `HKDF-SHA256` con dominio `PANZER_WEBAUTHN_PRF_KEK_V1` e salt casuale).
 
-- **🔐🌡️🛡️ Jittered Thermal Shield Race:** <br> Ispezione forense profonda sul modulo `deepVaultValidation()`. Implementa una gara asincrona tra l'interrogazione al database della stiva e lo **Scudo Termico Adattivo** (`waitTillIdle`).
+- **⏳🔑 Session Key Store con TTL (`sessionKeyStore`):** <br> Stiva temporanea cifrata in IndexedDB con scadenza a 10 minuti (`SESSION_TTL_MS = 600.000 ms`) per preservare in sicurezza la chiave di sessione anche durante la sospensione/ibernazione del Service Worker senza estendere la durata della sessione.
 
-- **🔄🌐🛡️🔗 Dynamic Adaptive Network Resiliency:** <br> Algoritmo proprietario che adatta dinamicamente i timeout di rete basandosi su 5 profili telemetrici hardware di velocità della connessione.
+- **🔐🌡️🛡️ Jittered Thermal Shield Race:** <br> Ispezione forense profonda sul modulo `deepVaultValidation()` con gara asincrona tra lettura del caveau e **Scudo Termico Adattivo** (`waitTillIdle`) per distinguere saturazione CPU/I/O da manomissioni reali.
 
-- **🌐➡️💾 Network-First Predittivo con Cache Fallback:** <br> Intercettazione condizionale degli eventi di fetch con abort atomico delle richieste in caso di latenza degradata e rilascio immediato della risorsa cifrata locale.
+- **🔄🌐🛡️🔗 Dynamic Adaptive Network Resiliency:** <br> Algoritmo proprietario che adatta dinamicamente i timeout e il parallelismo di rete basandosi su 5 profili telemetrici (`Ultrafast`, `Fast`, `Medium`, `Low`, `Verylow`) e controllo reale della connettività (`checkRealOnline`).
 
-- **🔬🧬 SW Forensics (DNA Check & Binary Validation):** <br> Controllo biometrico sequenziale (**🤯 Testa**, **👣 Coda**, **🪵 Corpo**) tramite `isValidBlob()` per prevenire attacchi di *☠️ Cache Poisoning*, bloccare file polyglot ed eradicare vettori malevoli (*Anti-PDF Scripting ❌📜*).
+- **🌐➡️💾 Network-First Predittivo con Cache Fallback & SWR:** <br> Intercettazione condizionale degli eventi di `fetch` con abort atomico (`AbortController` / `AbortSignal.any`) in caso di latenza degradata o interruzione sync e rilascio immediato della risorsa locale.
 
-- **🛡️📴 Offline Bunker Mode & Emergency Wipe:** <br> In caso di violazione rilevata o 3 tentativi errati di inserimento PIN, il Panzer attiva contromisure distruttive (*Tabula Rasa ☢️*): pialla il `Cache Storage` e il database locale (`indexedDB.deleteDatabase`), isolando il sistema per proteggere il dato sensibile.
+- **🔬🧬 SW Forensics (DNA Check & Binary Validation - v5.0):** <br> Controllo sequenziale su tre scomparti (**🤯 Testa**, **👣 Coda**, **🪵 Corpo**) tramite `isValidBlob()` per prevenire attacchi di *☠️ Cache Poisoning*, bloccare file polyglot (`SVG`, `PNG`, `WEBP`, `JPEG`, `AVIF`), ispezionare `PDF` / `PAdES` / `CAdES` (anche su stream compressi `/flatedecode` fino a 50 MB) e bonificare la RAM (`fill(0)`).
 
-- **🔀📡 Architettura di Instradamento a 5 Sezioni (Fetch Strict Layer 🚥):** <br> Ciclo di vita della richiesta compartimentato in perimetri rigidi per superare i capitolati di ispezione AgID (*Normalizzazione, Online Gateway, Cache Hit, Filtro Multimediale, Critical Fallback*).
+- **🛡️📴 Offline Bunker Mode, Canary Loopback & Emergency Wipe:** <br> Verifica tramite test canarino (`CONFIG.vaultCanaryText`), tolleranza ai fallimenti temporanei e, in caso di violazione confermata o 3 tentativi errati di PIN, attivazione della distruzione totale (*Tabula Rasa ☢️*): azzeramento chiavi in RAM, cancellazione di `Cache Storage` e `indexedDB.deleteDatabase("PWA_Vault")`.
 
-- **✉️↔️📬 Canale IPC PostMessage:** <br> Ricezione sicura dei comandi dal frontend con isolamento della chiave in RAM tramite `Structured Clone API` e validazione profonda (`universalScanner`).
+- **🔀📡 Architettura di Instradamento & Security Headers (`injectSecurityHeaders`):** <br> Instradamento compartimentato su `mainCache` (`Bunker` cifrato) e `userCache` (`Magazzino` con TTL), con iniezione automatica delle intestazioni HTTP difensive (`X-Content-Type-Options: nosniff`, `X-Frame-Options: DENY`, `Referrer-Policy`, `Cross-Origin-Resource-Policy: same-origin`, `X-XSS-Protection`).
+
+- **✉️↔️📬 Canale IPC PostMessage Hardened:** <br> Origin guard, lista esplicita dei comandi autorizzati (`INIT_DB`, `LOCK_VAULT`, `SUBMIT_PIN`, `CHANGE_PIN`, `CHECK_VAULT_STATUS`, `GET_PRF_CONFIG`, `UNLOCK_PRF`, `REGISTER_PRF`), `validateAndSanitizeAssetPath` (anti-SSRF e anti-path traversal), limite `MAX_ALLOWED_ASSETS = 500` e `universalScanner` (`MAX_NODES_LIMIT = 999`, profondità max 12).
 
 <br>
 
-### 🔹 2. Client SDK & Dashboard ( `SDK.js` v2.3.7 & `app.js` v2.4.2 )
+### 🔹 2. Client SDK & Dashboard ( `SDK.js` v2.3.8.1 & `app.js` v2.4.3.1 )
 
-- **🔏🛡️ PanzerVaultManager & Sblocco Forzato all'Avvio (`initVaultCheck`):** <br> Gestione governativa della sessione client con timer di inattività fissato a 10 minuti (auto-lock della RAM), modale unificato per Setup, Sblocco e Cambio PIN, e trigger automatico all'avvio o post-refresh per eliminare qualsiasi stallo sulla schermata di caricamento.
+- **🔏🛡️ PanzerVaultManager & Sblocco all'Avvio (`initVaultCheck`):** <br> Gestione del timer di inattività di 10 minuti con auto-lock della RAM, controllo di sessione per scheda (`panzer_tab_active`), modale grafico unificato (`showPinModal`) per `setup`, `unlock`, `change` e `register-prf`, e sblocco immediato all'avvio o dopo refresh.
 
-- **🐺🗄️ Watchdog Integrità Stiva Anti-Wipe:** <br> Sistema di controllo costante sui dati della PWA per impedire che l'interfaccia rimanga attiva se la memoria viene svuotata inaspettatamente dal browser o dal sistema operativo, con popup di ripristino guidato.
+- **🔐🧬 WebAuthn PRF con Catena di Fallback Multilivello:** <br> `registerPrfCredential` esegue la registrazione con bonifica dei buffer sensibili in RAM e fallback progressivo (`platform` con PRF → authenticator esterno/roaming `USB/NFC/QR` con PRF → esterno senza PRF in fase di creazione), mentre `unlockVaultWithFallback` tenta lo sblocco con Passkey/Biometria e ripiega in modo trasparente sul PIN senza bruciare i tentativi PIN.
 
-- **🐺 Watchdog Anti-Incognito ❌🕵️:** <br> Rilevamento selettivo della navigazione in incognito sui motori Chromium/Blink con timeout adattivo configurabile.
+- **🐺🗄️ Watchdog Integrità Stiva Anti-Wipe:** <br> Controllo periodico (ogni 5 secondi e al ritorno in primo piano) su `PWA_Vault` e `Cache Storage` con tolleranza a 3 tentativi e modale di ripristino guidato.
 
-- **🔒 Visore Sandbox Protetto (`openInSandbox`):** <br> Apertura isolata dei documenti tramite `iframe` con policy `sandbox="allow-scripts"`, zoom istantaneo su Blob e **Zeroization preventiva della RAM** (`Uint8Array.fill(0)`) alla chiusura.
+- **🐺 Watchdog Anti-Incognito ❌🕵️:** <br> Rilevamento selettivo della navigazione in incognito o sandbox restrittive sui motori Chromium/Blink con timeout adattivo.
 
-- **❄️ Immutabilità & Hardening Client:** <br> Congelamento delle configurazioni e del manifesto in memoria (`Deep Freeze`), sanitizzazione degli input e rendering sicuro del DOM senza `innerHTML` per azzerare i rischi di DOM-based XSS.
+- **🔒 Visore Sandbox Protetto (`openInSandbox` & `closeSandbox`):** <br> Apertura isolata dei documenti tramite `iframe` (`sandbox="allow-scripts"`), rendering rasterizzato delle pagine PDF tramite `pdfjsLib`, zoom regolabile e **Zeroization preventiva della RAM** (`Uint8Array.fill(0)`) alla chiusura.
 
-- **🎖️ Zero-Dipendenze:** <br> Sviluppato interamente in **🍦 Vanilla JS**, garantendo assenza di debiti tecnici e piena rispondenza all'**Art. 69 del CAD**.
+- **❄️ Immutabilità & Hardening Client:** <br> Sigillatura delle configurazioni e del manifesto in memoria (`Object.freeze` / `deepFreeze`), sanitizzazione dei filtri di ricerca e rendering tabellare tramite `DocumentFragment` e `textContent`.
+
+- **🎖️ Zero-Dipendenze:** <br> Sviluppato interamente in **🍦 Vanilla JS**, senza framework esterni e allineato ai principi di riuso dell'**Art. 69 del CAD**.
 
 <br>
 
@@ -89,15 +93,15 @@ Il sistema si compone di due livelli perfettamente integrati: il **Service Worke
 
 | 🌐 Browser | 🔎 Stato | Note Tecniche |
 | :--- | :--- | :--- |
-| 🌐 **Google Chrome** | Supportato ✅ | Pieno supporto a tutte le feature e Watchdog |
+| 🌐 **Google Chrome** | Supportato ✅ | Pieno supporto a tutte le feature, Watchdog e WebAuthn PRF |
 | 🌐 **Chromium** | Supportato ✅ | Pieno supporto (motore JS V8 ⚡) |
-| 🧭 **Safari** | **In sperimentazione** ☑️ | Watchdog Anti-Incognito non supportato |
+| 🧭 **Safari** | **In sperimentazione** ☑️ | Watchdog Anti-Incognito non supportato; gestione buffer/slice dedicata |
 | 🦊 **Firefox** | **Non supportato** ❌ | Limitazioni architetturali sulle API richieste |
 
 <br>
 
 > [!TIP]
-> 💡 **Compatibilità estesa:** Il progetto è pienamente compatibile con tutti i browser basati su motore **Chromium (`JS V8` ⚡)**, inclusi **Microsoft Edge, Brave, Opera, Vivaldi e Arc** (incluso il supporto completo al *🐺 Watchdog Anti-Incognito ❌🕵️*).
+> 💡 **Compatibilità estesa:** Il progetto è compatibile con i browser basati su motore **Chromium (`JS V8` ⚡)**, inclusi **Microsoft Edge, Brave, Opera, Vivaldi e Arc** (incluso il supporto al *🐺 Watchdog Anti-Incognito ❌🕵️*).
 
 <br>
 
@@ -142,7 +146,16 @@ Il sistema si compone di due livelli perfettamente integrati: il **Service Worke
 ## 📜 Changelog & Storico Versioni
 
 <details>
-<summary><strong>⚙️🪖 Espandi Changelog <br> CORE PANZER ( v7.6+ → v7.9.30+ )</strong></summary>
+<summary><strong>⚙️🪖 Espandi Changelog <br> CORE PANZER ( v7.6+ → v7.9.40+ )</strong></summary>
+
+<br>
+
+### 🪖 NOVITÀ v7.9.40+ (`🔐🧬 WebAuthn PRF Vault & Hardening`)
+- 🔐🧬 **Supporto WebAuthn PRF nel Caveau:** <br> Introdotti i comandi IPC `GET_PRF_CONFIG`, `UNLOCK_PRF` e `REGISTER_PRF` con derivazione KEK tramite `HKDF-SHA256` (`deriveKeyFromPrfBytes`), wrapping dedicato della Master Key (`wrapMasterKeyWithPrf`), verifica canarino e bonifica sistematica di tutti i buffer sensibili in RAM.
+
+- ⏳🔑 **Persistenza Chiave di Sessione con TTL (`sessionKeyStore`):** <br> Rafforzato il salvataggio e il ripristino della chiave di sessione (`SESSION_TTL_MS = 10 min`) in IndexedDB tramite chiave simmetrica dedicata con azzeramento dei buffer grezzi.
+
+- 🛡️🔬 **DNA Check Post-Decrittazione & Bonifica:** <br> Aggiunta la verifica forense sul plaintext decifrato estratto dal Bunker (`VAULT_PLAINTEXT_DNA_CORRUPTED`) e il reset dello stato/sessione nelle routine di emergenza (`Destroy_ALL_Caches`).
 
 <br>
 
@@ -251,7 +264,15 @@ Il sistema si compone di due livelli perfettamente integrati: il **Service Worke
 <br>
 
 <details>
-<summary><strong>⚙️📦 Espandi Changelog <br> SDK ( v2.3.8 ) & DASHBOARD APP ( v2.4.2 )</strong></summary>
+<summary><strong>⚙️📦 Espandi Changelog <br> SDK ( v2.3.8.1 ) & DASHBOARD APP ( v2.4.3.1 )</strong></summary>
+
+<br>
+
+### 📣 NOVITÀ SDK v2.3.8.1 & APP v2.4.3.1 (`🔐🧬 WebAuthn PRF & Fallback Multilivello`)
+
+- 🔐🧬 **Sblocco e Registrazione WebAuthn PRF (`SDK v2.3.8.1`):** <br> Aggiunti in `PanzerVaultManager` i metodi `canUsePrf()`, `_getPrfConfigFromSW()`, `_sendPrfUnlockToSW()`, `unlockVaultWithFallback()` e `registerPrfCredential()` con fallback automatico su authenticator esterni (`USB/NFC/QR`), gestione dei casi senza `prf` in creazione, ripiego sicuro sul PIN e bonifica dei buffer in RAM.
+
+- 🎛️ **UI Passkey / Biometria & Gestione Scheda (`APP v2.4.3.1`):** <br> Aggiornato `showPinModal` con la modalità `register-prf`, il pulsante di sblocco rapido via Passkey/Biometria nella schermata `unlock`, il flusso post-setup per associare una Passkey e il controllo del ciclo di vita scheda (`panzer_tab_active` e blocco su `beforeunload`).
 
 <br>
 
