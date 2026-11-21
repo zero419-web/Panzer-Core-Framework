@@ -539,6 +539,13 @@ export class PanzerVaultManager {
             prfSalt = crypto.getRandomValues(new Uint8Array(32));
             challenge = crypto.getRandomValues(new Uint8Array(32));
             const userId = crypto.getRandomValues(new Uint8Array(16));
+            
+            const platformUvpa = typeof PublicKeyCredential.isUserVerifyingPlatformAuthenticatorAvailable === 'function'
+                ? await PublicKeyCredential.isUserVerifyingPlatformAuthenticatorAvailable()
+                : null;
+            if (typeof logToTerminal === 'function') {
+                logToTerminal('info', `🔎 PRF Check -> origin: ${window.location.origin} | host: ${window.location.hostname} | platformUVPA: ${platformUvpa}`);
+            }
 
             const credential = await navigator.credentials.create({
                 publicKey: {
@@ -624,11 +631,16 @@ export class PanzerVaultManager {
             prfCopy = null;
 
             return result;
-        } catch (err) {
-            return {
-                success: false,
-                error: err?.message || 'Registrazione WebAuthn PRF annullata o non riuscita.'
-            };
+            } catch (err) {
+                const errName = err?.name || 'Error';
+                const errMsg = err?.message || 'Registrazione WebAuthn PRF annullata o non riuscita.';
+                if (typeof logToTerminal === 'function') {
+                    logToTerminal('error', `❌ PRF Exception [${errName}]: ${errMsg} (host: ${window.location.hostname})`);
+                }
+                return {
+                    success: false,
+                    error: `[${errName}] ${errMsg} (host: ${window.location.hostname})`
+                };
         } finally {
             try { if (pinBytes) pinBytes.fill(0); } catch (_) {}
             try { if (prfSalt) prfSalt.fill(0); } catch (_) {}
