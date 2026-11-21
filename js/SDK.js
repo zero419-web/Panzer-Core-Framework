@@ -513,6 +513,7 @@ export class PanzerVaultManager {
         let pinBytes = null;
         let prfSalt = null;
         let challenge = null;
+        let userId = null;
         let credIdCopy = null;
         let saltCopy = null;
         let prfCopy = null;
@@ -538,8 +539,8 @@ export class PanzerVaultManager {
 
             prfSalt = crypto.getRandomValues(new Uint8Array(32));
             challenge = crypto.getRandomValues(new Uint8Array(32));
-            const userId = crypto.getRandomValues(new Uint8Array(16));
-            
+            userId = crypto.getRandomValues(new Uint8Array(16));
+
             const platformUvpa = typeof PublicKeyCredential.isUserVerifyingPlatformAuthenticatorAvailable === 'function'
                 ? await PublicKeyCredential.isUserVerifyingPlatformAuthenticatorAvailable()
                 : null;
@@ -547,8 +548,17 @@ export class PanzerVaultManager {
                 logToTerminal('info', `🔎 PRF Check -> origin: ${window.location.origin} | host: ${window.location.hostname} | platformUVPA: ${platformUvpa}`);
             }
 
-            const credential = await navigator.credentials.create({
-                publicKey: {
+            const buildCreateOptions = (attachmentMode, includePrf) => {
+                const authSel = {
+                    requireResidentKey: false,
+                    residentKey: 'preferred',
+                    userVerification: 'required'
+                };
+                if (attachmentMode) {
+                    authSel.authenticatorAttachment = attachmentMode;
+                }
+
+                const publicKey = {
                     rp: {
                         name: options.rpName || 'PANZER Vault',
                         id: window.location.hostname
@@ -563,26 +573,57 @@ export class PanzerVaultManager {
                         { type: 'public-key', alg: -7 },
                         { type: 'public-key', alg: -257 }
                     ],
-                    authenticatorSelection: {
-                        authenticatorAttachment: 'platform',
-                        residentKey: 'preferred',
-                        userVerification: 'required'
+                    authenticatorSelection: authSel
+                };
+
+                if (includePrf) {
+                    publicKey.extensions = {
+                        prf: {
+                            eval: {
+                                first: prfSalt
+                            }
+                        }
+                    };
+                }
+
+                return { publicKey };
+            };
+
+            let credential = null;
+            const attempts = [
+                { mode: 'platform', prf: true, label: 'Passkey interna + PRF' },
+                { mode: null, prf: true, label: 'Authenticator esterno (USB/NFC/QR) + PRF' },
+                { mode: null, prf: false, label: 'Authenticator esterno (USB/NFC/QR) senza PRF in create' }
+            ];
+
+            let lastErr = null;
+            for (const step of attempts) {
+                if (step.mode === 'platform' && platformUvpa === false) {
+                    continue;
+                }
+                try {
+                    credential = await navigator.credentials.create(buildCreateOptions(step.mode, step.prf));
+                    if (credential?.rawId) {
+                        lastErr = null;
+                        break;
+                    }
+                } catch (attemptErr) {
+                    lastErr = attemptErr;
+                    if (typeof logToTerminal === 'function') {
+                        logToTerminal('warn', `⚠️ ${step.label} non riuscito (${attemptErr?.name || 'Error'}). Passo al fallback successivo...`);
                     }
                 }
-            });
+            }
 
             challenge.fill(0);
             userId.fill(0);
 
+            if (!credential?.rawId) {
+                throw lastErr || new Error('Creazione credenziale WebAuthn non riuscita.');
+            }
+
             const extResults = credential?.getClientExtensionResults?.();
             const firstPrf = extResults?.prf?.results?.first;
-
-            if (!credential?.rawId) {
-                return {
-                    success: false,
-                    error: 'Creazione credenziale WebAuthn non riuscita.'
-                };
-            }
 
             if (!(firstPrf instanceof ArrayBuffer) || firstPrf.byteLength === 0) {
                 return {
@@ -631,20 +672,21 @@ export class PanzerVaultManager {
             prfCopy = null;
 
             return result;
-            } catch (err) {
-                const errName = err?.name || 'Error';
-                const errMsg = err?.message || 'Registrazione WebAuthn PRF annullata o non riuscita.';
-                if (typeof logToTerminal === 'function') {
-                    logToTerminal('error', `❌ PRF Exception [${errName}]: ${errMsg} (host: ${window.location.hostname})`);
-                }
-                return {
-                    success: false,
-                    error: `[${errName}] ${errMsg} (host: ${window.location.hostname})`
-                };
+        } catch (err) {
+            const errName = err?.name || 'Error';
+            const errMsg = err?.message || 'Registrazione WebAuthn PRF annullata o non riuscita.';
+            if (typeof logToTerminal === 'function') {
+                logToTerminal('error', `❌ PRF Exception [${errName}]: ${errMsg} (host: ${window.location.hostname})`);
+            }
+            return {
+                success: false,
+                error: `[${errName}] ${errMsg} (host: ${window.location.hostname})`
+            };
         } finally {
             try { if (pinBytes) pinBytes.fill(0); } catch (_) {}
             try { if (prfSalt) prfSalt.fill(0); } catch (_) {}
             try { if (challenge) challenge.fill(0); } catch (_) {}
+            try { if (userId) userId.fill(0); } catch (_) {}
             try { if (credIdCopy instanceof ArrayBuffer) new Uint8Array(credIdCopy).fill(0); } catch (_) {}
             try { if (saltCopy instanceof ArrayBuffer) new Uint8Array(saltCopy).fill(0); } catch (_) {}
             try { if (prfCopy instanceof ArrayBuffer) new Uint8Array(prfCopy).fill(0); } catch (_) {}
