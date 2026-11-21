@@ -560,13 +560,6 @@ export class PanzerVaultManager {
                         authenticatorAttachment: 'platform',
                         residentKey: 'preferred',
                         userVerification: 'required'
-                    },
-                    extensions: {
-                        prf: {
-                            eval: {
-                                first: prfSalt
-                            }
-                        }
                     }
                 }
             });
@@ -577,10 +570,17 @@ export class PanzerVaultManager {
             const extResults = credential?.getClientExtensionResults?.();
             const firstPrf = extResults?.prf?.results?.first;
 
-            if (!credential?.rawId || !(firstPrf instanceof ArrayBuffer) || firstPrf.byteLength === 0) {
+            if (!credential?.rawId) {
                 return {
                     success: false,
-                    error: 'L\'authenticator non ha restituito il risultato PRF richiesto.'
+                    error: 'Creazione credenziale WebAuthn non riuscita.'
+                };
+            }
+
+            if (!(firstPrf instanceof ArrayBuffer) || firstPrf.byteLength === 0) {
+                return {
+                    success: false,
+                    error: 'Credenziale creata, ma l\'authenticator non ha restituito il risultato PRF in fase di creazione.'
                 };
             }
 
