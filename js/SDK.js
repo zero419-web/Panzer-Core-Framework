@@ -328,6 +328,109 @@ export class PanzerVaultManager {
             callback({ success: false, error: 'Service Worker controller non attivo.' });
         }
     }
+    
+    /**
+     * 🧬🛡️ Verifica se il contesto corrente supporta WebAuthn con estensione PRF.
+     * Esegue un controllo sicuro senza eccezioni per consentire il fallback al PIN.
+     * @returns {Promise<boolean>}
+    */
+    async canUsePrf() {
+        try {
+            if (typeof window === 'undefined' || !window.PublicKeyCredential || !navigator?.credentials?.get) {
+                return false;
+            }
+            if (window.location.protocol !== 'https:' && window.location.hostname !== 'localhost') {
+                return false;
+            }
+            if (typeof PublicKeyCredential.getClientCapabilities === 'function') {
+                const caps = await PublicKeyCredential.getClientCapabilities();
+                if (caps && typeof caps.prf === 'boolean') {
+                    return caps.prf;
+                }
+            }
+        return true;
+        } catch (_) {
+        return false;
+        }
+    }
+    /**
+     * 🔑🧬 Richiede al Service Worker l'eventuale configurazione PRF salvata nel caveau.
+     * @returns {Promise<{enabled: boolean, credentialId: ArrayBuffer|Uint8Array|null, salt: ArrayBuffer|Uint8Array|null}>}
+     */
+     async _getPrfConfigFromSW() {
+         const sw = navigator.serviceWorker?.controller;
+         if (!sw) {
+             return { enabled: false, credentialId: null, salt: null };
+         }
+         
+         return await new Promise((resolve) => {
+             const timeoutId = setTimeout(() => {
+                 navigator.serviceWorker.removeEventListener('message', onMsg);
+                 resolve({ enabled: false, credentialId: null, salt: null });
+             }, 2500);
+             
+             const onMsg = (event) => {
+                 if (event.origin !== window.location.origin) return;
+                 if (event.data?.type === 'PRF_CONFIG_RESULT') {
+                     clearTimeout(timeoutId);
+                     navigator.serviceWorker.removeEventListener('message', onMsg);
+                     resolve({
+                         enabled: Boolean(event.data.enabled),
+                         credentialId: event.data.credentialId || null,
+                         salt: event.data.salt || null
+                     });
+                 }
+             };
+        navigator.serviceWorker.addEventListener('message', onMsg);
+        sw.postMessage({ type: 'GET_PRF_CONFIG' });
+         });
+        
+        // 🔐 Fallback automatico al PIN tramite callback già esistente in PanzerVaultManager
+    const fallbackFn = typeof onPinFallback === 'function' ? onPinFallback : this.onPromptPinCallback;
+    if (typeof fallbackFn === 'function') {
+        await fallbackFn('unlock', '🔐 Inserisci il PIN per sbloccare il caveau:');
+    }
+    return false;
+
+     }
+
+/**
+ * 📥🧬 Invia al SW il buffer PRF via postMessage con transfer list e attende l'esito.
+ * Azzera il buffer locale in caso di mancata trasferibilità o fallimento.
+ * @param {ArrayBuffer} prfBuffer
+ * @returns {Promise<{success: boolean, fallbackToPin: boolean, error?: string}>}
+ */
+async _sendPrfUnlockToSW(prfBuffer) {
+    const sw = navigator.serviceWorker?.controller;
+    if (!sw || !(prfBuffer instanceof ArrayBuffer)) {
+        try { if (prfBuffer instanceof ArrayBuffer) new Uint8Array(prfBuffer).fill(0); } catch (_) {}
+        return { success: false, fallbackToPin: true, error: "SW non disponibile" };
+    }
+
+    return await new Promise((resolve) => {
+        const timeoutId = setTimeout(() => {
+            navigator.serviceWorker.removeEventListener('message', onMsg);
+            resolve({ success: false, fallbackToPin: true, error: "Timeout sblocco PRF" });
+        }, 5000);
+
+        const onMsg = (event) => {
+            if (event.origin !== window.location.origin) return;
+            if (event.data?.type === 'PRF_UNLOCK_RESULT') {
+                clearTimeout(timeoutId);
+                navigator.serviceWorker.removeEventListener('message', onMsg);
+                resolve({
+                    success: Boolean(event.data.success),
+                    fallbackToPin: event.data.fallbackToPin !== false,
+                    error: event.data.error || null
+                });
+            }
+        };
+
+        navigator.serviceWorker.addEventListener('message', onMsg);
+        sw.postMessage({ type: 'UNLOCK_PRF', prfBuffer }, [prfBuffer]);
+    });
+}
+
 
     /**
      * 🛑 Rilascia tutte le risorse e i timer attivi del Vault Manager.
