@@ -1,7 +1,7 @@
 /*
  * 📄 [ DISCIPLINARE TECNICO DI CONFORMITÀ ]
  *
- * ⚙️ CORE: 🪖 PANZER v7.9.30+ ( v2.x SDK ⛓️)
+ * ⚙️ CORE: 🪖 PANZER v7.9.40+ ( v2.x SDK ⛓️)
  *
  * 🛡️ REQUISITI OPERATIVI DI SISTEMA :
  *
@@ -70,8 +70,8 @@ const BASE_PATH = self.location.pathname.replace(/[^\/]+$/, "").replace(/\/+/g, 
 let globalAbortController = new AbortController();
 const CONFIG = {
     ROOT: BASE_PATH,
-        cacheName:      'PA_PANZER_ENGINE_v7.9.30',
-    userCacheName: 'user_PA_PANZER_ENGINE_v7.9.30',
+        cacheName:      'PA_PANZER_ENGINE_v7.9.40',
+    userCacheName: 'user_PA_PANZER_ENGINE_v7.9.40',
 	vaultCanaryText: 'KANARY_OK_PANZER_KEY',
 	MAX_PATH_LENGTH: 400,
     ALLOWED_SCHEMES: [
@@ -88,7 +88,9 @@ const CONFIG = {
         'LOCK_VAULT',
         'SUBMIT_PIN',
         'CHANGE_PIN',
-        'CHECK_VAULT_STATUS'
+        'CHECK_VAULT_STATUS',
+        'GET_PRF_CONFIG',
+        'UNLOCK_PRF'
     ],
     userCacheTTL: 7,
     networkResilient: {
@@ -1639,6 +1641,176 @@ self.addEventListener('message', (event) => {
             }
             return;
         }
+        
+                // 🔐🧬 Lettura configurazione WebAuthn PRF dal caveau (senza esporre chiavi)
+        if (eventDataSnapshot.type === 'GET_PRF_CONFIG') {
+            let db = null;
+            try {
+                db = await openVaultDB();
+                const { credId, salt, wrappedPrf } = await new Promise((res, rej) => {
+                    const tx = db.transaction("keys", "readonly");
+                    const store = tx.objectStore("keys");
+                    const r1 = store.get("prf_credential_id");
+                    const r2 = store.get("prf_salt");
+                    const r3 = store.get("prf_wrapped_master_key");
+                    tx.oncomplete = () => res({
+                        credId: r1.result,
+                        salt: r2.result,
+                        wrappedPrf: r3.result
+                    });
+                    tx.onerror = () => rej(tx.error);
+                });
+
+                const enabled = Boolean(credId && salt && wrappedPrf);
+                event.source?.postMessage({
+                    type: 'PRF_CONFIG_RESULT',
+                    enabled,
+                    credentialId: enabled ? credId : null,
+                    salt: enabled ? salt : null
+                });
+            } catch (_) {
+                event.source?.postMessage({
+                    type: 'PRF_CONFIG_RESULT',
+                    enabled: false,
+                    credentialId: null,
+                    salt: null
+                });
+            } finally {
+                if (db) { try { db.close(); } catch (_) {} }
+            }
+            return;
+        }
+
+        // 🔓🧬 Sblocco caveau tramite output WebAuthn PRF con bonifica immediata dei buffer
+        if (eventDataSnapshot.type === 'UNLOCK_PRF') {
+            const startPrfTime = performance.now();
+            const prfBuffer = eventDataSnapshot.prfBuffer;
+            if (!prfBuffer) {
+                event.source?.postMessage({
+                    type: 'PRF_UNLOCK_RESULT',
+                    success: false,
+                    fallbackToPin: true,
+                    error: "Buffer PRF mancante"
+                });
+                return;
+            }
+
+            const prfBytes = new Uint8Array(prfBuffer);
+            let rawMasterBytes = null;
+            let db = null;
+
+            try {
+                if (prfBytes.byteLength === 0) {
+                    event.source?.postMessage({
+                        type: 'PRF_UNLOCK_RESULT',
+                        success: false,
+                        fallbackToPin: true,
+                        error: "Buffer PRF vuoto"
+                    });
+                    return;
+                }
+
+                db = await openVaultDB();
+                const { prfSalt, wrappedPrf } = await new Promise((res, rej) => {
+                    const tx = db.transaction("keys", "readonly");
+                    const store = tx.objectStore("keys");
+                    const r1 = store.get("prf_salt");
+                    const r2 = store.get("prf_wrapped_master_key");
+                    tx.oncomplete = () => res({ prfSalt: r1.result, wrappedPrf: r2.result });
+                    tx.onerror = () => rej(tx.error);
+                });
+
+                if (!prfSalt || !wrappedPrf) {
+                    event.source?.postMessage({
+                        type: 'PRF_UNLOCK_RESULT',
+                        success: false,
+                        fallbackToPin: true,
+                        error: "Credenziale PRF non associata"
+                    });
+                    return;
+                }
+
+                const cleanSalt = prfSalt instanceof ArrayBuffer ? new Uint8Array(prfSalt) : new Uint8Array(prfSalt);
+                const cleanWrapped = wrappedPrf instanceof ArrayBuffer ? new Uint8Array(wrappedPrf) : new Uint8Array(wrappedPrf);
+                const kek = await deriveKeyFromPrfBytes(prfBytes, cleanSalt);
+                const iv = cleanWrapped.subarray(0, 12);
+                const ciphertext = cleanWrapped.subarray(12);
+
+                rawMasterBytes = await crypto.subtle.decrypt(
+                    { name: "AES-GCM", iv },
+                    kek,
+                    ciphertext
+                );
+
+                const key = await crypto.subtle.importKey(
+                    "raw",
+                    rawMasterBytes,
+                    { name: "AES-GCM", length: 256 },
+                    false,
+                    ["encrypt", "decrypt"]
+                );
+
+                // 🐺 Test canarino di validazione isolato
+                const canaryText = CONFIG.vaultCanaryText;
+                const canaryIv = crypto.getRandomValues(new Uint8Array(12));
+                const canaryPlain = new TextEncoder().encode(canaryText);
+                const canaryCipher = await crypto.subtle.encrypt(
+                    { name: "AES-GCM", iv: canaryIv },
+                    key,
+                    canaryPlain
+                );
+                canaryPlain.fill(0);
+
+                const combined = new Uint8Array(canaryIv.length + canaryCipher.byteLength);
+                combined.set(canaryIv);
+                combined.set(new Uint8Array(canaryCipher), canaryIv.length);
+
+                const decryptedCanary = await crypto.subtle.decrypt(
+                    { name: "AES-GCM", iv: combined.subarray(0, 12) },
+                    key,
+                    combined.subarray(12)
+                );
+                combined.fill(0);
+
+                const decryptedText = new TextDecoder().decode(decryptedCanary);
+                new Uint8Array(decryptedCanary).fill(0);
+
+                if (decryptedText !== canaryText) {
+                    throw new Error("CANARY_MISMATCH");
+                }
+
+                encryptionKey = key;
+                await sessionKeyStore.set(encryptionKey, SESSION_TTL_MS, rawMasterBytes);
+
+                if (typeof injectTimingNoise === 'function') {
+                    await injectTimingNoise(startPrfTime, 150);
+                }
+
+                event.source?.postMessage({
+                    type: 'PRF_UNLOCK_RESULT',
+                    success: true
+                });
+                console.info("🔓🧬 SW: Caveau sbloccato tramite WebAuthn PRF.");
+            } catch (_) {
+                if (typeof injectTimingNoise === 'function') {
+                    await injectTimingNoise(startPrfTime, 150);
+                }
+                event.source?.postMessage({
+                    type: 'PRF_UNLOCK_RESULT',
+                    success: false,
+                    fallbackToPin: true,
+                    error: "Sblocco PRF non riuscito, fallback al PIN"
+                });
+            } finally {
+                if (rawMasterBytes) {
+                    try { new Uint8Array(rawMasterBytes).fill(0); } catch (_) {}
+                }
+                try { prfBytes.fill(0); } catch (_) {}
+                if (db) { try { db.close(); } catch (_) {} }
+            }
+            return;
+        }
+
         
     // 🔄📥 Comando Di Sync Download...
         if (eventDataSnapshot.type === 'INIT_DB') {
@@ -3209,6 +3381,56 @@ const unwrapMasterKey = async (wrappedData, pinBytes, salt) => {
     );
 };
 Object.freeze(unwrapMasterKey);
+
+/**
+ * 🔐🧬 DERIVAZIONE CHIAVE KEK PRF (WebAuthn Pseudo-Random Function):
+ * Deriva una chiave simmetrica non esportabile a 256 bit (AES-GCM) dall'output binario
+ * generato dall'authenticator WebAuthn (estensione PRF) tramite HKDF-SHA256,
+ * isolando il dominio crittografico con un info-tag dedicato e un salt casuale.
+ * @param {Uint8Array} prfBytes - Materiale binario grezzo restituito da `prf.results.first`.
+ * @param {Uint8Array} prfSalt - Salt crittografico casuale associato alla credenziale PRF.
+ * @returns {Promise<CryptoKey>} Chiave AES-GCM 256-bit non esportabile per il Key Wrapping PRF.
+ */
+const deriveKeyFromPrfBytes = async (prfBytes, prfSalt) => {
+    const ikm = await crypto.subtle.importKey(
+        "raw",
+        prfBytes,
+        "HKDF",
+        false,
+        ["deriveKey"]
+    );
+    const info = new TextEncoder().encode("PANZER_WEBAUTHN_PRF_KEK_V1");
+    return await crypto.subtle.deriveKey(
+        { name: "HKDF", hash: "SHA-256", salt: prfSalt, info },
+        ikm,
+        { name: "AES-GCM", length: 256 },
+        false,
+        ["encrypt", "decrypt"]
+    );
+};
+Object.freeze(deriveKeyFromPrfBytes);
+
+/**
+ * 🛡️🎁 KEY WRAPPING PRF (Protezione Master Key tramite Passkey):
+ * Cifra i byte grezzi della Master Key in AES-GCM 256-bit usando la KEK derivata
+ * dall'output WebAuthn PRF e un vettore d'inizializzazione (IV) casuale da 12 byte,
+ * restituendo un pacchetto binario unificato [12B IV + Ciphertext].
+ * @param {ArrayBuffer|Uint8Array} rawMasterBytes - Byte grezzi della Master Key da proteggere.
+ * @param {Uint8Array} prfBytes - Materiale binario grezzo restituito dall'estensione PRF.
+ * @param {Uint8Array} prfSalt - Salt crittografico casuale associato al record PRF.
+ * @returns {Promise<Uint8Array>} Pacchetto cifrato unificato [12B IV + Ciphertext].
+ */
+const wrapMasterKeyWithPrf = async (rawMasterBytes, prfBytes, prfSalt) => {
+    const kek = await deriveKeyFromPrfBytes(prfBytes, prfSalt);
+    const iv = crypto.getRandomValues(new Uint8Array(12));
+    const plainCopy = new Uint8Array(rawMasterBytes instanceof ArrayBuffer ? rawMasterBytes : rawMasterBytes.buffer);
+    const wrapped = await crypto.subtle.encrypt({ name: "AES-GCM", iv }, kek, plainCopy);
+    const combined = new Uint8Array(iv.length + wrapped.byteLength);
+    combined.set(iv);
+    combined.set(new Uint8Array(wrapped), iv.length);
+    return combined;
+};
+Object.freeze(wrapMasterKeyWithPrf);
 
 /**
  * 🗄️🔓 APERTURA CAVEAU: Connessione e Inizializzazione Strutturata (IndexedDB Vault).
