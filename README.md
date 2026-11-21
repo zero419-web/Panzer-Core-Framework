@@ -7,7 +7,7 @@
 <p align="center">
   <img src="https://img.shields.io/badge/🌀_PANZER_SDK-v2.3.8.1-1f4e79" alt="SDK Badge">
   <img src="https://img.shields.io/badge/📊_PANZER_APP-v2.4.3.1-2563eb" alt="App Badge">
-  <img src="https://img.shields.io/badge/⚙️🪖_CORE_PANZER-v7.9.40+-4f4f00" alt="Core Badge">
+  <img src="https://img.shields.io/badge/⚙️🪖_CORE_PANZER-v7.9.41+-4f4f00" alt="Core Badge">
   <img src="https://img.shields.io/badge/PoC-📱_PWA_x_PA-af0000" alt="PoC Badge">
   <img src="https://img.shields.io/badge/Licenza-🇪🇺_EUPL_v1.2-0055a5" alt="License Badge">
 </p>
@@ -31,7 +31,7 @@
 
 ## 🚀 Obiettivi del Progetto
 
-- 🌀 **Proof of Concept (PoC):** <br> Architettura software sovrana per **Progressive Web App (📲 PWA)** basata sul **⚙️🪖 Core Panzer v7.9.40+**, il client **PanzerSDK v2.3.8.1** e la Dashboard **App Controller v2.4.3.1**, progettata in modalità *🔐 Zero-Trust*.
+- 🌀 **Proof of Concept (PoC):** <br> Architettura software sovrana per **Progressive Web App (📲 PWA)** basata sul **⚙️🪖 Core Panzer v7.9.41+**, il client **PanzerSDK v2.3.8.1** e la Dashboard **App Controller v2.4.3.1**, progettata in modalità *🔐 Zero-Trust*.
 
 - 🏛️ **Conformità Istituzionale:** <br> Il sistema garantisce **massima resilienza informatica**, continuità operativa *offline-first*, consultazione protetta di atti e documenti della **Pubblica Amministrazione (PA)**, nel pieno rispetto delle linee guida tecniche 📑 **AgID** e del **📜 Codice dell'Amministrazione Digitale (CAD)** per il riuso (*🇪🇺 EUPL v1.2*).
 
