@@ -1,7 +1,7 @@
 /*
  * 📄 [ DISCIPLINARE TECNICO DI CONFORMITÀ ]
  *
- * ⚙️ CORE: 🪖 PANZER v7.9.40+ ( v2.x SDK ⛓️)
+ * ⚙️ CORE: 🪖 PANZER v7.9.41+ ( v2.x SDK ⛓️)
  *
  * 🛡️ REQUISITI OPERATIVI DI SISTEMA :
  *
@@ -1472,8 +1472,6 @@ self.addEventListener('message', (event) => {
                             false,
                             ["encrypt", "decrypt"]
                         );
-                        // 🛡️ Uint8Array per consentire la bonifica sicura della RAM
-                        new Uint8Array(rawBytes).fill(0);
 
                         await new Promise((res, rej) => {
                             const tx = db.transaction("keys", "readwrite");
@@ -1492,6 +1490,8 @@ self.addEventListener('message', (event) => {
                         console.info("🔑 SW: Setup completato. Master Key protetta e caricata in RAM.");
                     } finally {
                         if (db) { try { db.close(); } catch (_) {} }
+                        // 🛡️ Uint8Array per consentire la bonifica sicura della RAM
+                        new Uint8Array(rawBytes).fill(0);
                     }
                 } else {
                     // 🔓 UNLOCK: Sblocco standard gestito interamente da getStoredKey
