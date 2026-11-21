@@ -353,6 +353,7 @@ export class PanzerVaultManager {
         return false;
         }
     }
+    
     /**
      * 🔑🧬 Richiede al Service Worker l'eventuale configurazione PRF salvata nel caveau.
      * @returns {Promise<{enabled: boolean, credentialId: ArrayBuffer|Uint8Array|null, salt: ArrayBuffer|Uint8Array|null}>}
@@ -384,53 +385,258 @@ export class PanzerVaultManager {
         navigator.serviceWorker.addEventListener('message', onMsg);
         sw.postMessage({ type: 'GET_PRF_CONFIG' });
          });
-        
-        // 🔐 Fallback automatico al PIN tramite callback già esistente in PanzerVaultManager
-    const fallbackFn = typeof onPinFallback === 'function' ? onPinFallback : this.onPromptPinCallback;
-    if (typeof fallbackFn === 'function') {
-        await fallbackFn('unlock', '🔐 Inserisci il PIN per sbloccare il caveau:');
     }
-    return false;
-
+     
+     /**
+      * 📥🧬 Invia al SW il buffer PRF via postMessage con transfer list e attende l'esito.
+      * Azzera il buffer locale in caso di mancata trasferibilità o fallimento.
+      * @param {ArrayBuffer} prfBuffer
+      * @returns {Promise<{success: boolean, fallbackToPin: boolean, error?: string}>}
+     */
+     async _sendPrfUnlockToSW(prfBuffer) {
+         const sw = navigator.serviceWorker?.controller;
+         if (!sw || !(prfBuffer instanceof ArrayBuffer)) {
+             try { if (prfBuffer instanceof ArrayBuffer) new Uint8Array(prfBuffer).fill(0); } catch (_) {}
+             return { success: false, fallbackToPin: true, error: "SW non disponibile" };
+         }
+         
+         return await new Promise((resolve) => {
+             const timeoutId = setTimeout(() => {
+                 navigator.serviceWorker.removeEventListener('message', onMsg);
+                 resolve({ success: false, fallbackToPin: true, error: "Timeout sblocco PRF" });
+             }, 5000);
+             
+             const onMsg = (event) => {
+                 if (event.origin !== window.location.origin) return;
+                 if (event.data?.type === 'PRF_UNLOCK_RESULT') {
+                     clearTimeout(timeoutId);
+                     navigator.serviceWorker.removeEventListener('message', onMsg);
+                     resolve({
+                         success: Boolean(event.data.success),
+                         fallbackToPin: event.data.fallbackToPin !== false,
+                         error: event.data.error || null
+                     });
+                 }
+             };
+             
+             navigator.serviceWorker.addEventListener('message', onMsg);
+             sw.postMessage({ type: 'UNLOCK_PRF', prfBuffer }, [prfBuffer]);
+         });
      }
+     
+    /**
+     * 🔓🧬🛡️ Tenta lo sblocco del caveau tramite WebAuthn PRF e, in caso di assenza
+     * di supporto, annullamento o esito negativo, ripiega automaticamente sul PIN.
+     * @param {Function|null} [onPinFallback=null] - Callback opzionale per mostrare la UI del PIN.
+     * @returns {Promise<boolean>}
+     */
+    async unlockVaultWithFallback(onPinFallback = null) {
+        let prfOutputCopy = null;
+        try {
+            const supported = await this.canUsePrf();
+            if (supported) {
+                const prfCfg = await this._getPrfConfigFromSW();
+                if (prfCfg.enabled && prfCfg.credentialId && prfCfg.salt) {
+                    const credIdBytes = prfCfg.credentialId instanceof ArrayBuffer
+                        ? new Uint8Array(prfCfg.credentialId)
+                        : new Uint8Array(prfCfg.credentialId);
+                    const saltBytes = prfCfg.salt instanceof ArrayBuffer
+                        ? new Uint8Array(prfCfg.salt)
+                        : new Uint8Array(prfCfg.salt);
 
-/**
- * 📥🧬 Invia al SW il buffer PRF via postMessage con transfer list e attende l'esito.
- * Azzera il buffer locale in caso di mancata trasferibilità o fallimento.
- * @param {ArrayBuffer} prfBuffer
- * @returns {Promise<{success: boolean, fallbackToPin: boolean, error?: string}>}
- */
-async _sendPrfUnlockToSW(prfBuffer) {
-    const sw = navigator.serviceWorker?.controller;
-    if (!sw || !(prfBuffer instanceof ArrayBuffer)) {
-        try { if (prfBuffer instanceof ArrayBuffer) new Uint8Array(prfBuffer).fill(0); } catch (_) {}
-        return { success: false, fallbackToPin: true, error: "SW non disponibile" };
+                    const challenge = crypto.getRandomValues(new Uint8Array(32));
+                    try {
+                        const assertion = await navigator.credentials.get({
+                            publicKey: {
+                                challenge,
+                                rpId: window.location.hostname,
+                                userVerification: 'required',
+                                allowCredentials: [{
+                                    type: 'public-key',
+                                    id: credIdBytes
+                                }],
+                                extensions: {
+                                    prf: {
+                                        eval: {
+                                            first: saltBytes
+                                        }
+                                    }
+                                }
+                            }
+                        });
+
+                        challenge.fill(0);
+
+                        const extResults = assertion?.getClientExtensionResults?.();
+                        const firstPrf = extResults?.prf?.results?.first;
+
+                        if (firstPrf instanceof ArrayBuffer && firstPrf.byteLength > 0) {
+                            prfOutputCopy = firstPrf.slice(0);
+                            const swRes = await this._sendPrfUnlockToSW(prfOutputCopy);
+                            prfOutputCopy = null;
+
+                            if (swRes.success) {
+                                this.resetInactivityTimer();
+                                return true;
+                            }
+                        }
+                    } finally {
+                        try { challenge.fill(0); } catch (_) {}
+                    }
+                }
+            }
+        } catch (_) {
+            // 🔁 Fallback silenzioso e sicuro al PIN (non brucia i tentativi PIN)
+        } finally {
+            if (prfOutputCopy instanceof ArrayBuffer) {
+                try { new Uint8Array(prfOutputCopy).fill(0); } catch (_) {}
+                prfOutputCopy = null;
+            }
+        }
+
+        const fallbackFn = typeof onPinFallback === 'function' ? onPinFallback : this.onPromptPinCallback;
+        if (typeof fallbackFn === 'function') {
+            await fallbackFn('unlock', '🔐 Inserisci il PIN per sbloccare il caveau:');
+        }
+        return false;
     }
 
-    return await new Promise((resolve) => {
-        const timeoutId = setTimeout(() => {
-            navigator.serviceWorker.removeEventListener('message', onMsg);
-            resolve({ success: false, fallbackToPin: true, error: "Timeout sblocco PRF" });
-        }, 5000);
+    /**
+     * 🔐📝 Registra e associa una credenziale WebAuthn PRF al caveau esistente
+     * (richiede il PIN corrente per derivare e ri-avvolgere la Master Key in sicurezza).
+     * Bonifica tutti i buffer sensibili in RAM al termine.
+     * @param {string} pinString - 🔑 PIN corrente del caveau per confermare l'associazione.
+     * @param {Object} [options={}] - ⚙️ Opzioni opzionali per WebAuthn (`userName`, `userDisplayName`, `rpName`).
+     * @returns {Promise<{success: boolean, error?: string}>}
+     */
+    async registerPrfCredential(pinString, options = {}) {
+        let pinBytes = null;
+        let prfSalt = null;
+        let challenge = null;
+        let credIdCopy = null;
+        let saltCopy = null;
+        let prfCopy = null;
 
-        const onMsg = (event) => {
-            if (event.origin !== window.location.origin) return;
-            if (event.data?.type === 'PRF_UNLOCK_RESULT') {
-                clearTimeout(timeoutId);
-                navigator.serviceWorker.removeEventListener('message', onMsg);
-                resolve({
-                    success: Boolean(event.data.success),
-                    fallbackToPin: event.data.fallbackToPin !== false,
-                    error: event.data.error || null
-                });
+        try {
+            if (!pinString || typeof pinString !== 'string') {
+                return { success: false, error: 'PIN obbligatorio per associare la credenziale PRF.' };
             }
-        };
 
-        navigator.serviceWorker.addEventListener('message', onMsg);
-        sw.postMessage({ type: 'UNLOCK_PRF', prfBuffer }, [prfBuffer]);
-    });
-}
+            const supported = await this.canUsePrf();
+            if (!supported) {
+                return { success: false, error: 'WebAuthn PRF non supportato in questo contesto o dispositivo.' };
+            }
 
+            const sw = navigator.serviceWorker?.controller;
+            if (!sw) {
+                return { success: false, error: 'Service Worker controller non attivo.' };
+            }
+
+            const enc = new TextEncoder();
+            pinBytes = enc.encode(pinString);
+            const pinBuffer = pinBytes.buffer.slice(0);
+
+            prfSalt = crypto.getRandomValues(new Uint8Array(32));
+            challenge = crypto.getRandomValues(new Uint8Array(32));
+            const userId = crypto.getRandomValues(new Uint8Array(16));
+
+            const credential = await navigator.credentials.create({
+                publicKey: {
+                    rp: {
+                        name: options.rpName || 'PANZER Vault',
+                        id: window.location.hostname
+                    },
+                    user: {
+                        id: userId,
+                        name: options.userName || 'operator@panzer.local',
+                        displayName: options.userDisplayName || 'Operatore Caveau'
+                    },
+                    challenge,
+                    pubKeyCredParams: [
+                        { type: 'public-key', alg: -7 },
+                        { type: 'public-key', alg: -257 }
+                    ],
+                    authenticatorSelection: {
+                        residentKey: 'preferred',
+                        userVerification: 'required'
+                    },
+                    extensions: {
+                        prf: {
+                            eval: {
+                                first: prfSalt
+                            }
+                        }
+                    }
+                }
+            });
+
+            challenge.fill(0);
+            userId.fill(0);
+
+            const extResults = credential?.getClientExtensionResults?.();
+            const firstPrf = extResults?.prf?.results?.first;
+
+            if (!credential?.rawId || !(firstPrf instanceof ArrayBuffer) || firstPrf.byteLength === 0) {
+                return {
+                    success: false,
+                    error: 'L\'authenticator non ha restituito il risultato PRF richiesto.'
+                };
+            }
+
+            credIdCopy = credential.rawId.slice(0);
+            saltCopy = prfSalt.buffer.slice(0);
+            prfCopy = firstPrf.slice(0);
+
+            const result = await new Promise((resolve) => {
+                const timeoutId = setTimeout(() => {
+                    navigator.serviceWorker.removeEventListener('message', onMsg);
+                    resolve({ success: false, error: 'Timeout registrazione PRF dal Service Worker.' });
+                }, 8000);
+
+                const onMsg = (event) => {
+                    if (event.origin !== window.location.origin) return;
+                    if (event.data?.type === 'PRF_REGISTER_RESULT') {
+                        clearTimeout(timeoutId);
+                        navigator.serviceWorker.removeEventListener('message', onMsg);
+                        resolve({
+                            success: Boolean(event.data.success),
+                            error: event.data.error || null
+                        });
+                    }
+                };
+
+                navigator.serviceWorker.addEventListener('message', onMsg);
+                sw.postMessage(
+                    {
+                        type: 'REGISTER_PRF',
+                        credentialIdBuffer: credIdCopy,
+                        prfSaltBuffer: saltCopy,
+                        prfBuffer: prfCopy,
+                        pinBuffer
+                    },
+                    [credIdCopy, saltCopy, prfCopy, pinBuffer]
+                );
+            });
+
+            credIdCopy = null;
+            saltCopy = null;
+            prfCopy = null;
+
+            return result;
+        } catch (err) {
+            return {
+                success: false,
+                error: err?.message || 'Registrazione WebAuthn PRF annullata o non riuscita.'
+            };
+        } finally {
+            try { if (pinBytes) pinBytes.fill(0); } catch (_) {}
+            try { if (prfSalt) prfSalt.fill(0); } catch (_) {}
+            try { if (challenge) challenge.fill(0); } catch (_) {}
+            try { if (credIdCopy instanceof ArrayBuffer) new Uint8Array(credIdCopy).fill(0); } catch (_) {}
+            try { if (saltCopy instanceof ArrayBuffer) new Uint8Array(saltCopy).fill(0); } catch (_) {}
+            try { if (prfCopy instanceof ArrayBuffer) new Uint8Array(prfCopy).fill(0); } catch (_) {}
+        }
+    }
 
     /**
      * 🛑 Rilascia tutte le risorse e i timer attivi del Vault Manager.

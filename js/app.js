@@ -1,7 +1,7 @@
 /**
  * ⚙️⚡ App Controller 
  * Dashboard PA & Gestione UI
- * v2.4.2.0
+ * v2.4.3.0
  *
  * * 👤 Autore: Valentino Aglianó
  * Perito Informatico / Idoneo ASMEL 2025
@@ -154,7 +154,12 @@ document.addEventListener('DOMContentLoaded', async () => {
             buttonText = 'Aggiorna PIN';
         } else {
             innerFields = `
-                <input type="password" id="pa-pin-1" placeholder="Inserisci PIN" maxlength="8" style="width: 100%; padding: 12px; box-sizing: border-box; background: #0f172a; border: 1px solid #64748b; color: #fff; font-size: 1.1rem; border-radius: 6px; text-align: center; letter-spacing: 4px; margin-bottom: 16px;">
+                <input type="password" id="pa-pin-1" placeholder="Inserisci PIN" maxlength="8" style="width: 100%; padding: 12px; box-sizing: border-box; background: #0f172a; border: 1px solid #64748b; color: #fff; font-size: 1.1rem; border-radius: 6px; text-align: center; letter-spacing: 4px; margin-bottom: 12px;">
+                <button type="button" id="pa-prf-unlock-btn" style="
+                    display: none; width: 100%; padding: 10px; margin-bottom: 14px;
+                    background: #0f172a; color: #38bdf8; border: 1px solid #38bdf8;
+                    border-radius: 6px; font-weight: 600; cursor: pointer; font-size: 0.95rem;
+                ">🔐🧬 Entra con Passkey / Biometria</button>
             `;
             buttonText = 'Sblocca Caveau';
         }
@@ -163,7 +168,7 @@ document.addEventListener('DOMContentLoaded', async () => {
             <div style="background: #1e293b; border: 1px solid #475569; padding: 30px; border-radius: 12px; max-width: 380px; width: 100%; text-align: center; box-shadow: 0 10px 25px rgba(0,0,0,0.5);">
                 <div style="font-size: 36px; margin-bottom: 12px;">🔐🪖</div>
                 <h3 style="margin-top: 0; color: #38bdf8; font-size: 1.2rem;">SICUREZZA BUNKER PA</h3>
-                <p style="font-size: 0.9rem; color: #cbd5e1; margin-bottom: 20px;">${messageText}</p>
+                <p id="pa-pin-modal-msg" style="font-size: 0.9rem; color: #cbd5e1; margin-bottom: 20px;">${messageText}</p>
                 ${innerFields}
                 <button id="pa-pin-action-btn" style="
                     width: 100%; padding: 12px; background: #2563eb; color: #fff; border: none; border-radius: 6px;
@@ -176,6 +181,42 @@ document.addEventListener('DOMContentLoaded', async () => {
         const btn = document.getElementById('pa-pin-action-btn');
         const pin1Input = document.getElementById('pa-pin-1');
         if (pin1Input) pin1Input.focus();
+
+        const prfBtn = document.getElementById('pa-prf-unlock-btn');
+        if (mode === 'unlock' && prfBtn && sdk && sdk.vaultManager && typeof sdk.vaultManager.canUsePrf === 'function') {
+            sdk.vaultManager.canUsePrf().then((supported) => {
+                if (supported && pinModal.style.display !== 'none') {
+                    prfBtn.style.display = 'block';
+                }
+            });
+
+            prfBtn.addEventListener('click', async () => {
+                if (!sdk || !sdk.vaultManager || typeof sdk.vaultManager.unlockVaultWithFallback !== 'function') return;
+                prfBtn.disabled = true;
+                const origText = prfBtn.textContent;
+                prfBtn.textContent = '⏳ Verifica Passkey / Biometria...';
+
+                try {
+                    const unlocked = await sdk.vaultManager.unlockVaultWithFallback(() => {});
+                    if (unlocked) {
+                        pinModal.style.display = 'none';
+                        logToTerminal('success', '🔓🧬 Caveau sbloccato tramite WebAuthn PRF.');
+                    } else {
+                        prfBtn.disabled = false;
+                        prfBtn.textContent = origText;
+                        const msgEl = document.getElementById('pa-pin-modal-msg');
+                        if (msgEl) msgEl.textContent = '🔐 Passkey non disponibile o annullata: inserisci il PIN.';
+                        logToTerminal('info', '🔐 Fallback al PIN: sblocco PRF non completato.');
+                        if (pin1Input) pin1Input.focus();
+                    }
+                } catch (_) {
+                    prfBtn.disabled = false;
+                    prfBtn.textContent = origText;
+                    logToTerminal('warn', '⚠️ Fallback al PIN durante sblocco PRF.');
+                    if (pin1Input) pin1Input.focus();
+                }
+            });
+        }
 
         const handleAction = () => {
             if (!sdk || !sdk.vaultManager) return;
@@ -193,24 +234,82 @@ document.addEventListener('DOMContentLoaded', async () => {
                 p2El.value = '';
 
                 if (mode === 'setup') {
-                    sdk.vaultManager.submitPin(p1Val, 'setup', (res) => {
-                    if (res && res.success) {
-                        pinModal.style.display = 'none';
-                        logToTerminal('success', '🔓✅ Caveau sbloccato correttamente.');
-                    } else {
-                        if (res && (res.wiped || (res.attemptsLeft === 0) || (res.error && res.error.toLowerCase().includes("rimasti 0")))) {
-                            alert("🚨💣 3 tentativi falliti! La stiva è stata distrutta per sicurezza.");
-                            // 🧹 Pulizia totale dello storage client
-                            localStorage.removeItem('panzer_has_ever_synced');
-                            localStorage.removeItem('panzer_vault_synced');
-                            sessionStorage.removeItem('panzer_active_session');
-                            window.location.reload();
+                    sdk.vaultManager.submitPin(p1Val, 'setup', async (res) => {
+                        if (res && res.success) {
+                            logToTerminal('success', '🔓✅ Caveau creato e sbloccato correttamente.');
+
+                            const canPrf = sdk.vaultManager && typeof sdk.vaultManager.canUsePrf === 'function'
+                                ? await sdk.vaultManager.canUsePrf()
+                                : false;
+
+                            if (canPrf && typeof sdk.vaultManager.registerPrfCredential === 'function') {
+                                pinModal.innerHTML = `
+                                    <div style="background: #1e293b; border: 1px solid #475569; padding: 30px; border-radius: 12px; max-width: 380px; width: 100%; text-align: center; box-shadow: 0 10px 25px rgba(0,0,0,0.5);">
+                                        <div style="font-size: 36px; margin-bottom: 12px;">🧬🔐</div>
+                                        <h3 style="margin-top: 0; color: #38bdf8; font-size: 1.2rem;">ACCESSO RAPIDO PASSKEY</h3>
+                                        <p id="pa-prf-setup-msg" style="font-size: 0.9rem; color: #cbd5e1; margin-bottom: 20px;">
+                                            PIN impostato. Vuoi associare ora una Passkey / Biometria per sbloccare il caveau senza PIN?
+                                        </p>
+                                        <button type="button" id="pa-prf-register-btn" style="
+                                            width: 100%; padding: 12px; margin-bottom: 10px; background: #2563eb; color: #fff;
+                                            border: none; border-radius: 6px; font-weight: bold; cursor: pointer; font-size: 1rem;
+                                        ">🔐🧬 Associa Passkey / Biometria</button>
+                                        <button type="button" id="pa-prf-skip-btn" style="
+                                            width: 100%; padding: 10px; background: #0f172a; color: #cbd5e1;
+                                            border: 1px solid #475569; border-radius: 6px; cursor: pointer; font-size: 0.9rem;
+                                        ">Salta (usa solo PIN)</button>
+                                    </div>
+                                `;
+
+                                const regBtn = document.getElementById('pa-prf-register-btn');
+                                const skipBtn = document.getElementById('pa-prf-skip-btn');
+                                const setupMsg = document.getElementById('pa-prf-setup-msg');
+
+                                if (skipBtn) {
+                                    skipBtn.addEventListener('click', () => {
+                                        pinModal.style.display = 'none';
+                                    });
+                                }
+
+                                if (regBtn) {
+                                    regBtn.addEventListener('click', async () => {
+                                        regBtn.disabled = true;
+                                        if (skipBtn) skipBtn.disabled = true;
+                                        const origRegText = regBtn.textContent;
+                                        regBtn.textContent = '⏳ Registrazione Passkey in corso...';
+
+                                        const regRes = await sdk.vaultManager.registerPrfCredential(p1Val);
+                                        if (regRes && regRes.success) {
+                                            logToTerminal('success', '🔐🧬 Passkey PRF associata al caveau.');
+                                            pinModal.style.display = 'none';
+                                        } else {
+                                            regBtn.disabled = false;
+                                            if (skipBtn) skipBtn.disabled = false;
+                                            regBtn.textContent = origRegText;
+                                            if (setupMsg) {
+                                                setupMsg.textContent = `⚠️ ${regRes?.error || 'Associazione non completata.'} Puoi riprovare o usare solo il PIN.`;
+                                            }
+                                            logToTerminal('warn', `⚠️ Associazione PRF non completata: ${regRes?.error || 'annullata'}`);
+                                        }
+                                    });
+                                }
+                            } else {
+                                pinModal.style.display = 'none';
+                            }
                         } else {
-                            alert(`❌🔒 ${res?.error || "PIN errato. Riprova."}`);
-                            if (pin1Input) pin1Input.focus();
+                            if (res && (res.wiped || (res.attemptsLeft === 0) || (res.error && res.error.toLowerCase().includes("rimasti 0")))) {
+                                alert("🚨💣 3 tentativi falliti! La stiva è stata distrutta per sicurezza.");
+                                // 🧹 Pulizia totale dello storage client
+                                localStorage.removeItem('panzer_has_ever_synced');
+                                localStorage.removeItem('panzer_vault_synced');
+                                sessionStorage.removeItem('panzer_active_session');
+                                window.location.reload();
+                            } else {
+                                alert(`❌🔒 ${res?.error || "PIN errato. Riprova."}`);
+                                if (pin1Input) pin1Input.focus();
+                            }
                         }
-                    }
-                });
+                    });
                 } else {
                     const oldEl = document.getElementById('pa-pin-old');
                     const oldVal = oldEl.value.trim();
@@ -725,6 +824,42 @@ document.addEventListener('DOMContentLoaded', async () => {
         btnChangePin.addEventListener('click', () => {
             if (typeof showPinModal === 'function') {
                 showPinModal('change', '🔑 Modifica il PIN di sicurezza del Caveau:');
+            }
+        });
+    }
+    
+    // 🔐🧬 Tasto esplicito Associa Passkey PRF.
+    const btnRegisterPrf = document.getElementById('PA-btn-register-prf');
+    if (btnRegisterPrf && sdk && sdk.vaultManager && typeof sdk.vaultManager.registerPrfCredential === 'function') {
+        if (typeof sdk.vaultManager.canUsePrf === 'function') {
+            sdk.vaultManager.canUsePrf().then((supported) => {
+                if (supported) {
+                    btnRegisterPrf.style.display = 'inline-block';
+                }
+            });
+        }
+
+        btnRegisterPrf.addEventListener('click', async () => {
+            const pinVal = prompt('🔐 Inserisci il PIN corrente del caveau per associare Passkey / Biometria:');
+            if (!pinVal || pinVal.trim().length < 4) return;
+
+            btnRegisterPrf.disabled = true;
+            const origLabel = btnRegisterPrf.textContent;
+            btnRegisterPrf.textContent = '⏳ Associazione...';
+
+            try {
+                const res = await sdk.vaultManager.registerPrfCredential(pinVal.trim());
+                if (res && res.success) {
+                    logToTerminal('success', '🔐🧬 Passkey PRF associata correttamente al caveau.');
+                    alert('✅ Passkey / Biometria associata! Al prossimo sblocco potrai usarla dal modale PIN.');
+                } else {
+                    const errMsg = res?.error || 'Associazione annullata o non riuscita.';
+                    logToTerminal('warn', `⚠️ Associazione Passkey PRF: ${errMsg}`);
+                    alert(`⚠️ ${errMsg}`);
+                }
+            } finally {
+                btnRegisterPrf.disabled = false;
+                btnRegisterPrf.textContent = origLabel;
             }
         });
     }
