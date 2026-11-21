@@ -1,7 +1,7 @@
 /**
  * ⚙️⚡ App Controller 
  * Dashboard PA & Gestione UI
- * v2.4.3.0
+ * v2.4.3.1
  *
  * * 👤 Autore: Valentino Aglianó
  * Perito Informatico / Idoneo ASMEL 2025
@@ -120,8 +120,8 @@ document.addEventListener('DOMContentLoaded', async () => {
         statusBadge.textContent = stateText;
         statusBadge.className = `badge-status ${badgeClass}`;
     };
-
-    // 🔏 Modale Grafico Unificato per Gestione PIN (Setup, Sblocco, Cambio)
+    
+    // 🔏 Modale Grafico Unificato per Gestione PIN (Setup, Sblocco, Cambio, Associa PRF)
     const showPinModal = (mode = 'unlock', messageText = 'Inserisci il PIN di sblocco:') => {
         let pinModal = document.getElementById('PA-pin-manager-modal');
         if (!pinModal) {
@@ -152,6 +152,15 @@ document.addEventListener('DOMContentLoaded', async () => {
                 <input type="password" id="pa-pin-2" placeholder="Conferma Nuovo PIN" maxlength="8" style="width: 100%; padding: 12px; box-sizing: border-box; background: #0f172a; border: 1px solid #64748b; color: #fff; font-size: 1.1rem; border-radius: 6px; text-align: center; letter-spacing: 4px; margin-bottom: 16px;">
             `;
             buttonText = 'Aggiorna PIN';
+        } else if (mode === 'register-prf') {
+            innerFields = `
+                <input type="password" id="pa-pin-1" placeholder="Inserisci PIN corrente" maxlength="8" style="width: 100%; padding: 12px; box-sizing: border-box; background: #0f172a; border: 1px solid #64748b; color: #fff; font-size: 1.1rem; border-radius: 6px; text-align: center; letter-spacing: 4px; margin-bottom: 12px;">
+                <button type="button" id="pa-pin-cancel-btn" style="
+                    width: 100%; padding: 10px; margin-bottom: 12px; background: #0f172a; color: #cbd5e1;
+                    border: 1px solid #475569; border-radius: 6px; cursor: pointer; font-size: 0.9rem;
+                ">Annulla</button>
+            `;
+            buttonText = '🧬 Associa Passkey / Biometria';
         } else {
             innerFields = `
                 <input type="password" id="pa-pin-1" placeholder="Inserisci PIN" maxlength="8" style="width: 100%; padding: 12px; box-sizing: border-box; background: #0f172a; border: 1px solid #64748b; color: #fff; font-size: 1.1rem; border-radius: 6px; text-align: center; letter-spacing: 4px; margin-bottom: 12px;">
@@ -181,6 +190,13 @@ document.addEventListener('DOMContentLoaded', async () => {
         const btn = document.getElementById('pa-pin-action-btn');
         const pin1Input = document.getElementById('pa-pin-1');
         if (pin1Input) pin1Input.focus();
+
+        const cancelBtn = document.getElementById('pa-pin-cancel-btn');
+        if (cancelBtn) {
+            cancelBtn.addEventListener('click', () => {
+                pinModal.style.display = 'none';
+            });
+        }
 
         const prfBtn = document.getElementById('pa-prf-unlock-btn');
         if (mode === 'unlock' && prfBtn && sdk && sdk.vaultManager && typeof sdk.vaultManager.canUsePrf === 'function') {
@@ -313,7 +329,7 @@ document.addEventListener('DOMContentLoaded', async () => {
                 } else {
                     const oldEl = document.getElementById('pa-pin-old');
                     const oldVal = oldEl.value.trim();
-                    
+
                     // 🛑 CONTROLLO: Il nuovo PIN non può essere identico al vecchio
                     if (oldVal === p1Val) {
                         alert("⚠️ Il nuovo PIN non può essere identico al vecchio PIN. Scegline uno diverso.");
@@ -335,6 +351,30 @@ document.addEventListener('DOMContentLoaded', async () => {
                         }
                     });
                 }
+            } else if (mode === 'register-prf') {
+                const pinVal = pin1Input.value.trim();
+                if (pinVal.length < 4) { alert("⚠️🔢 Inserisci un PIN valido (min 4 cifre)."); return; }
+                pin1Input.value = '';
+
+                btn.disabled = true;
+                if (cancelBtn) cancelBtn.disabled = true;
+                const origBtnText = btn.textContent;
+                btn.textContent = '⏳ Registrazione Passkey...';
+
+                sdk.vaultManager.registerPrfCredential(pinVal).then((res) => {
+                    btn.disabled = false;
+                    if (cancelBtn) cancelBtn.disabled = false;
+                    btn.textContent = origBtnText;
+                    if (res && res.success) {
+                        pinModal.style.display = 'none';
+                        logToTerminal('success', '🔐🧬 Passkey PRF associata correttamente al caveau.');
+                    } else {
+                        const errMsg = res?.error || 'Associazione annullata o non riuscita.';
+                        logToTerminal('warn', `⚠️ Associazione Passkey PRF: ${errMsg}`);
+                        alert(`⚠️ ${errMsg}`);
+                        if (pin1Input) pin1Input.focus();
+                    }
+                });
             } else {
                 const pinVal = pin1Input.value.trim();
                 if (pinVal.length < 4) { alert("⚠️🔢 Inserisci un PIN valido (min 4 cifre)."); return; }
@@ -839,28 +879,8 @@ document.addEventListener('DOMContentLoaded', async () => {
             });
         }
 
-        btnRegisterPrf.addEventListener('click', async () => {
-            const pinVal = prompt('🔐 Inserisci il PIN corrente del caveau per associare Passkey / Biometria:');
-            if (!pinVal || pinVal.trim().length < 4) return;
-
-            btnRegisterPrf.disabled = true;
-            const origLabel = btnRegisterPrf.textContent;
-            btnRegisterPrf.textContent = '⏳ Associazione...';
-
-            try {
-                const res = await sdk.vaultManager.registerPrfCredential(pinVal.trim());
-                if (res && res.success) {
-                    logToTerminal('success', '🔐🧬 Passkey PRF associata correttamente al caveau.');
-                    alert('✅ Passkey / Biometria associata! Al prossimo sblocco potrai usarla dal modale PIN.');
-                } else {
-                    const errMsg = res?.error || 'Associazione annullata o non riuscita.';
-                    logToTerminal('warn', `⚠️ Associazione Passkey PRF: ${errMsg}`);
-                    alert(`⚠️ ${errMsg}`);
-                }
-            } finally {
-                btnRegisterPrf.disabled = false;
-                btnRegisterPrf.textContent = origLabel;
-            }
+        btnRegisterPrf.addEventListener('click', () => {
+            showPinModal('register-prf', '🔐🧬 Inserisci il PIN corrente per associare Passkey / Biometria:');
         });
     }
     

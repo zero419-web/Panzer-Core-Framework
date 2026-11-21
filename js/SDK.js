@@ -1,5 +1,5 @@
 /**
- * ⚙️🪖🛡️ PanzerSDK - v2.3.8.0
+ * ⚙️🪖🛡️ PanzerSDK - v2.3.8.1
  * 
  * * 👤 Autore: Valentino Aglianó
  * Perito Informatico / Idoneo ASMEL 2025
@@ -557,6 +557,7 @@ export class PanzerVaultManager {
                         { type: 'public-key', alg: -257 }
                     ],
                     authenticatorSelection: {
+                        authenticatorAttachment: 'platform',
                         residentKey: 'preferred',
                         userVerification: 'required'
                     },
