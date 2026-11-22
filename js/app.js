@@ -450,6 +450,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         if (!activeMimeType) return;
         const posted = postToSandboxFrame({
             type: 'PANZER_ZOOM_VIEWER',
+            nonce: activeSandboxNonce,
             zoom: currentZoom
         });
         if (!posted) {

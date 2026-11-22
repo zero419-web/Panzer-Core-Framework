@@ -1,6 +1,8 @@
 /**
  * 🌀🪖 Panzer-Core-Framework — Visore Isolato per Documenti PA (js/sandbox_viewer.js)
  *
+ * v1.0.0.2
+ * 
  * 🛡️ Modulo client zero-dipendenze eseguito all'interno di un contenitore <iframe>
  * isolato (sandbox="allow-scripts", origine opaca) per la visualizzazione in sola
  * lettura di atti, immagini e documenti convertiti in memoria locale.
@@ -62,48 +64,93 @@
         currentUrls = [];
     };
 
-    // 🔭 Applica il livello di ingrandimento (zoom) e abilita/disabilita lo scorrimento a trascinamento.
+    // 🔭 Applica il livello di ingrandimento (zoom) in modo reale e misurabile sia su desktop che su mobile.
     const applyZoomState = (zoom) => {
         currentZoomVal = isValidZoom(zoom) ? zoom : 1.0;
-        const isZoomedMode = currentZoomVal > 1.0;
-        const pct = `${currentZoomVal * 100}%`;
+        const isZoomedMode = currentZoomVal > 1.001;
+        const baseWidth = (scroller && scroller.clientWidth > 0)
+            ? scroller.clientWidth
+            : (window.innerWidth || 360);
+        const targetPx = Math.round(baseWidth * currentZoomVal);
 
         if (!root) return;
 
+        const imgStage = root.querySelector('.img-stage');
         const imgContainer = root.querySelector('.img-container');
-        if (imgContainer) {
+        if (imgStage && imgContainer) {
             imgContainer.classList.toggle('zoomed', isZoomedMode);
+            if (isZoomedMode) {
+                imgContainer.style.display = 'block';
+                imgContainer.style.width = `${Math.max(baseWidth, targetPx + 24)}px`;
+                imgContainer.style.minWidth = `${Math.max(baseWidth, targetPx + 24)}px`;
+            } else {
+                imgContainer.style.display = 'flex';
+                imgContainer.style.width = '100%';
+                imgContainer.style.minWidth = '100%';
+            }
+
             const img = imgContainer.querySelector('img');
-            if (img) img.style.width = pct;
+            if (img) {
+                img.style.transition = 'none';
+                img.style.maxWidth = 'none';
+                img.style.height = 'auto';
+                if (isZoomedMode) {
+                    img.style.width = `${targetPx}px`;
+                    img.style.minWidth = `${targetPx}px`;
+                } else {
+                    img.style.width = '100%';
+                    img.style.minWidth = '0';
+                }
+            }
         }
 
         const pdfWrapper = root.querySelector('#pdf-wrapper');
         if (pdfWrapper) {
             pdfWrapper.classList.toggle('zoomed', isZoomedMode);
+            if (isZoomedMode) {
+                pdfWrapper.style.width = `${Math.max(baseWidth, targetPx + 16)}px`;
+                pdfWrapper.style.minWidth = `${Math.max(baseWidth, targetPx + 16)}px`;
+                pdfWrapper.style.alignItems = 'flex-start';
+            } else {
+                pdfWrapper.style.width = '100%';
+                pdfWrapper.style.minWidth = '100%';
+                pdfWrapper.style.alignItems = 'center';
+            }
+
             pdfWrapper.querySelectorAll('.pdf-page').forEach((el) => {
-                el.style.width = pct;
+                el.style.transition = 'none';
+                el.style.maxWidth = 'none';
+                el.style.height = 'auto';
+                if (isZoomedMode) {
+                    el.style.width = `${targetPx}px`;
+                    el.style.minWidth = `${targetPx}px`;
+                } else {
+                    el.style.width = '100%';
+                    el.style.minWidth = '0';
+                }
             });
         }
 
         const objEl = root.querySelector('.generic-stage object');
         if (objEl) {
-            objEl.style.width = pct;
-            objEl.style.height = pct;
+            objEl.style.transition = 'none';
+            objEl.style.width = `${targetPx}px`;
+            objEl.style.height = `${Math.round((scroller && scroller.clientHeight ? scroller.clientHeight : 600) * currentZoomVal)}px`;
         }
 
-        if (isZoomedMode) {
-            document.body.style.touchAction = 'none';
-            document.body.style.cursor = 'grab';
-        } else {
-            document.body.style.touchAction = '';
-            document.body.style.cursor = 'default';
+        if (scroller) {
+            scroller.style.overflow = 'auto';
+            scroller.style.webkitOverflowScrolling = 'touch';
+            scroller.style.touchAction = 'auto';
         }
+        document.body.style.touchAction = 'auto';
+        document.body.style.cursor = isZoomedMode ? 'grab' : 'default';
     };
 
-    // 🖐️ Gestione del panning (scorrimento tramite puntatore/touch) quando il documento è ingrandito.
+    // 🖐️ Gestione del panning (trascinamento fluido su mouse e touch quando zoom > 1.0).
     if (scroller) {
         scroller.addEventListener('pointerdown', (e) => {
-            if (currentZoomVal <= 1.0) return;
+            if (currentZoomVal <= 1.001) return;
             if (e.pointerType === 'mouse' && e.button !== 0) return;
             isDragging = true;
             startX = e.clientX;
@@ -111,28 +158,20 @@
             startScrollLeft = scroller.scrollLeft;
             startScrollTop = scroller.scrollTop;
             document.body.style.cursor = 'grabbing';
-            try {
-                scroller.setPointerCapture(e.pointerId);
-            } catch (_) {}
         }, { passive: true });
 
         scroller.addEventListener('pointermove', (e) => {
-            if (!isDragging || currentZoomVal <= 1.0) return;
+            if (!isDragging || currentZoomVal <= 1.001) return;
             const dx = e.clientX - startX;
             const dy = e.clientY - startY;
             scroller.scrollLeft = startScrollLeft - dx;
             scroller.scrollTop = startScrollTop - dy;
         }, { passive: true });
 
-        const stopDrag = (e) => {
+        const stopDrag = () => {
             if (!isDragging) return;
             isDragging = false;
-            document.body.style.cursor = currentZoomVal > 1.0 ? 'grab' : 'default';
-            if (e && typeof e.pointerId === 'number') {
-                try {
-                    scroller.releasePointerCapture(e.pointerId);
-                } catch (_) {}
-            }
+            document.body.style.cursor = currentZoomVal > 1.001 ? 'grab' : 'default';
         };
 
         scroller.addEventListener('pointerup', stopDrag, { passive: true });
