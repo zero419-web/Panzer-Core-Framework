@@ -1,7 +1,7 @@
 /**
  * ⚙️⚡ App Controller 
  * Dashboard PA & Gestione UI
- * v2.4.3.1
+ * v2.4.3.2
  *
  * * 👤 Autore: Valentino Aglianó
  * Perito Informatico / Idoneo ASMEL 2025
@@ -96,8 +96,9 @@ document.addEventListener('DOMContentLoaded', async () => {
     let totalCombinedCount = 0;
     
     let activeMimeType = null;
-    let activeImagesHtmlList = null;
-    let activeFallbackDataUrl = null;
+    let activePageObjectUrls = [];
+    let activeFallbackObjectUrl = null;
+
     
     const logToTerminal = (level, text) => {
         const timeString = new Date().toLocaleTimeString('it-IT', { hour12: false });
@@ -431,7 +432,7 @@ document.addEventListener('DOMContentLoaded', async () => {
 
     // 🔭 Zoom Universale...
     const applyZoom = () => {
-        if (!activeRawBuffer) return;
+        if (!activeFallbackObjectUrl && (!activePageObjectUrls || activePageObjectUrls.length === 0)) return;
         renderAndMountSandbox();
     };
 
@@ -456,6 +457,59 @@ document.addEventListener('DOMContentLoaded', async () => {
     // 🖼️📄 Generatore del visore protetto.
     const renderAndMountSandbox = () => {
         let renderedContentHtml = '';
+        const isZoomed = currentZoom > 1.0;
+        const panActive = isZoomed ? 'true' : 'false';
+
+        const panScript = `
+            <script>
+            (function() {
+                const scroller = document.scrollingElement || document.documentElement;
+                const isZoomedMode = ${panActive};
+                let isDragging = false;
+                let startX = 0;
+                let startY = 0;
+                let startScrollLeft = 0;
+                let startScrollTop = 0;
+
+                if (isZoomedMode) {
+                    document.body.style.touchAction = 'none';
+                    document.body.style.cursor = 'grab';
+                }
+
+                scroller.addEventListener('pointerdown', (e) => {
+                    if (!isZoomedMode) return;
+                    if (e.pointerType === 'mouse' && e.button !== 0) return;
+                    isDragging = true;
+                    startX = e.clientX;
+                    startY = e.clientY;
+                    startScrollLeft = scroller.scrollLeft;
+                    startScrollTop = scroller.scrollTop;
+                    document.body.style.cursor = 'grabbing';
+                    try { scroller.setPointerCapture(e.pointerId); } catch (_) {}
+                }, { passive: true });
+
+                scroller.addEventListener('pointermove', (e) => {
+                    if (!isDragging || !isZoomedMode) return;
+                    const dx = e.clientX - startX;
+                    const dy = e.clientY - startY;
+                    scroller.scrollLeft = startScrollLeft - dx;
+                    scroller.scrollTop = startScrollTop - dy;
+                }, { passive: true });
+
+                const stopDrag = (e) => {
+                    if (!isDragging) return;
+                    isDragging = false;
+                    document.body.style.cursor = isZoomedMode ? 'grab' : 'default';
+                    if (e && typeof e.pointerId === 'number') {
+                        try { scroller.releasePointerCapture(e.pointerId); } catch (_) {}
+                    }
+                };
+
+                scroller.addEventListener('pointerup', stopDrag, { passive: true });
+                scroller.addEventListener('pointercancel', stopDrag, { passive: true });
+            })();
+            </script>
+        `;
 
         if (activeMimeType && activeMimeType.startsWith('image/')) {
             renderedContentHtml = `
@@ -467,16 +521,21 @@ document.addEventListener('DOMContentLoaded', async () => {
                     <style>
                         * { margin:0; padding:0; box-sizing:border-box; user-select:none; -webkit-user-select:none; }
                         body, html { width:100%; height:100%; background:#000; overflow:auto; }
-                        .container { min-width:100%; min-height:100%; display:flex; justify-content:center; align-items:center; padding:12px; }
+                        .container { display:inline-flex; min-width:100%; min-height:100%; justify-content:${isZoomed ? 'flex-start' : 'center'}; align-items:${isZoomed ? 'flex-start' : 'center'}; padding:12px; }
                         img { width: ${currentZoom * 100}%; max-width: none; height: auto; object-fit: contain; pointer-events: none; -webkit-user-drag: none; display: block; transition: width 0.15s ease; }
                     </style>
                 </head>
                 <body oncontextmenu="return false;" ondragstart="return false;" onselectstart="return false;">
-                    <div class="container"><img src="${activeFallbackDataUrl}" alt="Immagine protetta" /></div>
+                    <div class="container"><img src="${activeFallbackObjectUrl}" alt="Immagine protetta" /></div>
+                    ${panScript}
                 </body>
                 </html>
             `;
         } else if (activeMimeType && activeMimeType.includes('pdf')) {
+            const pagesHtml = (activePageObjectUrls || [])
+                .map((pageUrl, idx) => `<img class="pdf-page" src="${pageUrl}" alt="Pagina ${idx + 1}" />`)
+                .join('\n');
+
             renderedContentHtml = `
                 <!DOCTYPE html>
                 <html>
@@ -486,14 +545,15 @@ document.addEventListener('DOMContentLoaded', async () => {
                     <style>
                         * { margin:0; padding:0; box-sizing:border-box; user-select:none; -webkit-user-select:none; }
                         body, html { width:100%; height:100%; background:#0f172a; overflow:auto; -webkit-overflow-scrolling:touch; }
-                        #pdf-wrapper { display:flex; flex-direction:column; align-items:center; width:100%; padding:8px; gap:6px; }
-                        .pdf-page { width: ${currentZoom * 100}%; height: auto; background: #fff; pointer-events: none; -webkit-user-drag: none; display: block; transition: width 0.15s ease; }
+                        #pdf-wrapper { display:flex; flex-direction:column; align-items:${isZoomed ? 'flex-start' : 'center'}; width:${isZoomed ? 'max-content' : '100%'}; min-width:100%; padding:8px; gap:6px; }
+                        .pdf-page { width: ${currentZoom * 100}%; max-width: none; height: auto; background: #fff; pointer-events: none; -webkit-user-drag: none; display: block; transition: width 0.15s ease; }
                     </style>
                 </head>
                 <body oncontextmenu="return false;" ondragstart="return false;" onselectstart="return false;">
                     <div id="pdf-wrapper">
-                        ${activeImagesHtmlList}
+                        ${pagesHtml}
                     </div>
+                    ${panScript}
                 </body>
                 </html>
             `;
@@ -511,7 +571,7 @@ document.addEventListener('DOMContentLoaded', async () => {
                     </style>
                 </head>
                 <body>
-                    <object data="${activeFallbackDataUrl}" type="${activeMimeType}" width="100%" height="100%"></object>
+                    <object data="${activeFallbackObjectUrl}" type="${activeMimeType}" width="100%" height="100%"></object>
                 </body>
                 </html>
             `;
@@ -544,6 +604,13 @@ document.addEventListener('DOMContentLoaded', async () => {
 
             if (activeObjectUrl) { URL.revokeObjectURL(activeObjectUrl); activeObjectUrl = null; }
             if (activeViewerBlobUrl) { URL.revokeObjectURL(activeViewerBlobUrl); activeViewerBlobUrl = null; }
+            if (activeFallbackObjectUrl) { URL.revokeObjectURL(activeFallbackObjectUrl); activeFallbackObjectUrl = null; }
+            if (Array.isArray(activePageObjectUrls) && activePageObjectUrls.length > 0) {
+                for (const u of activePageObjectUrls) {
+                    try { URL.revokeObjectURL(u); } catch (_) {}
+                }
+                activePageObjectUrls = [];
+            }
 
             const loadingHtml = `
                 <!DOCTYPE html>
@@ -576,17 +643,12 @@ document.addEventListener('DOMContentLoaded', async () => {
             const rawMime = response.headers.get('Content-Type') || 'application/octet-stream';
             activeMimeType = CoreUtils.detectMimeType(url, rawMime);
 
+            activePageObjectUrls = [];
+            activeFallbackObjectUrl = null;
+
             if (activeMimeType.startsWith('image/')) {
-                const bytes = new Uint8Array(activeRawBuffer);
-                let binary = '';
-                const chunkSize = 8192;
-                for (let i = 0; i < bytes.length; i += chunkSize) {
-                    const chunk = bytes.subarray(i, i + chunkSize);
-                    binary += String.fromCharCode.apply(null, chunk);
-                }
-                const base64Data = btoa(binary);
-                activeFallbackDataUrl = `data:${activeMimeType};base64,${base64Data}`;
-                activeImagesHtmlList = null;
+                const imgBlob = new Blob([activeRawBuffer], { type: activeMimeType });
+                activeFallbackObjectUrl = URL.createObjectURL(imgBlob);
 
             } else if (activeMimeType.includes('pdf')) {
                 if (typeof pdfjsLib === 'undefined') {
@@ -614,13 +676,12 @@ document.addEventListener('DOMContentLoaded', async () => {
 
                 const pdfDoc = await loadingTask.promise;
                 logToTerminal('vault', `✅🔎 PDF - Pagine totali: ${pdfDoc.numPages}`);
-                
-                let rawImagesHtml = '';
+
                 for (let pageNum = 1; pageNum <= pdfDoc.numPages; pageNum++) {
                     const page = await pdfDoc.getPage(pageNum);
                     const scale = window.devicePixelRatio > 1 ? 1.5 : 1.2;
                     const viewport = page.getViewport({ scale: scale });
-                    
+
                     const canvas = document.createElement('canvas');
                     const context = canvas.getContext('2d');
                     canvas.height = viewport.height;
@@ -631,24 +692,21 @@ document.addEventListener('DOMContentLoaded', async () => {
                         viewport: viewport
                     }).promise;
 
-                    const pageDataUrl = canvas.toDataURL('image/png');
-                    rawImagesHtml += `<img src="${pageDataUrl}" alt="Pagina ${pageNum}" />\n`;
-                }
+                    const pageBlob = await new Promise((resolve) => {
+                        canvas.toBlob((blob) => resolve(blob), 'image/png');
+                    });
 
-                activeImagesHtmlList = rawImagesHtml.replace(/<img /g, '<img class="pdf-page" ');
-                activeFallbackDataUrl = null;
+                    if (pageBlob) {
+                        activePageObjectUrls.push(URL.createObjectURL(pageBlob));
+                    }
+
+                    canvas.width = 0;
+                    canvas.height = 0;
+                }
 
             } else {
-                const bytes = new Uint8Array(activeRawBuffer);
-                let binary = '';
-                const chunkSize = 8192;
-                for (let i = 0; i < bytes.length; i += chunkSize) {
-                    const chunk = bytes.subarray(i, i + chunkSize);
-                    binary += String.fromCharCode.apply(null, chunk);
-                }
-                const base64Data = btoa(binary);
-                activeFallbackDataUrl = `data:${activeMimeType};base64,${base64Data}`;
-                activeImagesHtmlList = null;
+                const genericBlob = new Blob([activeRawBuffer], { type: activeMimeType });
+                activeFallbackObjectUrl = URL.createObjectURL(genericBlob);
             }
 
             renderAndMountSandbox();
@@ -671,7 +729,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         }
     };
 
-    // ️🔎🔒 Chiusura Visore.
+    // ️🔎🔒 Chiusura Visore e bonifica immediata.
     const closeSandbox = () => {
         sandboxModal.classList.remove('active');
         sandboxFrame.src = 'about:blank';
@@ -684,6 +742,17 @@ document.addEventListener('DOMContentLoaded', async () => {
             URL.revokeObjectURL(activeObjectUrl);
             activeObjectUrl = null;
         }
+        if (activeFallbackObjectUrl) {
+            URL.revokeObjectURL(activeFallbackObjectUrl);
+            activeFallbackObjectUrl = null;
+        }
+        if (Array.isArray(activePageObjectUrls) && activePageObjectUrls.length > 0) {
+            for (const url of activePageObjectUrls) {
+                try { URL.revokeObjectURL(url); } catch (_) {}
+            }
+            activePageObjectUrls = [];
+        }
+
         if (activeRawBuffer) {
             try {
                 if (!activeRawBuffer.detached && activeRawBuffer.byteLength > 0) {
@@ -698,6 +767,9 @@ document.addEventListener('DOMContentLoaded', async () => {
             }
             activeRawBuffer = null;
         }
+
+        activeMimeType = null;
+        currentZoom = 1.0;
 
         logToTerminal('info', '🔎🔒 Visore protetto chiuso. ✅');
     };
