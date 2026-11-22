@@ -1,7 +1,7 @@
 /**
  * ⚙️⚡ App Controller 
  * Dashboard PA & Gestione UI
- * v2.4.3.2
+ * v2.4.3.3
  *
  * * 👤 Autore: Valentino Aglianó
  * Perito Informatico / Idoneo ASMEL 2025
@@ -98,7 +98,8 @@ document.addEventListener('DOMContentLoaded', async () => {
     let activeMimeType = null;
     let activePageObjectUrls = [];
     let activeFallbackObjectUrl = null;
-
+    let activePageBlobs = [];
+    let activeSandboxNonce = null;
     
     const logToTerminal = (level, text) => {
         const timeString = new Date().toLocaleTimeString('it-IT', { hour12: false });
@@ -431,9 +432,28 @@ document.addEventListener('DOMContentLoaded', async () => {
     });
 
     // 🔭 Zoom Universale...
+    const postToSandboxFrame = (payload) => {
+        if (!sandboxFrame || !sandboxFrame.contentWindow || !activeSandboxNonce) return false;
+        try {
+            sandboxFrame.contentWindow.postMessage({
+                ...payload,
+                nonce: activeSandboxNonce
+            }, '*');
+            return true;
+        } catch (_) {
+            return false;
+        }
+    };
+
     const applyZoom = () => {
-        if (!activeFallbackObjectUrl && (!activePageObjectUrls || activePageObjectUrls.length === 0)) return;
-        renderAndMountSandbox();
+        if (!activeMimeType) return;
+        const posted = postToSandboxFrame({
+            type: 'PANZER_ZOOM_VIEWER',
+            zoom: currentZoom
+        });
+        if (!posted) {
+            renderAndMountSandbox();
+        }
     };
 
     if (btnZoomIn) {
@@ -454,145 +474,266 @@ document.addEventListener('DOMContentLoaded', async () => {
         });
     }
 
-    // 🖼️📄 Generatore del visore protetto.
-    const renderAndMountSandbox = () => {
-        let renderedContentHtml = '';
-        const isZoomed = currentZoom > 1.0;
-        const panActive = isZoomed ? 'true' : 'false';
+    // 🖼️📄 Generatore del visore protetto (origine opaca 'null', canale blindato da nonce e validazione payload).
+    const renderAndMountSandbox = async () => {
+        activeSandboxNonce = (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function')
+            ? crypto.randomUUID()
+            : `${Date.now()}_${Math.random().toString(36).slice(2)}`;
 
-        const panScript = `
-            <script>
-            (function() {
-                const scroller = document.scrollingElement || document.documentElement;
-                const isZoomedMode = ${panActive};
-                let isDragging = false;
-                let startX = 0;
-                let startY = 0;
-                let startScrollLeft = 0;
-                let startScrollTop = 0;
+        const safeNonceLiteral = JSON.stringify(activeSandboxNonce);
 
-                if (isZoomedMode) {
-                    document.body.style.touchAction = 'none';
-                    document.body.style.cursor = 'grab';
-                }
+        const viewerHtml = `
+            <!DOCTYPE html>
+            <html>
+            <head>
+                <meta charset="UTF-8">
+                <meta name="viewport" content="width=device-width, initial-scale=1.0">
+                <style>
+                    * { margin:0; padding:0; box-sizing:border-box; user-select:none; -webkit-user-select:none; }
+                    body, html { width:100%; height:100%; background:#0f172a; overflow:auto; -webkit-overflow-scrolling:touch; font-family:system-ui,sans-serif; color:#e2e8f0; }
+                    .img-stage { background:#000; width:100%; height:100%; overflow:auto; }
+                    .img-container { display:inline-flex; min-width:100%; min-height:100%; justify-content:center; align-items:center; padding:12px; }
+                    .img-container.zoomed { justify-content:flex-start; align-items:flex-start; }
+                    .img-container img { width:100%; max-width:none; height:auto; object-fit:contain; pointer-events:none; -webkit-user-drag:none; display:block; transition:width 0.15s ease; }
+                    #pdf-wrapper { display:flex; flex-direction:column; align-items:center; width:100%; min-width:100%; padding:8px; gap:6px; }
+                    #pdf-wrapper.zoomed { align-items:flex-start; width:max-content; }
+                    .pdf-page { width:100%; max-width:none; height:auto; background:#fff; pointer-events:none; -webkit-user-drag:none; display:block; transition:width 0.15s ease; }
+                    .generic-stage { width:100%; height:100%; background:#111; display:flex; justify-content:center; align-items:center; overflow:auto; }
+                    .generic-stage object { width:100%; height:100%; transition:width 0.15s ease, height 0.15s ease; }
+                </style>
+            </head>
+            <body oncontextmenu="return false;" ondragstart="return false;" onselectstart="return false;">
+                <div id="panzer-viewer-root"></div>
+                <script>
+                (function() {
+                    const EXPECTED_NONCE = ${safeNonceLiteral};
+                    let channelSealed = false;
+                    const root = document.getElementById('panzer-viewer-root');
+                    const scroller = document.scrollingElement || document.documentElement;
+                    let currentUrls = [];
+                    let currentZoomVal = 1.0;
+                    let isDragging = false;
+                    let startX = 0;
+                    let startY = 0;
+                    let startScrollLeft = 0;
+                    let startScrollTop = 0;
 
-                scroller.addEventListener('pointerdown', (e) => {
-                    if (!isZoomedMode) return;
-                    if (e.pointerType === 'mouse' && e.button !== 0) return;
-                    isDragging = true;
-                    startX = e.clientX;
-                    startY = e.clientY;
-                    startScrollLeft = scroller.scrollLeft;
-                    startScrollTop = scroller.scrollTop;
-                    document.body.style.cursor = 'grabbing';
-                    try { scroller.setPointerCapture(e.pointerId); } catch (_) {}
-                }, { passive: true });
+                    const isValidZoom = (z) => typeof z === 'number' && Number.isFinite(z) && z >= 0.5 && z <= 3.0;
+                    const isValidMime = (m) => typeof m === 'string' && m.length > 0 && m.length <= 100 && /^[a-z0-9.+-]+\\/[a-z0-9.+-]+$/i.test(m.split(';')[0].trim());
 
-                scroller.addEventListener('pointermove', (e) => {
-                    if (!isDragging || !isZoomedMode) return;
-                    const dx = e.clientX - startX;
-                    const dy = e.clientY - startY;
-                    scroller.scrollLeft = startScrollLeft - dx;
-                    scroller.scrollTop = startScrollTop - dy;
-                }, { passive: true });
+                    const revokeLocalUrls = () => {
+                        for (let i = 0; i < currentUrls.length; i++) {
+                            try { URL.revokeObjectURL(currentUrls[i]); } catch (_) {}
+                        }
+                        currentUrls = [];
+                    };
 
-                const stopDrag = (e) => {
-                    if (!isDragging) return;
-                    isDragging = false;
-                    document.body.style.cursor = isZoomedMode ? 'grab' : 'default';
-                    if (e && typeof e.pointerId === 'number') {
-                        try { scroller.releasePointerCapture(e.pointerId); } catch (_) {}
-                    }
-                };
+                    const applyZoomState = (zoom) => {
+                        currentZoomVal = isValidZoom(zoom) ? zoom : 1.0;
+                        const isZoomedMode = currentZoomVal > 1.0;
+                        const pct = (currentZoomVal * 100) + '%';
 
-                scroller.addEventListener('pointerup', stopDrag, { passive: true });
-                scroller.addEventListener('pointercancel', stopDrag, { passive: true });
-            })();
-            </script>
+                        const imgContainer = root.querySelector('.img-container');
+                        if (imgContainer) {
+                            imgContainer.classList.toggle('zoomed', isZoomedMode);
+                            const img = imgContainer.querySelector('img');
+                            if (img) img.style.width = pct;
+                        }
+
+                        const pdfWrapper = root.querySelector('#pdf-wrapper');
+                        if (pdfWrapper) {
+                            pdfWrapper.classList.toggle('zoomed', isZoomedMode);
+                            pdfWrapper.querySelectorAll('.pdf-page').forEach((el) => {
+                                el.style.width = pct;
+                            });
+                        }
+
+                        const objEl = root.querySelector('.generic-stage object');
+                        if (objEl) {
+                            objEl.style.width = pct;
+                            objEl.style.height = pct;
+                        }
+
+                        if (isZoomedMode) {
+                            document.body.style.touchAction = 'none';
+                            document.body.style.cursor = 'grab';
+                        } else {
+                            document.body.style.touchAction = '';
+                            document.body.style.cursor = 'default';
+                        }
+                    };
+
+                    scroller.addEventListener('pointerdown', (e) => {
+                        if (currentZoomVal <= 1.0) return;
+                        if (e.pointerType === 'mouse' && e.button !== 0) return;
+                        isDragging = true;
+                        startX = e.clientX;
+                        startY = e.clientY;
+                        startScrollLeft = scroller.scrollLeft;
+                        startScrollTop = scroller.scrollTop;
+                        document.body.style.cursor = 'grabbing';
+                        try { scroller.setPointerCapture(e.pointerId); } catch (_) {}
+                    }, { passive: true });
+
+                    scroller.addEventListener('pointermove', (e) => {
+                        if (!isDragging || currentZoomVal <= 1.0) return;
+                        const dx = e.clientX - startX;
+                        const dy = e.clientY - startY;
+                        scroller.scrollLeft = startScrollLeft - dx;
+                        scroller.scrollTop = startScrollTop - dy;
+                    }, { passive: true });
+
+                    const stopDrag = (e) => {
+                        if (!isDragging) return;
+                        isDragging = false;
+                        document.body.style.cursor = currentZoomVal > 1.0 ? 'grab' : 'default';
+                        if (e && typeof e.pointerId === 'number') {
+                            try { scroller.releasePointerCapture(e.pointerId); } catch (_) {}
+                        }
+                    };
+
+                    scroller.addEventListener('pointerup', stopDrag, { passive: true });
+                    scroller.addEventListener('pointercancel', stopDrag, { passive: true });
+
+                    window.addEventListener('message', (event) => {
+                        if (channelSealed) return;
+                        if (event.source !== window.parent) return;
+                        if (event.origin !== 'null' && event.origin !== '') return;
+
+                        const data = event.data;
+                        if (!data || typeof data !== 'object' || Array.isArray(data)) return;
+                        if (typeof data.nonce !== 'string' || data.nonce !== EXPECTED_NONCE) return;
+
+                        const allowedTypes = ['PANZER_RENDER_VIEWER', 'PANZER_ZOOM_VIEWER', 'PANZER_CLEAR_VIEWER'];
+                        if (!allowedTypes.includes(data.type)) return;
+
+                        if (data.type === 'PANZER_ZOOM_VIEWER') {
+                            if (!isValidZoom(data.zoom)) return;
+                            applyZoomState(data.zoom);
+                            return;
+                        }
+
+                        if (data.type === 'PANZER_CLEAR_VIEWER') {
+                            channelSealed = true;
+                            revokeLocalUrls();
+                            root.innerHTML = '';
+                            currentZoomVal = 1.0;
+                            document.body.style.touchAction = '';
+                            document.body.style.cursor = 'default';
+                            return;
+                        }
+
+                        if (data.type === 'PANZER_RENDER_VIEWER') {
+                            if (!isValidMime(data.mimeType)) return;
+                            if (data.zoom !== undefined && !isValidZoom(data.zoom)) return;
+
+                            revokeLocalUrls();
+                            root.innerHTML = '';
+                            const mime = data.mimeType.split(';')[0].trim().toLowerCase();
+
+                            if (mime.startsWith('image/') && data.blob instanceof Blob) {
+                                const objUrl = URL.createObjectURL(data.blob);
+                                currentUrls.push(objUrl);
+
+                                const stage = document.createElement('div');
+                                stage.className = 'img-stage';
+                                const container = document.createElement('div');
+                                container.className = 'img-container';
+                                const img = document.createElement('img');
+                                img.src = objUrl;
+                                img.alt = 'Immagine protetta';
+                                container.appendChild(img);
+                                stage.appendChild(container);
+                                root.appendChild(stage);
+                            } else if (mime.includes('pdf') && Array.isArray(data.pageBlobs) && data.pageBlobs.length <= 500) {
+                                const wrapper = document.createElement('div');
+                                wrapper.id = 'pdf-wrapper';
+
+                                data.pageBlobs.forEach((pBlob, idx) => {
+                                    if (!(pBlob instanceof Blob)) return;
+                                    const pUrl = URL.createObjectURL(pBlob);
+                                    currentUrls.push(pUrl);
+
+                                    const pageImg = document.createElement('img');
+                                    pageImg.className = 'pdf-page';
+                                    pageImg.src = pUrl;
+                                    pageImg.alt = 'Pagina ' + (idx + 1);
+                                    wrapper.appendChild(pageImg);
+                                });
+
+                                root.appendChild(wrapper);
+                            } else if (data.blob instanceof Blob) {
+                                const gUrl = URL.createObjectURL(data.blob);
+                                currentUrls.push(gUrl);
+
+                                const stage = document.createElement('div');
+                                stage.className = 'generic-stage';
+                                const objEl = document.createElement('object');
+                                objEl.data = gUrl;
+                                objEl.type = mime;
+                                stage.appendChild(objEl);
+                                root.appendChild(stage);
+                            }
+
+                            applyZoomState(data.zoom !== undefined ? data.zoom : 1.0);
+                        }
+                    });
+                })();
+                </script>
+            </body>
+            </html>
         `;
-
-        if (activeMimeType && activeMimeType.startsWith('image/')) {
-            renderedContentHtml = `
-                <!DOCTYPE html>
-                <html>
-                <head>
-                    <meta charset="UTF-8">
-                    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-                    <style>
-                        * { margin:0; padding:0; box-sizing:border-box; user-select:none; -webkit-user-select:none; }
-                        body, html { width:100%; height:100%; background:#000; overflow:auto; }
-                        .container { display:inline-flex; min-width:100%; min-height:100%; justify-content:${isZoomed ? 'flex-start' : 'center'}; align-items:${isZoomed ? 'flex-start' : 'center'}; padding:12px; }
-                        img { width: ${currentZoom * 100}%; max-width: none; height: auto; object-fit: contain; pointer-events: none; -webkit-user-drag: none; display: block; transition: width 0.15s ease; }
-                    </style>
-                </head>
-                <body oncontextmenu="return false;" ondragstart="return false;" onselectstart="return false;">
-                    <div class="container"><img src="${activeFallbackObjectUrl}" alt="Immagine protetta" /></div>
-                    ${panScript}
-                </body>
-                </html>
-            `;
-        } else if (activeMimeType && activeMimeType.includes('pdf')) {
-            const pagesHtml = (activePageObjectUrls || [])
-                .map((pageUrl, idx) => `<img class="pdf-page" src="${pageUrl}" alt="Pagina ${idx + 1}" />`)
-                .join('\n');
-
-            renderedContentHtml = `
-                <!DOCTYPE html>
-                <html>
-                <head>
-                    <meta charset="UTF-8">
-                    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-                    <style>
-                        * { margin:0; padding:0; box-sizing:border-box; user-select:none; -webkit-user-select:none; }
-                        body, html { width:100%; height:100%; background:#0f172a; overflow:auto; -webkit-overflow-scrolling:touch; }
-                        #pdf-wrapper { display:flex; flex-direction:column; align-items:${isZoomed ? 'flex-start' : 'center'}; width:${isZoomed ? 'max-content' : '100%'}; min-width:100%; padding:8px; gap:6px; }
-                        .pdf-page { width: ${currentZoom * 100}%; max-width: none; height: auto; background: #fff; pointer-events: none; -webkit-user-drag: none; display: block; transition: width 0.15s ease; }
-                    </style>
-                </head>
-                <body oncontextmenu="return false;" ondragstart="return false;" onselectstart="return false;">
-                    <div id="pdf-wrapper">
-                        ${pagesHtml}
-                    </div>
-                    ${panScript}
-                </body>
-                </html>
-            `;
-        } else {
-            renderedContentHtml = `
-                <!DOCTYPE html>
-                <html>
-                <head>
-                    <meta charset="UTF-8">
-                    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-                    <style>
-                        * { margin:0; padding:0; box-sizing:border-box; }
-                        body, html { width:100%; height:100%; background:#111; display:flex; justify-content:center; align-items:center; overflow:auto; }
-                        object { width: ${currentZoom * 100}%; height: ${currentZoom * 100}%; transition: width 0.15s ease, height 0.15s ease; }
-                    </style>
-                </head>
-                <body>
-                    <object data="${activeFallbackObjectUrl}" type="${activeMimeType}" width="100%" height="100%"></object>
-                </body>
-                </html>
-            `;
-        }
 
         if (activeViewerBlobUrl) {
             URL.revokeObjectURL(activeViewerBlobUrl);
         }
-        const viewerBlob = new Blob([renderedContentHtml], { type: 'text/html' });
+        const viewerBlob = new Blob([viewerHtml], { type: 'text/html' });
         activeViewerBlobUrl = URL.createObjectURL(viewerBlob);
-        sandboxFrame.src = activeViewerBlobUrl;
+
+        await new Promise((resolve) => {
+            const onLoad = () => {
+                sandboxFrame.removeEventListener('load', onLoad);
+                resolve();
+            };
+            sandboxFrame.addEventListener('load', onLoad, { once: true });
+            sandboxFrame.setAttribute('sandbox', 'allow-scripts');
+            sandboxFrame.src = activeViewerBlobUrl;
+        });
+
+        if (activeMimeType && activeMimeType.startsWith('image/')) {
+            const imgBlob = new Blob([activeRawBuffer], { type: activeMimeType });
+            postToSandboxFrame({
+                type: 'PANZER_RENDER_VIEWER',
+                mimeType: activeMimeType,
+                blob: imgBlob,
+                zoom: currentZoom
+            });
+        } else if (activeMimeType && activeMimeType.includes('pdf')) {
+            postToSandboxFrame({
+                type: 'PANZER_RENDER_VIEWER',
+                mimeType: activeMimeType,
+                pageBlobs: activePageBlobs || [],
+                zoom: currentZoom
+            });
+        } else if (activeRawBuffer) {
+            const genericBlob = new Blob([activeRawBuffer], { type: activeMimeType || 'application/octet-stream' });
+            postToSandboxFrame({
+                type: 'PANZER_RENDER_VIEWER',
+                mimeType: activeMimeType || 'application/octet-stream',
+                blob: genericBlob,
+                zoom: currentZoom
+            });
+        }
     };
-    
+
     // 🔒 Visore Sandbox Protetto.
     const openInSandbox = async (url, fileName) => {
         try {
             currentZoom = 1.0;
             logToTerminal('vault', `🫙🔒 Apertura visore protetto per: ${fileName || url} ( Zoom: ${Math.round(currentZoom * 100)}% )`);
-            
+
             sandboxTitle.textContent = `🔎🔒 ${fileName || url}`;
-            
+
             if (btnZoomIn && btnZoomOut) {
                 btnZoomIn.disabled = true;
                 btnZoomOut.disabled = true;
@@ -611,6 +752,8 @@ document.addEventListener('DOMContentLoaded', async () => {
                 }
                 activePageObjectUrls = [];
             }
+            activePageBlobs = [];
+            activeSandboxNonce = null;
 
             const loadingHtml = `
                 <!DOCTYPE html>
@@ -630,7 +773,7 @@ document.addEventListener('DOMContentLoaded', async () => {
                 </body>
                 </html>
             `;
-            
+
             activeViewerBlobUrl = URL.createObjectURL(new Blob([loadingHtml], { type: 'text/html' }));
             sandboxFrame.setAttribute('sandbox', 'allow-scripts');
             sandboxFrame.src = activeViewerBlobUrl;
@@ -645,11 +788,11 @@ document.addEventListener('DOMContentLoaded', async () => {
 
             activePageObjectUrls = [];
             activeFallbackObjectUrl = null;
+            activePageBlobs = [];
 
             if (activeMimeType.startsWith('image/')) {
                 const imgBlob = new Blob([activeRawBuffer], { type: activeMimeType });
                 activeFallbackObjectUrl = URL.createObjectURL(imgBlob);
-
             } else if (activeMimeType.includes('pdf')) {
                 if (typeof pdfjsLib === 'undefined') {
                     await new Promise((resolve, reject) => {
@@ -697,19 +840,18 @@ document.addEventListener('DOMContentLoaded', async () => {
                     });
 
                     if (pageBlob) {
-                        activePageObjectUrls.push(URL.createObjectURL(pageBlob));
+                        activePageBlobs.push(pageBlob);
                     }
 
                     canvas.width = 0;
                     canvas.height = 0;
                 }
-
             } else {
                 const genericBlob = new Blob([activeRawBuffer], { type: activeMimeType });
                 activeFallbackObjectUrl = URL.createObjectURL(genericBlob);
             }
 
-            renderAndMountSandbox();
+            await renderAndMountSandbox();
 
             sandboxTitle.textContent = `🔎🔒 ${fileName || url}`;
 
@@ -731,6 +873,7 @@ document.addEventListener('DOMContentLoaded', async () => {
 
     // ️🔎🔒 Chiusura Visore e bonifica immediata.
     const closeSandbox = () => {
+        postToSandboxFrame({ type: 'PANZER_CLEAR_VIEWER' });
         sandboxModal.classList.remove('active');
         sandboxFrame.src = 'about:blank';
 
@@ -752,6 +895,8 @@ document.addEventListener('DOMContentLoaded', async () => {
             }
             activePageObjectUrls = [];
         }
+        activePageBlobs = [];
+        activeSandboxNonce = null;
 
         if (activeRawBuffer) {
             try {
