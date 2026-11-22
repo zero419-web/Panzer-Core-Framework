@@ -482,257 +482,256 @@ document.addEventListener('DOMContentLoaded', async () => {
 
         const safeNonceLiteral = JSON.stringify(activeSandboxNonce);
 
-        const viewerHtml = `
-            <!DOCTYPE html>
-            <html>
-            <head>
-                <meta charset="UTF-8">
-                <meta name="viewport" content="width=device-width, initial-scale=1.0">
-                <style>
-                    * { margin:0; padding:0; box-sizing:border-box; user-select:none; -webkit-user-select:none; }
-                    body, html { width:100%; height:100%; background:#0f172a; overflow:auto; -webkit-overflow-scrolling:touch; font-family:system-ui,sans-serif; color:#e2e8f0; }
-                    .img-stage { background:#000; width:100%; height:100%; overflow:auto; }
-                    .img-container { display:inline-flex; min-width:100%; min-height:100%; justify-content:center; align-items:center; padding:12px; }
-                    .img-container.zoomed { justify-content:flex-start; align-items:flex-start; }
-                    .img-container img { width:100%; max-width:none; height:auto; object-fit:contain; pointer-events:none; -webkit-user-drag:none; display:block; transition:width 0.15s ease; }
-                    #pdf-wrapper { display:flex; flex-direction:column; align-items:center; width:100%; min-width:100%; padding:8px; gap:6px; }
-                    #pdf-wrapper.zoomed { align-items:flex-start; width:max-content; }
-                    .pdf-page { width:100%; max-width:none; height:auto; background:#fff; pointer-events:none; -webkit-user-drag:none; display:block; transition:width 0.15s ease; }
-                    .generic-stage { width:100%; height:100%; background:#111; display:flex; justify-content:center; align-items:center; overflow:auto; }
-                    .generic-stage object { width:100%; height:100%; transition:width 0.15s ease, height 0.15s ease; }
-                </style>
-            </head>
-            <body oncontextmenu="return false;" ondragstart="return false;" onselectstart="return false;">
-                <div id="panzer-viewer-root"></div>
-                <script>
-                (function() {
-                    const EXPECTED_NONCE = ${safeNonceLiteral};
-                    let channelSealed = false;
-                    const root = document.getElementById('panzer-viewer-root');
-                    const scroller = document.scrollingElement || document.documentElement;
-                    let currentUrls = [];
-                    let currentZoomVal = 1.0;
-                    let isDragging = false;
-                    let startX = 0;
-                    let startY = 0;
-                    let startScrollLeft = 0;
-                    let startScrollTop = 0;
+        const viewerHtml = `<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<style>
+* { margin:0; padding:0; box-sizing:border-box; user-select:none; -webkit-user-select:none; }
+body, html { width:100%; height:100%; background:#0f172a; overflow:auto; -webkit-overflow-scrolling:touch; font-family:system-ui,sans-serif; color:#e2e8f0; }
+.img-stage { background:#000; width:100%; height:100%; overflow:auto; }
+.img-container { display:inline-flex; min-width:100%; min-height:100%; justify-content:center; align-items:center; padding:12px; }
+.img-container.zoomed { justify-content:flex-start; align-items:flex-start; }
+.img-container img { width:100%; max-width:none; height:auto; object-fit:contain; pointer-events:none; -webkit-user-drag:none; display:block; transition:width 0.15s ease; }
+#pdf-wrapper { display:flex; flex-direction:column; align-items:center; width:100%; min-width:100%; padding:8px; gap:6px; }
+#pdf-wrapper.zoomed { align-items:flex-start; width:max-content; }
+.pdf-page { width:100%; max-width:none; height:auto; background:#fff; pointer-events:none; -webkit-user-drag:none; display:block; transition:width 0.15s ease; }
+.generic-stage { width:100%; height:100%; background:#111; display:flex; justify-content:center; align-items:center; overflow:auto; }
+.generic-stage object { width:100%; height:100%; transition:width 0.15s ease, height 0.15s ease; }
+</style>
+</head>
+<body oncontextmenu="return false;" ondragstart="return false;" onselectstart="return false;">
+<div id="panzer-viewer-root"></div>
+<script>
+(function() {
+    const EXPECTED_NONCE = ${safeNonceLiteral};
+    let channelSealed = false;
+    const root = document.getElementById('panzer-viewer-root');
+    const scroller = document.scrollingElement || document.documentElement;
+    let currentUrls = [];
+    let currentZoomVal = 1.0;
+    let isDragging = false;
+    let startX = 0;
+    let startY = 0;
+    let startScrollLeft = 0;
+    let startScrollTop = 0;
 
-                    const isValidZoom = (z) => typeof z === 'number' && Number.isFinite(z) && z >= 0.5 && z <= 3.0;
-                    const isValidMime = (m) => typeof m === 'string' && m.length > 0 && m.length <= 100 && /^[a-z0-9.+-]+\\/[a-z0-9.+-]+$/i.test(m.split(';')[0].trim());
+    const isValidZoom = (z) => typeof z === 'number' && Number.isFinite(z) && z >= 0.5 && z <= 3.0;
+    const isValidMime = (m) => typeof m === 'string' && m.length > 0 && m.length <= 100 && /^[a-z0-9.+-]+\\/[a-z0-9.+-]+$/i.test(m.split(';')[0].trim());
 
-                    const revokeLocalUrls = () => {
-                        for (let i = 0; i < currentUrls.length; i++) {
-                            try { URL.revokeObjectURL(currentUrls[i]); } catch (_) {}
-                        }
-                        currentUrls = [];
-                    };
+    const revokeLocalUrls = () => {
+        for (let i = 0; i < currentUrls.length; i++) {
+            try { URL.revokeObjectURL(currentUrls[i]); } catch (_) {}
+        }
+        currentUrls = [];
+    };
 
-                    const applyZoomState = (zoom) => {
-                        currentZoomVal = isValidZoom(zoom) ? zoom : 1.0;
-                        const isZoomedMode = currentZoomVal > 1.0;
-                        const pct = (currentZoomVal * 100) + '%';
+    const applyZoomState = (zoom) => {
+        currentZoomVal = isValidZoom(zoom) ? zoom : 1.0;
+        const isZoomedMode = currentZoomVal > 1.0;
+        const pct = (currentZoomVal * 100) + '%';
 
-                        const imgContainer = root.querySelector('.img-container');
-                        if (imgContainer) {
-                            imgContainer.classList.toggle('zoomed', isZoomedMode);
-                            const img = imgContainer.querySelector('img');
-                            if (img) img.style.width = pct;
-                        }
+        const imgContainer = root.querySelector('.img-container');
+        if (imgContainer) {
+            imgContainer.classList.toggle('zoomed', isZoomedMode);
+            const img = imgContainer.querySelector('img');
+            if (img) img.style.width = pct;
+        }
 
-                        const pdfWrapper = root.querySelector('#pdf-wrapper');
-                        if (pdfWrapper) {
-                            pdfWrapper.classList.toggle('zoomed', isZoomedMode);
-                            pdfWrapper.querySelectorAll('.pdf-page').forEach((el) => {
-                                el.style.width = pct;
-                            });
-                        }
+        const pdfWrapper = root.querySelector('#pdf-wrapper');
+        if (pdfWrapper) {
+            pdfWrapper.classList.toggle('zoomed', isZoomedMode);
+            pdfWrapper.querySelectorAll('.pdf-page').forEach((el) => {
+                el.style.width = pct;
+            });
+        }
 
-                        const objEl = root.querySelector('.generic-stage object');
-                        if (objEl) {
-                            objEl.style.width = pct;
-                            objEl.style.height = pct;
-                        }
+        const objEl = root.querySelector('.generic-stage object');
+        if (objEl) {
+            objEl.style.width = pct;
+            objEl.style.height = pct;
+        }
 
-                        if (isZoomedMode) {
-                            document.body.style.touchAction = 'none';
-                            document.body.style.cursor = 'grab';
-                        } else {
-                            document.body.style.touchAction = '';
-                            document.body.style.cursor = 'default';
-                        }
-                    };
+        if (isZoomedMode) {
+            document.body.style.touchAction = 'none';
+            document.body.style.cursor = 'grab';
+        } else {
+            document.body.style.touchAction = '';
+            document.body.style.cursor = 'default';
+        }
+    };
 
-                    scroller.addEventListener('pointerdown', (e) => {
-                        if (currentZoomVal <= 1.0) return;
-                        if (e.pointerType === 'mouse' && e.button !== 0) return;
-                        isDragging = true;
-                        startX = e.clientX;
-                        startY = e.clientY;
-                        startScrollLeft = scroller.scrollLeft;
-                        startScrollTop = scroller.scrollTop;
-                        document.body.style.cursor = 'grabbing';
-                        try { scroller.setPointerCapture(e.pointerId); } catch (_) {}
-                    }, { passive: true });
+    scroller.addEventListener('pointerdown', (e) => {
+        if (currentZoomVal <= 1.0) return;
+        if (e.pointerType === 'mouse' && e.button !== 0) return;
+        isDragging = true;
+        startX = e.clientX;
+        startY = e.clientY;
+        startScrollLeft = scroller.scrollLeft;
+        startScrollTop = scroller.scrollTop;
+        document.body.style.cursor = 'grabbing';
+        try { scroller.setPointerCapture(e.pointerId); } catch (_) {}
+    }, { passive: true });
 
-                    scroller.addEventListener('pointermove', (e) => {
-                        if (!isDragging || currentZoomVal <= 1.0) return;
-                        const dx = e.clientX - startX;
-                        const dy = e.clientY - startY;
-                        scroller.scrollLeft = startScrollLeft - dx;
-                        scroller.scrollTop = startScrollTop - dy;
-                    }, { passive: true });
+    scroller.addEventListener('pointermove', (e) => {
+        if (!isDragging || currentZoomVal <= 1.0) return;
+        const dx = e.clientX - startX;
+        const dy = e.clientY - startY;
+        scroller.scrollLeft = startScrollLeft - dx;
+        scroller.scrollTop = startScrollTop - dy;
+    }, { passive: true });
 
-                    const stopDrag = (e) => {
-                        if (!isDragging) return;
-                        isDragging = false;
-                        document.body.style.cursor = currentZoomVal > 1.0 ? 'grab' : 'default';
-                        if (e && typeof e.pointerId === 'number') {
-                            try { scroller.releasePointerCapture(e.pointerId); } catch (_) {}
-                        }
-                    };
+    const stopDrag = (e) => {
+        if (!isDragging) return;
+        isDragging = false;
+        document.body.style.cursor = currentZoomVal > 1.0 ? 'grab' : 'default';
+        if (e && typeof e.pointerId === 'number') {
+            try { scroller.releasePointerCapture(e.pointerId); } catch (_) {}
+        }
+    };
 
-                    scroller.addEventListener('pointerup', stopDrag, { passive: true });
-                    scroller.addEventListener('pointercancel', stopDrag, { passive: true });
+    scroller.addEventListener('pointerup', stopDrag, { passive: true });
+    scroller.addEventListener('pointercancel', stopDrag, { passive: true });
 
-                    window.addEventListener('message', (event) => {
-                        try {
-                            if (channelSealed) return;
-                            if (event.source !== window.parent) return;
-                            if (event.origin !== 'null' && event.origin !== '') return;
+    window.addEventListener('message', (event) => {
+        try {
+            if (channelSealed) return;
+            if (event.source !== window.parent) return;
 
-                            const data = event.data;
-                            if (!data || typeof data !== 'object' || Array.isArray(data)) return;
-                            if (typeof data.nonce !== 'string' || data.nonce !== EXPECTED_NONCE) return;
+            const data = event.data;
+            if (!data || typeof data !== 'object' || Array.isArray(data)) return;
+            if (typeof data.nonce !== 'string' || data.nonce !== EXPECTED_NONCE) return;
 
-                            const allowedTypes = ['PANZER_RENDER_VIEWER', 'PANZER_ZOOM_VIEWER', 'PANZER_CLEAR_VIEWER'];
-                            if (!allowedTypes.includes(data.type)) return;
+            const allowedTypes = ['PANZER_RENDER_VIEWER', 'PANZER_ZOOM_VIEWER', 'PANZER_CLEAR_VIEWER'];
+            if (!allowedTypes.includes(data.type)) return;
 
-                            if (data.type === 'PANZER_ZOOM_VIEWER') {
-                                if (!isValidZoom(data.zoom)) return;
-                                applyZoomState(data.zoom);
-                                return;
-                            }
+            if (data.type === 'PANZER_ZOOM_VIEWER') {
+                if (!isValidZoom(data.zoom)) return;
+                applyZoomState(data.zoom);
+                return;
+            }
 
-                            if (data.type === 'PANZER_CLEAR_VIEWER') {
-                                channelSealed = true;
-                                revokeLocalUrls();
-                                root.innerHTML = '';
-                                currentZoomVal = 1.0;
-                                document.body.style.touchAction = '';
-                                document.body.style.cursor = 'default';
-                                return;
-                            }
+            if (data.type === 'PANZER_CLEAR_VIEWER') {
+                channelSealed = true;
+                revokeLocalUrls();
+                root.innerHTML = '';
+                currentZoomVal = 1.0;
+                document.body.style.touchAction = '';
+                document.body.style.cursor = 'default';
+                return;
+            }
 
-                            if (data.type === 'PANZER_RENDER_VIEWER') {
-                                if (!isValidMime(data.mimeType)) return;
-                                if (data.zoom !== undefined && !isValidZoom(data.zoom)) return;
+            if (data.type === 'PANZER_RENDER_VIEWER') {
+                if (!isValidMime(data.mimeType)) return;
+                if (data.zoom !== undefined && !isValidZoom(data.zoom)) return;
 
-                                revokeLocalUrls();
-                                root.innerHTML = '';
-                                const mime = data.mimeType.split(';')[0].trim().toLowerCase();
-                                let mountedCount = 0;
+                revokeLocalUrls();
+                root.innerHTML = '';
+                const mime = data.mimeType.split(';')[0].trim().toLowerCase();
+                let mountedCount = 0;
 
-                                if (mime.startsWith('image/') && data.blob instanceof Blob) {
-                                    const objUrl = URL.createObjectURL(data.blob);
-                                    currentUrls.push(objUrl);
+                if (mime.startsWith('image/') && data.buffer instanceof ArrayBuffer) {
+                    const blob = new Blob([data.buffer], { type: mime });
+                    const objUrl = URL.createObjectURL(blob);
+                    currentUrls.push(objUrl);
 
-                                    const stage = document.createElement('div');
-                                    stage.className = 'img-stage';
-                                    const container = document.createElement('div');
-                                    container.className = 'img-container';
-                                    const img = document.createElement('img');
-                                    img.src = objUrl;
-                                    img.alt = 'Immagine protetta';
-                                    container.appendChild(img);
-                                    stage.appendChild(container);
-                                    root.appendChild(stage);
-                                    mountedCount = 1;
-                                } else if (mime.includes('pdf') && Array.isArray(data.pageBlobs) && data.pageBlobs.length <= 500) {
-                                    const wrapper = document.createElement('div');
-                                    wrapper.id = 'pdf-wrapper';
+                    const stage = document.createElement('div');
+                    stage.className = 'img-stage';
+                    const container = document.createElement('div');
+                    container.className = 'img-container';
+                    const img = document.createElement('img');
+                    img.src = objUrl;
+                    img.alt = 'Immagine protetta';
+                    container.appendChild(img);
+                    stage.appendChild(container);
+                    root.appendChild(stage);
+                    mountedCount = 1;
+                } else if (mime.includes('pdf') && Array.isArray(data.pageBuffers) && data.pageBuffers.length <= 500) {
+                    const wrapper = document.createElement('div');
+                    wrapper.id = 'pdf-wrapper';
 
-                                    data.pageBlobs.forEach((pBlob, idx) => {
-                                        if (!(pBlob instanceof Blob)) return;
-                                        const pUrl = URL.createObjectURL(pBlob);
-                                        currentUrls.push(pUrl);
+                    data.pageBuffers.forEach((pBuf, idx) => {
+                        if (!(pBuf instanceof ArrayBuffer)) return;
+                        const pBlob = new Blob([pBuf], { type: 'image/png' });
+                        const pUrl = URL.createObjectURL(pBlob);
+                        currentUrls.push(pUrl);
 
-                                        const pageImg = document.createElement('img');
-                                        pageImg.className = 'pdf-page';
-                                        pageImg.src = pUrl;
-                                        pageImg.alt = 'Pagina ' + (idx + 1);
-                                        wrapper.appendChild(pageImg);
-                                        mountedCount++;
-                                    });
-
-                                    root.appendChild(wrapper);
-                                } else if (data.blob instanceof Blob) {
-                                    const gUrl = URL.createObjectURL(data.blob);
-                                    currentUrls.push(gUrl);
-
-                                    const stage = document.createElement('div');
-                                    stage.className = 'generic-stage';
-                                    const objEl = document.createElement('object');
-                                    objEl.data = gUrl;
-                                    objEl.type = mime;
-                                    stage.appendChild(objEl);
-                                    root.appendChild(stage);
-                                    mountedCount = 1;
-                                }
-
-                                applyZoomState(data.zoom !== undefined ? data.zoom : 1.0);
-
-                                if (window.parent && window.parent !== window) {
-                                    window.parent.postMessage({
-                                        type: 'PANZER_RENDER_ACK',
-                                        nonce: EXPECTED_NONCE,
-                                        count: mountedCount
-                                    }, '*');
-                                }
-                            }
-                        } catch (frameErr) {
-                            try {
-                                if (window.parent && window.parent !== window) {
-                                    window.parent.postMessage({
-                                        type: 'PANZER_VIEWER_ERR',
-                                        nonce: EXPECTED_NONCE,
-                                        msg: frameErr && frameErr.message ? String(frameErr.message) : 'FrameError'
-                                    }, '*');
-                                }
-                            } catch (_) {}
-                        }
+                        const pageImg = document.createElement('img');
+                        pageImg.className = 'pdf-page';
+                        pageImg.src = pUrl;
+                        pageImg.alt = 'Pagina ' + (idx + 1);
+                        wrapper.appendChild(pageImg);
+                        mountedCount++;
                     });
 
-                    try {
-                        if (window.parent && window.parent !== window) {
-                            window.parent.postMessage({
-                                type: 'PANZER_VIEWER_READY',
-                                nonce: EXPECTED_NONCE
-                            }, '*');
-                        }
-                    } catch (_) {}
-                })();
-                </script>
-            </body>
-            </html>
-        `;
+                    root.appendChild(wrapper);
+                } else if (data.buffer instanceof ArrayBuffer) {
+                    const gBlob = new Blob([data.buffer], { type: mime });
+                    const gUrl = URL.createObjectURL(gBlob);
+                    currentUrls.push(gUrl);
+
+                    const stage = document.createElement('div');
+                    stage.className = 'generic-stage';
+                    const objEl = document.createElement('object');
+                    objEl.data = gUrl;
+                    objEl.type = mime;
+                    stage.appendChild(objEl);
+                    root.appendChild(stage);
+                    mountedCount = 1;
+                }
+
+                applyZoomState(data.zoom !== undefined ? data.zoom : 1.0);
+
+                if (window.parent && window.parent !== window) {
+                    window.parent.postMessage({
+                        type: 'PANZER_RENDER_ACK',
+                        nonce: EXPECTED_NONCE,
+                        count: mountedCount
+                    }, '*');
+                }
+            }
+        } catch (frameErr) {
+            try {
+                if (window.parent && window.parent !== window) {
+                    window.parent.postMessage({
+                        type: 'PANZER_VIEWER_ERR',
+                        nonce: EXPECTED_NONCE,
+                        msg: frameErr && frameErr.message ? String(frameErr.message) : 'FrameError'
+                    }, '*');
+                }
+            } catch (_) {}
+        }
+    });
+
+    try {
+        if (window.parent && window.parent !== window) {
+            window.parent.postMessage({
+                type: 'PANZER_VIEWER_READY',
+                nonce: EXPECTED_NONCE
+            }, '*');
+        }
+    } catch (_) {}
+})();
+<\/script>
+</body>
+</html>`;
 
         if (activeViewerBlobUrl) {
             URL.revokeObjectURL(activeViewerBlobUrl);
+            activeViewerBlobUrl = null;
         }
-        const viewerBlob = new Blob([viewerHtml], { type: 'text/html' });
-        activeViewerBlobUrl = URL.createObjectURL(viewerBlob);
 
         const currentNonce = activeSandboxNonce;
 
         await new Promise((resolve) => {
             let settled = false;
-            let fallbackTimer = null;
+            let timer = null;
 
             const finish = () => {
                 if (settled) return;
                 settled = true;
-                clearTimeout(fallbackTimer);
+                clearTimeout(timer);
                 window.removeEventListener('message', onReadyMsg);
                 sandboxFrame.removeEventListener('load', onFrameLoad);
                 resolve();
@@ -748,51 +747,67 @@ document.addEventListener('DOMContentLoaded', async () => {
             };
 
             const onFrameLoad = () => {
-                fallbackTimer = setTimeout(finish, 80);
+                timer = setTimeout(finish, 100);
             };
 
-            fallbackTimer = setTimeout(finish, 1200);
+            timer = setTimeout(finish, 1200);
             window.addEventListener('message', onReadyMsg);
             sandboxFrame.addEventListener('load', onFrameLoad, { once: true });
 
+            sandboxFrame.removeAttribute('src');
             sandboxFrame.setAttribute('sandbox', 'allow-scripts');
-            sandboxFrame.src = activeViewerBlobUrl;
+            sandboxFrame.srcdoc = viewerHtml;
         });
 
-        const sent = activeMimeType && activeMimeType.startsWith('image/')
-            ? postToSandboxFrame({
+        let payload = null;
+        const transferList = [];
+
+        if (activeMimeType && activeMimeType.startsWith('image/') && activeRawBuffer) {
+            const copyBuf = activeRawBuffer.slice(0);
+            transferList.push(copyBuf);
+            payload = {
                 type: 'PANZER_RENDER_VIEWER',
                 mimeType: activeMimeType,
-                blob: new Blob([activeRawBuffer], { type: activeMimeType }),
+                buffer: copyBuf,
                 zoom: currentZoom
-            })
-            : (activeMimeType && activeMimeType.includes('pdf'))
-                ? postToSandboxFrame({
-                    type: 'PANZER_RENDER_VIEWER',
-                    mimeType: activeMimeType,
-                    pageBlobs: activePageBlobs || [],
-                    zoom: currentZoom
-                })
-                : activeRawBuffer
-                    ? postToSandboxFrame({
-                        type: 'PANZER_RENDER_VIEWER',
-                        mimeType: activeMimeType || 'application/octet-stream',
-                        blob: new Blob([activeRawBuffer], { type: activeMimeType || 'application/octet-stream' }),
-                        zoom: currentZoom
-                    })
-                    : false;
+            };
+        } else if (activeMimeType && activeMimeType.includes('pdf') && Array.isArray(activePageBlobs)) {
+            const pageBuffers = [];
+            for (const pBlob of activePageBlobs) {
+                if (pBlob instanceof Blob) {
+                    const ab = await pBlob.arrayBuffer();
+                    pageBuffers.push(ab);
+                    transferList.push(ab);
+                }
+            }
+            payload = {
+                type: 'PANZER_RENDER_VIEWER',
+                mimeType: activeMimeType,
+                pageBuffers,
+                zoom: currentZoom
+            };
+        } else if (activeRawBuffer) {
+            const copyBuf = activeRawBuffer.slice(0);
+            transferList.push(copyBuf);
+            payload = {
+                type: 'PANZER_RENDER_VIEWER',
+                mimeType: activeMimeType || 'application/octet-stream',
+                buffer: copyBuf,
+                zoom: currentZoom
+            };
+        }
 
-        if (!sent) {
+        if (!payload || !sandboxFrame.contentWindow) {
             logToTerminal('warn', '⚠️ Invio payload al visore sandbox non riuscito.');
             return;
         }
 
-        await new Promise((resolve) => {
+        const ackPromise = new Promise((resolve) => {
             let done = false;
             const cleanup = () => {
                 if (done) return;
                 done = true;
-                clearTimeout(timer);
+                clearTimeout(timeoutTimer);
                 window.removeEventListener('message', onDiagMsg);
                 resolve();
             };
@@ -808,14 +823,26 @@ document.addEventListener('DOMContentLoaded', async () => {
                     cleanup();
                 }
             };
-            const timer = setTimeout(() => {
+            const timeoutTimer = setTimeout(() => {
                 if (!done) {
                     logToTerminal('warn', '⚠️ Nessun ACK dal visore sandbox entro il timeout.');
                 }
                 cleanup();
-            }, 1500);
+            }, 1800);
             window.addEventListener('message', onDiagMsg);
         });
+
+        try {
+            sandboxFrame.contentWindow.postMessage({
+                ...payload,
+                nonce: currentNonce
+            }, '*', transferList);
+        } catch (postErr) {
+            logToTerminal('error', `❌ Errore postMessage sandbox: ${postErr.message}`);
+            return;
+        }
+
+        await ackPromise;
     };
 
     // 🔒 Visore Sandbox Protetto.
