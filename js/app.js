@@ -40,6 +40,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     const getDefinedCoreAssets = () => Object.freeze([
         './',
         './index.html',
+        './js/sandbox_viewer.js',
         './js/pdf_min.js',
         './js/pdf_worker_min.js',
         './js/app.js',
@@ -476,12 +477,14 @@ document.addEventListener('DOMContentLoaded', async () => {
 
     // 🖼️📄 Generatore del visore protetto.
     const renderAndMountSandbox = async () => {
+        // 🔑 Generazione del nonce crittografico di sessione per autenticare il canale parent <-> iframe.
         activeSandboxNonce = (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function')
             ? crypto.randomUUID()
             : `${Date.now()}_${Math.random().toString(36).slice(2)}`;
 
-        const safeNonceLiteral = JSON.stringify(activeSandboxNonce);
+        const safeNonceAttr = JSON.stringify(activeSandboxNonce).replace(/"/g, '&quot;');
 
+        // 🛡️ Documento ospite minimale in srcdoc privo di script inline (conforme a CSP strict 'self' su script-src).
         const viewerHtml = `<!DOCTYPE html>
 <html>
 <head>
@@ -503,220 +506,11 @@ body, html { width:100%; height:100%; background:#0f172a; overflow:auto; -webkit
 </head>
 <body oncontextmenu="return false;" ondragstart="return false;" onselectstart="return false;">
 <div id="panzer-viewer-root"></div>
-<script>
-(function() {
-    const EXPECTED_NONCE = ${safeNonceLiteral};
-    let channelSealed = false;
-    const root = document.getElementById('panzer-viewer-root');
-    const scroller = document.scrollingElement || document.documentElement;
-    let currentUrls = [];
-    let currentZoomVal = 1.0;
-    let isDragging = false;
-    let startX = 0;
-    let startY = 0;
-    let startScrollLeft = 0;
-    let startScrollTop = 0;
-
-    const isValidZoom = (z) => typeof z === 'number' && Number.isFinite(z) && z >= 0.5 && z <= 3.0;
-    const isValidMime = (m) => typeof m === 'string' && m.length > 0 && m.length <= 100 && /^[a-z0-9.+-]+\\/[a-z0-9.+-]+$/i.test(m.split(';')[0].trim());
-
-    const revokeLocalUrls = () => {
-        for (let i = 0; i < currentUrls.length; i++) {
-            try { URL.revokeObjectURL(currentUrls[i]); } catch (_) {}
-        }
-        currentUrls = [];
-    };
-
-    const applyZoomState = (zoom) => {
-        currentZoomVal = isValidZoom(zoom) ? zoom : 1.0;
-        const isZoomedMode = currentZoomVal > 1.0;
-        const pct = (currentZoomVal * 100) + '%';
-
-        const imgContainer = root.querySelector('.img-container');
-        if (imgContainer) {
-            imgContainer.classList.toggle('zoomed', isZoomedMode);
-            const img = imgContainer.querySelector('img');
-            if (img) img.style.width = pct;
-        }
-
-        const pdfWrapper = root.querySelector('#pdf-wrapper');
-        if (pdfWrapper) {
-            pdfWrapper.classList.toggle('zoomed', isZoomedMode);
-            pdfWrapper.querySelectorAll('.pdf-page').forEach((el) => {
-                el.style.width = pct;
-            });
-        }
-
-        const objEl = root.querySelector('.generic-stage object');
-        if (objEl) {
-            objEl.style.width = pct;
-            objEl.style.height = pct;
-        }
-
-        if (isZoomedMode) {
-            document.body.style.touchAction = 'none';
-            document.body.style.cursor = 'grab';
-        } else {
-            document.body.style.touchAction = '';
-            document.body.style.cursor = 'default';
-        }
-    };
-
-    scroller.addEventListener('pointerdown', (e) => {
-        if (currentZoomVal <= 1.0) return;
-        if (e.pointerType === 'mouse' && e.button !== 0) return;
-        isDragging = true;
-        startX = e.clientX;
-        startY = e.clientY;
-        startScrollLeft = scroller.scrollLeft;
-        startScrollTop = scroller.scrollTop;
-        document.body.style.cursor = 'grabbing';
-        try { scroller.setPointerCapture(e.pointerId); } catch (_) {}
-    }, { passive: true });
-
-    scroller.addEventListener('pointermove', (e) => {
-        if (!isDragging || currentZoomVal <= 1.0) return;
-        const dx = e.clientX - startX;
-        const dy = e.clientY - startY;
-        scroller.scrollLeft = startScrollLeft - dx;
-        scroller.scrollTop = startScrollTop - dy;
-    }, { passive: true });
-
-    const stopDrag = (e) => {
-        if (!isDragging) return;
-        isDragging = false;
-        document.body.style.cursor = currentZoomVal > 1.0 ? 'grab' : 'default';
-        if (e && typeof e.pointerId === 'number') {
-            try { scroller.releasePointerCapture(e.pointerId); } catch (_) {}
-        }
-    };
-
-    scroller.addEventListener('pointerup', stopDrag, { passive: true });
-    scroller.addEventListener('pointercancel', stopDrag, { passive: true });
-
-    window.addEventListener('message', (event) => {
-        try {
-            if (channelSealed) return;
-            if (event.source !== window.parent) return;
-
-            const data = event.data;
-            if (!data || typeof data !== 'object' || Array.isArray(data)) return;
-            if (typeof data.nonce !== 'string' || data.nonce !== EXPECTED_NONCE) return;
-
-            const allowedTypes = ['PANZER_RENDER_VIEWER', 'PANZER_ZOOM_VIEWER', 'PANZER_CLEAR_VIEWER'];
-            if (!allowedTypes.includes(data.type)) return;
-
-            if (data.type === 'PANZER_ZOOM_VIEWER') {
-                if (!isValidZoom(data.zoom)) return;
-                applyZoomState(data.zoom);
-                return;
-            }
-
-            if (data.type === 'PANZER_CLEAR_VIEWER') {
-                channelSealed = true;
-                revokeLocalUrls();
-                root.innerHTML = '';
-                currentZoomVal = 1.0;
-                document.body.style.touchAction = '';
-                document.body.style.cursor = 'default';
-                return;
-            }
-
-            if (data.type === 'PANZER_RENDER_VIEWER') {
-                if (!isValidMime(data.mimeType)) return;
-                if (data.zoom !== undefined && !isValidZoom(data.zoom)) return;
-
-                revokeLocalUrls();
-                root.innerHTML = '';
-                const mime = data.mimeType.split(';')[0].trim().toLowerCase();
-                let mountedCount = 0;
-
-                if (mime.startsWith('image/') && data.buffer instanceof ArrayBuffer) {
-                    const blob = new Blob([data.buffer], { type: mime });
-                    const objUrl = URL.createObjectURL(blob);
-                    currentUrls.push(objUrl);
-
-                    const stage = document.createElement('div');
-                    stage.className = 'img-stage';
-                    const container = document.createElement('div');
-                    container.className = 'img-container';
-                    const img = document.createElement('img');
-                    img.src = objUrl;
-                    img.alt = 'Immagine protetta';
-                    container.appendChild(img);
-                    stage.appendChild(container);
-                    root.appendChild(stage);
-                    mountedCount = 1;
-                } else if (mime.includes('pdf') && Array.isArray(data.pageBuffers) && data.pageBuffers.length <= 500) {
-                    const wrapper = document.createElement('div');
-                    wrapper.id = 'pdf-wrapper';
-
-                    data.pageBuffers.forEach((pBuf, idx) => {
-                        if (!(pBuf instanceof ArrayBuffer)) return;
-                        const pBlob = new Blob([pBuf], { type: 'image/png' });
-                        const pUrl = URL.createObjectURL(pBlob);
-                        currentUrls.push(pUrl);
-
-                        const pageImg = document.createElement('img');
-                        pageImg.className = 'pdf-page';
-                        pageImg.src = pUrl;
-                        pageImg.alt = 'Pagina ' + (idx + 1);
-                        wrapper.appendChild(pageImg);
-                        mountedCount++;
-                    });
-
-                    root.appendChild(wrapper);
-                } else if (data.buffer instanceof ArrayBuffer) {
-                    const gBlob = new Blob([data.buffer], { type: mime });
-                    const gUrl = URL.createObjectURL(gBlob);
-                    currentUrls.push(gUrl);
-
-                    const stage = document.createElement('div');
-                    stage.className = 'generic-stage';
-                    const objEl = document.createElement('object');
-                    objEl.data = gUrl;
-                    objEl.type = mime;
-                    stage.appendChild(objEl);
-                    root.appendChild(stage);
-                    mountedCount = 1;
-                }
-
-                applyZoomState(data.zoom !== undefined ? data.zoom : 1.0);
-
-                if (window.parent && window.parent !== window) {
-                    window.parent.postMessage({
-                        type: 'PANZER_RENDER_ACK',
-                        nonce: EXPECTED_NONCE,
-                        count: mountedCount
-                    }, '*');
-                }
-            }
-        } catch (frameErr) {
-            try {
-                if (window.parent && window.parent !== window) {
-                    window.parent.postMessage({
-                        type: 'PANZER_VIEWER_ERR',
-                        nonce: EXPECTED_NONCE,
-                        msg: frameErr && frameErr.message ? String(frameErr.message) : 'FrameError'
-                    }, '*');
-                }
-            } catch (_) {}
-        }
-    });
-
-    try {
-        if (window.parent && window.parent !== window) {
-            window.parent.postMessage({
-                type: 'PANZER_VIEWER_READY',
-                nonce: EXPECTED_NONCE
-            }, '*');
-        }
-    } catch (_) {}
-})();
-<\/script>
+<script src="js/sandbox_viewer.js" data-panzer-nonce="${safeNonceAttr}"></script>
 </body>
 </html>`;
 
+        // 🧹 Revoca preventiva di eventuali Object URL del visore residui prima del nuovo montaggio.
         if (activeViewerBlobUrl) {
             URL.revokeObjectURL(activeViewerBlobUrl);
             activeViewerBlobUrl = null;
@@ -724,6 +518,7 @@ body, html { width:100%; height:100%; background:#0f172a; overflow:auto; -webkit
 
         const currentNonce = activeSandboxNonce;
 
+        // 📡🤝 Attesa della segnalazione PANZER_VIEWER_READY dal contesto isolato (con fallback su load e timeout di sicurezza).
         await new Promise((resolve) => {
             let settled = false;
             let timer = null;
@@ -747,10 +542,10 @@ body, html { width:100%; height:100%; background:#0f172a; overflow:auto; -webkit
             };
 
             const onFrameLoad = () => {
-                timer = setTimeout(finish, 100);
+                timer = setTimeout(finish, 120);
             };
 
-            timer = setTimeout(finish, 1200);
+            timer = setTimeout(finish, 1500);
             window.addEventListener('message', onReadyMsg);
             sandboxFrame.addEventListener('load', onFrameLoad, { once: true });
 
@@ -759,6 +554,7 @@ body, html { width:100%; height:100%; background:#0f172a; overflow:auto; -webkit
             sandboxFrame.srcdoc = viewerHtml;
         });
 
+        // 📦 Preparazione del payload binario (copia e trasferimento ArrayBuffer) in base al tipo MIME validato.
         let payload = null;
         const transferList = [];
 
@@ -802,6 +598,7 @@ body, html { width:100%; height:100%; background:#0f172a; overflow:auto; -webkit
             return;
         }
 
+        // 📩 Attesa del riscontro di montaggio (PANZER_RENDER_ACK / PANZER_VIEWER_ERR) per la telemetria PA.
         const ackPromise = new Promise((resolve) => {
             let done = false;
             const cleanup = () => {
@@ -811,6 +608,7 @@ body, html { width:100%; height:100%; background:#0f172a; overflow:auto; -webkit
                 window.removeEventListener('message', onDiagMsg);
                 resolve();
             };
+
             const onDiagMsg = (event) => {
                 if (event.source !== sandboxFrame.contentWindow) return;
                 const d = event.data;
@@ -823,12 +621,14 @@ body, html { width:100%; height:100%; background:#0f172a; overflow:auto; -webkit
                     cleanup();
                 }
             };
+
             const timeoutTimer = setTimeout(() => {
                 if (!done) {
                     logToTerminal('warn', '⚠️ Nessun ACK dal visore sandbox entro il timeout.');
                 }
                 cleanup();
             }, 1800);
+
             window.addEventListener('message', onDiagMsg);
         });
 
@@ -845,14 +645,16 @@ body, html { width:100%; height:100%; background:#0f172a; overflow:auto; -webkit
         await ackPromise;
     };
 
-    // 🔒 Visore Sandbox Protetto.
+    // 🔒 Visore Sandbox Protetto per la consultazione in sola lettura di atti, immagini e documenti PA.
     const openInSandbox = async (url, fileName) => {
         try {
+            // 🔭 Ripristino fattore di zoom iniziale (100%) e registrazione dell'evento nella telemetria PA.
             currentZoom = 1.0;
             logToTerminal('vault', `🫙🔒 Apertura visore protetto per: ${fileName || url} ( Zoom: ${Math.round(currentZoom * 100)}% )`);
 
             sandboxTitle.textContent = `🔎🔒 ${fileName || url}`;
 
+            // 🛑 Inibizione temporanea dei controlli di zoom durante il caricamento e la rasterizzazione del documento.
             if (btnZoomIn && btnZoomOut) {
                 btnZoomIn.disabled = true;
                 btnZoomOut.disabled = true;
@@ -862,6 +664,7 @@ body, html { width:100%; height:100%; background:#0f172a; overflow:auto; -webkit
                 btnZoomOut.style.cursor = 'not-allowed';
             }
 
+            // 🧹 Bonifica preventiva di eventuali risorse Object URL o buffer residui da sessioni precedenti.
             if (activeObjectUrl) { URL.revokeObjectURL(activeObjectUrl); activeObjectUrl = null; }
             if (activeViewerBlobUrl) { URL.revokeObjectURL(activeViewerBlobUrl); activeViewerBlobUrl = null; }
             if (activeFallbackObjectUrl) { URL.revokeObjectURL(activeFallbackObjectUrl); activeFallbackObjectUrl = null; }
@@ -874,30 +677,30 @@ body, html { width:100%; height:100%; background:#0f172a; overflow:auto; -webkit
             activePageBlobs = [];
             activeSandboxNonce = null;
 
-            const loadingHtml = `
-                <!DOCTYPE html>
-                <html>
-                <head>
-                    <meta charset="UTF-8">
-                    <style>
-                        body { background: #0f172a; color: #38bdf8; font-family: system-ui, -apple-system, sans-serif; display: flex; flex-direction: column; justify-content: center; align-items: center; height: 100vh; margin: 0; user-select: none; }
-                        .spinner { width: 44px; height: 44px; border: 4px solid rgba(56, 189, 248, 0.2); border-top-color: #38bdf8; border-radius: 50%; animation: spin 0.8s linear infinite; margin-bottom: 16px; }
-                        @keyframes spin { to { transform: rotate(360deg); } }
-                        p { font-size: 14px; letter-spacing: 0.5px; font-weight: 500; }
-                    </style>
-                </head>
-                <body>
-                    <div class="spinner"></div>
-                    <p>⏳📄 Loading...</p>
-                </body>
-                </html>
-            `;
+            // ⏳ Schermata di caricamento isolata in srcdoc senza script inline per evitare blocchi CSP.
+            const loadingHtml = `<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<style>
+body { background: #0f172a; color: #38bdf8; font-family: system-ui, -apple-system, sans-serif; display: flex; flex-direction: column; justify-content: center; align-items: center; height: 100vh; margin: 0; user-select: none; }
+.spinner { width: 44px; height: 44px; border: 4px solid rgba(56, 189, 248, 0.2); border-top-color: #38bdf8; border-radius: 50%; animation: spin 0.8s linear infinite; margin-bottom: 16px; }
+@keyframes spin { to { transform: rotate(360deg); } }
+p { font-size: 14px; letter-spacing: 0.5px; font-weight: 500; }
+</style>
+</head>
+<body>
+<div class="spinner"></div>
+<p>⏳📄 Loading...</p>
+</body>
+</html>`;
 
-            activeViewerBlobUrl = URL.createObjectURL(new Blob([loadingHtml], { type: 'text/html' }));
+            sandboxFrame.removeAttribute('src');
             sandboxFrame.setAttribute('sandbox', 'allow-scripts');
-            sandboxFrame.src = activeViewerBlobUrl;
+            sandboxFrame.srcdoc = loadingHtml;
             sandboxModal.classList.add('active');
 
+            // 📥 Acquisizione della risorsa dalla cache/stiva locale e identificazione del tipo MIME.
             const response = await fetch(url);
             if (!response || !response.ok) throw new Error(`HTTP ${response?.status || 'Risorsa irreperibile'}`);
 
@@ -909,6 +712,7 @@ body, html { width:100%; height:100%; background:#0f172a; overflow:auto; -webkit
             activeFallbackObjectUrl = null;
             activePageBlobs = [];
 
+            // 🖼️📄 Decodifica e preparazione del contenuto in base alla tipologia documentale.
             if (activeMimeType.startsWith('image/')) {
                 const imgBlob = new Blob([activeRawBuffer], { type: activeMimeType });
                 activeFallbackObjectUrl = URL.createObjectURL(imgBlob);
@@ -939,6 +743,7 @@ body, html { width:100%; height:100%; background:#0f172a; overflow:auto; -webkit
                 const pdfDoc = await loadingTask.promise;
                 logToTerminal('vault', `✅🔎 PDF - Pagine totali: ${pdfDoc.numPages}`);
 
+                // 🖼️ Rasterizzazione pagina per pagina su canvas temporaneo e rilascio immediato del buffer canvas.
                 for (let pageNum = 1; pageNum <= pdfDoc.numPages; pageNum++) {
                     const page = await pdfDoc.getPage(pageNum);
                     const scale = window.devicePixelRatio > 1 ? 1.5 : 1.2;
@@ -970,10 +775,12 @@ body, html { width:100%; height:100%; background:#0f172a; overflow:auto; -webkit
                 activeFallbackObjectUrl = URL.createObjectURL(genericBlob);
             }
 
+            // 🚀 Montaggio del visore isolato e trasmissione sicura del payload.
             await renderAndMountSandbox();
 
             sandboxTitle.textContent = `🔎🔒 ${fileName || url}`;
 
+            // 🔓 Riattivazione dei comandi di zoom a caricamento completato.
             if (btnZoomIn && btnZoomOut) {
                 btnZoomIn.disabled = false;
                 btnZoomOut.disabled = false;
@@ -990,12 +797,15 @@ body, html { width:100%; height:100%; background:#0f172a; overflow:auto; -webkit
         }
     };
 
-    // ️🔎🔒 Chiusura Visore e bonifica immediata.
+    // ️🔎🔒 Chiusura Visore, sigillatura canale, revoca risorse e bonifica volatile della RAM.
     const closeSandbox = () => {
-        postToSandboxFrame({ type: 'PANZER_CLEAR_VIEWER' });
+        // 🔒 Invio del comando di bonifica e sigillatura al contesto sandboxato prima della disattivazione.
+        postToSandboxFrame({ type: 'PANZER_CLEAR_VIEWER', nonce: activeSandboxNonce });
         sandboxModal.classList.remove('active');
+        sandboxFrame.removeAttribute('srcdoc');
         sandboxFrame.src = 'about:blank';
 
+        // 🧹 Revoca di tutti gli Object URL attivi e reset dei riferimenti di sessione.
         if (activeViewerBlobUrl) {
             URL.revokeObjectURL(activeViewerBlobUrl);
             activeViewerBlobUrl = null;
@@ -1017,6 +827,7 @@ body, html { width:100%; height:100%; background:#0f172a; overflow:auto; -webkit
         activePageBlobs = [];
         activeSandboxNonce = null;
 
+        // 🧹 Sovrascrittura a zero del buffer binario in memoria volatile ove ancora allocato.
         if (activeRawBuffer) {
             try {
                 if (!activeRawBuffer.detached && activeRawBuffer.byteLength > 0) {
