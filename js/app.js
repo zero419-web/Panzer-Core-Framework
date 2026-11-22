@@ -1,7 +1,7 @@
 /**
  * ⚙️⚡ App Controller 
  * Dashboard PA & Gestione UI
- * v2.4.3.3
+ * v2.4.3.4
  *
  * * 👤 Autore: Valentino Aglianó
  * Perito Informatico / Idoneo ASMEL 2025
@@ -124,7 +124,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         statusBadge.className = `badge-status ${badgeClass}`;
     };
     
-    // 🔏 Modale Grafico Unificato per Gestione PIN (Setup, Sblocco, Cambio, Associa PRF)
+        // 🔏 Modale Grafico Unificato per Gestione PIN (Setup, Sblocco, Cambio, Associa PRF)
     const showPinModal = (mode = 'unlock', messageText = 'Inserisci il PIN di sblocco:') => {
         let pinModal = document.getElementById('PA-pin-manager-modal');
         if (!pinModal) {
@@ -138,6 +138,42 @@ document.addEventListener('DOMContentLoaded', async () => {
             `;
             document.body.appendChild(pinModal);
         }
+
+        if (pinModal.style.display === 'flex' && mode === 'unlock' && document.getElementById('pa-pin-1')) {
+            return;
+        }
+        
+        let setupPinTemp = '';
+        const canDismissModal = (mode === 'change' || mode === 'register-prf');
+
+        const setModalFeedback = (text, color = '#fbbf24') => {
+            const msgEl = document.getElementById('pa-pin-modal-msg');
+            if (msgEl) {
+                msgEl.textContent = text;
+                msgEl.style.color = color;
+            }
+        };
+
+        const closeModalCleanly = () => {
+            setupPinTemp = '';
+            ['pa-pin-old', 'pa-pin-1', 'pa-pin-2'].forEach((id) => {
+                const el = document.getElementById(id);
+                if (el) el.value = '';
+            });
+            if (sdk && sdk.vaultManager) {
+                sdk.vaultManager._isChangingPin = false;
+            }
+            pinModal.style.display = 'none';
+        };
+
+        const closeBtnHtml = canDismissModal
+            ? `<button type="button" id="pa-pin-close-x" aria-label="Chiudi" title="Chiudi" style="
+                    position: absolute; top: 12px; right: 12px; width: 32px; height: 32px;
+                    background: transparent; color: #94a3b8; border: 1px solid #475569;
+                    border-radius: 6px; cursor: pointer; font-size: 1rem; line-height: 1;
+                    display: flex; align-items: center; justify-content: center;
+               ">✕</button>`
+            : '';
 
         let innerFields = '';
         let buttonText = 'Sblocca Caveau';
@@ -177,7 +213,8 @@ document.addEventListener('DOMContentLoaded', async () => {
         }
 
         pinModal.innerHTML = `
-            <div style="background: #1e293b; border: 1px solid #475569; padding: 30px; border-radius: 12px; max-width: 380px; width: 100%; text-align: center; box-shadow: 0 10px 25px rgba(0,0,0,0.5);">
+            <div style="position: relative; background: #1e293b; border: 1px solid #475569; padding: 30px; border-radius: 12px; max-width: 380px; width: 100%; text-align: center; box-shadow: 0 10px 25px rgba(0,0,0,0.5);">
+                ${closeBtnHtml}
                 <div style="font-size: 36px; margin-bottom: 12px;">🔐🪖</div>
                 <h3 style="margin-top: 0; color: #38bdf8; font-size: 1.2rem;">SICUREZZA BUNKER PA</h3>
                 <p id="pa-pin-modal-msg" style="font-size: 0.9rem; color: #cbd5e1; margin-bottom: 20px;">${messageText}</p>
@@ -194,11 +231,14 @@ document.addEventListener('DOMContentLoaded', async () => {
         const pin1Input = document.getElementById('pa-pin-1');
         if (pin1Input) pin1Input.focus();
 
+        const closeXBtn = document.getElementById('pa-pin-close-x');
+        if (closeXBtn) {
+            closeXBtn.addEventListener('click', closeModalCleanly);
+        }
+
         const cancelBtn = document.getElementById('pa-pin-cancel-btn');
         if (cancelBtn) {
-            cancelBtn.addEventListener('click', () => {
-                pinModal.style.display = 'none';
-            });
+            cancelBtn.addEventListener('click', closeModalCleanly);
         }
 
         const prfBtn = document.getElementById('pa-prf-unlock-btn');
@@ -218,19 +258,19 @@ document.addEventListener('DOMContentLoaded', async () => {
                 try {
                     const unlocked = await sdk.vaultManager.unlockVaultWithFallback(() => {});
                     if (unlocked) {
-                        pinModal.style.display = 'none';
+                        closeModalCleanly();
                         logToTerminal('success', '🔓🧬 Caveau sbloccato tramite WebAuthn PRF.');
                     } else {
                         prfBtn.disabled = false;
                         prfBtn.textContent = origText;
-                        const msgEl = document.getElementById('pa-pin-modal-msg');
-                        if (msgEl) msgEl.textContent = '🔐 Passkey non disponibile o annullata: inserisci il PIN.';
+                        setModalFeedback('🔐 Passkey non disponibile o annullata: inserisci il PIN.', '#fbbf24');
                         logToTerminal('info', '🔐 Fallback al PIN: sblocco PRF non completato.');
                         if (pin1Input) pin1Input.focus();
                     }
                 } catch (_) {
                     prfBtn.disabled = false;
                     prfBtn.textContent = origText;
+                    setModalFeedback('⚠️ Errore Passkey: inserisci il PIN.', '#fbbf24');
                     logToTerminal('warn', '⚠️ Fallback al PIN durante sblocco PRF.');
                     if (pin1Input) pin1Input.focus();
                 }
@@ -246,14 +286,30 @@ document.addEventListener('DOMContentLoaded', async () => {
                 const p1Val = p1El.value.trim();
                 const p2Val = p2El.value.trim();
 
-                if (p1Val.length < 4) { alert("⚠️🔢 Il PIN deve essere di almeno 4 cifre."); return; }
-                if (p1Val !== p2Val) { alert("❌🔄 I PIN inseriti non coincidono. Riprova."); return; }
+                if (p1Val.length < 4) {
+                    setModalFeedback('⚠️🔢 Il PIN deve essere di almeno 4 cifre.', '#fbbf24');
+                    if (p1El) p1El.focus();
+                    return;
+                }
+                if (p1Val !== p2Val) {
+                    setModalFeedback('❌🔄 I PIN inseriti non coincidono. Riprova.', '#f87171');
+                    if (p2El) p2El.focus();
+                    return;
+                }
 
                 p1El.value = '';
                 p2El.value = '';
 
                 if (mode === 'setup') {
-                    sdk.vaultManager.submitPin(p1Val, 'setup', async (res) => {
+                    setupPinTemp = p1Val;
+                    btn.disabled = true;
+                    const origSetupText = btn.textContent;
+                    btn.textContent = '⏳ Creazione Caveau...';
+
+                    sdk.vaultManager.submitPin(setupPinTemp, 'setup', async (res) => {
+                        btn.disabled = false;
+                        btn.textContent = origSetupText;
+
                         if (res && res.success) {
                             logToTerminal('success', '🔓✅ Caveau creato e sbloccato correttamente.');
 
@@ -263,7 +319,7 @@ document.addEventListener('DOMContentLoaded', async () => {
 
                             if (canPrf && typeof sdk.vaultManager.registerPrfCredential === 'function') {
                                 pinModal.innerHTML = `
-                                    <div style="background: #1e293b; border: 1px solid #475569; padding: 30px; border-radius: 12px; max-width: 380px; width: 100%; text-align: center; box-shadow: 0 10px 25px rgba(0,0,0,0.5);">
+                                    <div style="position: relative; background: #1e293b; border: 1px solid #475569; padding: 30px; border-radius: 12px; max-width: 380px; width: 100%; text-align: center; box-shadow: 0 10px 25px rgba(0,0,0,0.5);">
                                         <div style="font-size: 36px; margin-bottom: 12px;">🧬🔐</div>
                                         <h3 style="margin-top: 0; color: #38bdf8; font-size: 1.2rem;">ACCESSO RAPIDO PASSKEY</h3>
                                         <p id="pa-prf-setup-msg" style="font-size: 0.9rem; color: #cbd5e1; margin-bottom: 20px;">
@@ -286,7 +342,7 @@ document.addEventListener('DOMContentLoaded', async () => {
 
                                 if (skipBtn) {
                                     skipBtn.addEventListener('click', () => {
-                                        pinModal.style.display = 'none';
+                                        closeModalCleanly();
                                     });
                                 }
 
@@ -297,34 +353,35 @@ document.addEventListener('DOMContentLoaded', async () => {
                                         const origRegText = regBtn.textContent;
                                         regBtn.textContent = '⏳ Registrazione Passkey in corso...';
 
-                                        const regRes = await sdk.vaultManager.registerPrfCredential(p1Val);
+                                        const regRes = await sdk.vaultManager.registerPrfCredential(setupPinTemp);
                                         if (regRes && regRes.success) {
                                             logToTerminal('success', '🔐🧬 Passkey PRF associata al caveau.');
-                                            pinModal.style.display = 'none';
+                                            closeModalCleanly();
                                         } else {
                                             regBtn.disabled = false;
                                             if (skipBtn) skipBtn.disabled = false;
                                             regBtn.textContent = origRegText;
                                             if (setupMsg) {
                                                 setupMsg.textContent = `⚠️ ${regRes?.error || 'Associazione non completata.'} Puoi riprovare o usare solo il PIN.`;
+                                                setupMsg.style.color = '#fbbf24';
                                             }
                                             logToTerminal('warn', `⚠️ Associazione PRF non completata: ${regRes?.error || 'annullata'}`);
                                         }
                                     });
                                 }
                             } else {
-                                pinModal.style.display = 'none';
+                                closeModalCleanly();
                             }
                         } else {
+                            setupPinTemp = '';
                             if (res && (res.wiped || (res.attemptsLeft === 0) || (res.error && res.error.toLowerCase().includes("rimasti 0")))) {
-                                alert("🚨💣 3 tentativi falliti! La stiva è stata distrutta per sicurezza.");
-                                // 🧹 Pulizia totale dello storage client
+                                setModalFeedback('🚨💣 3 tentativi falliti! La stiva è stata distrutta per sicurezza.', '#f87171');
                                 localStorage.removeItem('panzer_has_ever_synced');
                                 localStorage.removeItem('panzer_vault_synced');
                                 sessionStorage.removeItem('panzer_active_session');
-                                window.location.reload();
+                                setTimeout(() => window.location.reload(), 1200);
                             } else {
-                                alert(`❌🔒 ${res?.error || "PIN errato. Riprova."}`);
+                                setModalFeedback(`❌🔒 ${res?.error || "PIN errato. Riprova."}`, '#f87171');
                                 if (pin1Input) pin1Input.focus();
                             }
                         }
@@ -333,30 +390,44 @@ document.addEventListener('DOMContentLoaded', async () => {
                     const oldEl = document.getElementById('pa-pin-old');
                     const oldVal = oldEl.value.trim();
 
-                    // 🛑 CONTROLLO: Il nuovo PIN non può essere identico al vecchio
+                    if (!oldVal || oldVal.length < 4) {
+                        setModalFeedback('⚠️🔢 Inserisci il vecchio PIN.', '#fbbf24');
+                        if (oldEl) oldEl.focus();
+                        return;
+                    }
+
                     if (oldVal === p1Val) {
-                        alert("⚠️ Il nuovo PIN non può essere identico al vecchio PIN. Scegline uno diverso.");
+                        setModalFeedback('⚠️ Il nuovo PIN non può essere identico al vecchio PIN.', '#fbbf24');
                         if (pin1Input) pin1Input.focus();
                         return;
                     }
 
                     oldEl.value = '';
+                    btn.disabled = true;
+                    const origChangeText = btn.textContent;
+                    btn.textContent = '⏳ Aggiornamento PIN...';
 
                     sdk.vaultManager.changePin(oldVal, p1Val, (res) => {
+                        btn.disabled = false;
+                        btn.textContent = origChangeText;
                         if (res && res.success) {
-                            pinModal.style.display = 'none';
+                            closeModalCleanly();
                             logToTerminal('success', '🔑✅ PIN modificato con successo.');
-                            alert("✅🔑 PIN aggiornato correttamente!");
                         } else {
                             const errMsg = res?.error || 'Vecchio PIN errato o errore interno.';
                             logToTerminal('error', `❌🔑 Errore cambio PIN: ${errMsg}`);
-                            alert(`❌🔑 Errore cambio PIN: ${errMsg}`);
+                            setModalFeedback(`❌🔑 ${errMsg}`, '#f87171');
+                            if (oldEl) oldEl.focus();
                         }
                     });
                 }
             } else if (mode === 'register-prf') {
                 const pinVal = pin1Input.value.trim();
-                if (pinVal.length < 4) { alert("⚠️🔢 Inserisci un PIN valido (min 4 cifre)."); return; }
+                if (pinVal.length < 4) {
+                    setModalFeedback('⚠️🔢 Inserisci un PIN valido (min 4 cifre).', '#fbbf24');
+                    if (pin1Input) pin1Input.focus();
+                    return;
+                }
                 pin1Input.value = '';
 
                 btn.disabled = true;
@@ -369,34 +440,43 @@ document.addEventListener('DOMContentLoaded', async () => {
                     if (cancelBtn) cancelBtn.disabled = false;
                     btn.textContent = origBtnText;
                     if (res && res.success) {
-                        pinModal.style.display = 'none';
+                        closeModalCleanly();
                         logToTerminal('success', '🔐🧬 Passkey PRF associata correttamente al caveau.');
                     } else {
                         const errMsg = res?.error || 'Associazione annullata o non riuscita.';
                         logToTerminal('warn', `⚠️ Associazione Passkey PRF: ${errMsg}`);
-                        alert(`⚠️ ${errMsg}`);
+                        setModalFeedback(`⚠️ ${errMsg}`, '#fbbf24');
                         if (pin1Input) pin1Input.focus();
                     }
                 });
             } else {
                 const pinVal = pin1Input.value.trim();
-                if (pinVal.length < 4) { alert("⚠️🔢 Inserisci un PIN valido (min 4 cifre)."); return; }
+                if (pinVal.length < 4) {
+                    setModalFeedback('⚠️🔢 Inserisci un PIN valido (min 4 cifre).', '#fbbf24');
+                    if (pin1Input) pin1Input.focus();
+                    return;
+                }
                 pin1Input.value = '';
 
+                btn.disabled = true;
+                const origUnlockText = btn.textContent;
+                btn.textContent = '⏳ Verifica PIN...';
+
                 sdk.vaultManager.submitPin(pinVal, 'unlock', (res) => {
+                    btn.disabled = false;
+                    btn.textContent = origUnlockText;
                     if (res && res.success) {
-                        pinModal.style.display = 'none';
+                        closeModalCleanly();
                         logToTerminal('success', '🔓✅ Caveau sbloccato correttamente.');
                     } else {
                         if (res && res.wiped) {
-                            alert("🚨💣 3 tentativi falliti! La stiva è stata distrutta per sicurezza.");
-                            // 🧹 Pulisci i flag locali prima del reload
+                            setModalFeedback('🚨💣 3 tentativi falliti! La stiva è stata distrutta per sicurezza.', '#f87171');
                             localStorage.removeItem('panzer_has_ever_synced');
                             localStorage.removeItem('panzer_vault_synced');
                             sessionStorage.removeItem('panzer_active_session');
-                            window.location.reload();
+                            setTimeout(() => window.location.reload(), 1200);
                         } else {
-                            alert(`❌🔒 ${res?.error || "PIN errato. Riprova."}`);
+                            setModalFeedback(`❌🔒 ${res?.error || "PIN errato. Riprova."}`, '#f87171');
                             if (pin1Input) pin1Input.focus();
                         }
                     }
@@ -1068,6 +1148,21 @@ p { font-size: 14px; letter-spacing: 0.5px; font-weight: 500; }
 
     // Avvia il controllo...
     initVaultCheck();
+    
+    window.addEventListener('pageshow', (event) => {
+        if (event.persisted) {
+            initVaultCheck();
+        }
+    });
+
+    if ('serviceWorker' in navigator) {
+        navigator.serviceWorker.addEventListener('controllerchange', () => {
+            const modal = document.getElementById('PA-pin-manager-modal');
+            if (!modal || modal.style.display === 'none') {
+                initVaultCheck();
+            }
+        });
+    }
 
 
     // 📊🔎🗄️ Rendering Tabella Ispezione Stiva.

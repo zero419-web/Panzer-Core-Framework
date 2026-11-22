@@ -1,5 +1,5 @@
 /**
- * ⚙️🪖🛡️ PanzerSDK - v2.3.8.1
+ * ⚙️🪖🛡️ PanzerSDK - v2.3.8.2
  * 
  * * 👤 Autore: Valentino Aglianó
  * Perito Informatico / Idoneo ASMEL 2025
@@ -89,15 +89,19 @@ export class PanzerVaultManager {
         });
         this.resetInactivityTimer();
         document.addEventListener('visibilitychange', () => {
-            if (document.visibilityState === 'visible') {
+            if (document.visibilityState === 'visible' && !this._isChangingPin) {
                 this.checkStatus((status) => {
-                    if (status && status.configured && !status.unlocked && typeof this.onLockCallback === 'function') {
-                        this.onLockCallback();
+                    if (status && status.configured && !status.unlocked) {
+                        if (typeof this.onLockCallback === 'function') {
+                            this.onLockCallback();
+                        }
+                        if (typeof this.onPromptPinCallback === 'function') {
+                            this.onPromptPinCallback('unlock', '🔒 Caveau bloccato. Inserisci il PIN o usa Passkey:');
+                        }
                     }
                 });
             }
         });
-        
 
         if ('serviceWorker' in navigator) {
             navigator.serviceWorker.addEventListener('message', (event) => {
@@ -609,12 +613,14 @@ export class PanzerVaultManager {
                     }
                 } catch (attemptErr) {
                     lastErr = attemptErr;
+                    if (attemptErr?.name === 'NotAllowedError' || attemptErr?.name === 'AbortError') {
+                        break;
+                    }
                     if (typeof logToTerminal === 'function') {
                         logToTerminal('warn', `⚠️ ${step.label} non riuscito (${attemptErr?.name || 'Error'}). Passo al fallback successivo...`);
                     }
                 }
             }
-
             challenge.fill(0);
             userId.fill(0);
 
@@ -1042,7 +1048,7 @@ export class PanzerSDK {
         this._watchdogFailures = 0;
 
         const runWatchdogCheck = async (isImmediate = false) => {
-            if (!('caches' in window) || this._isSyncing || this._isChangingPin) return;
+            if (!('caches' in window) || this._isSyncing || this._isChangingPin || this.vaultManager?._isChangingPin) return;
 
             try {
                 const everSynced = localStorage.getItem('panzer_has_ever_synced') === 'true';
@@ -1103,7 +1109,7 @@ export class PanzerSDK {
                 this._watchdogFailures = 0;
 
             } catch (e) {
-                if (this._isSyncing || this._isChangingPin) return;
+                if (this._isSyncing || this._isChangingPin || this.vaultManager?._isChangingPin) return;
 
                 this._watchdogFailures++;
                 this.onLogMessage('warn', `⚠️🐺 SDK: Anomalia Cache ⚠️🗄️ Retry (${this._watchdogFailures}/3) -> [${e.message}]`);
