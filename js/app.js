@@ -432,7 +432,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         }
     });
 
-    // 🔭 Zoom Universale...
+        // 🔭 Zoom Universale.
     const postToSandboxFrame = (payload) => {
         if (!sandboxFrame || !sandboxFrame.contentWindow || !activeSandboxNonce) return false;
         try {
@@ -458,19 +458,21 @@ document.addEventListener('DOMContentLoaded', async () => {
         }
     };
 
+    // 🔼 Incremento controllato dello zoom fino al tetto massimo consentito (300% / 3.0).
     if (btnZoomIn) {
         btnZoomIn.addEventListener('click', () => {
             if (currentZoom < 3.0) {
-                currentZoom = Math.round((currentZoom + 0.25) * 100) / 100;
+                currentZoom = Math.min(3.0, Math.round((currentZoom + 0.25) * 100) / 100);
                 applyZoom();
             }
         });
     }
 
+    // 🔽 Riduzione controllata dello zoom fino al limite base del campo visivo (100% / 1.0), senza accumuli sotto-soglia.
     if (btnZoomOut) {
         btnZoomOut.addEventListener('click', () => {
-            if (currentZoom > 0.5) {
-                currentZoom = Math.round((currentZoom - 0.25) * 100) / 100;
+            if (currentZoom > 1.0) {
+                currentZoom = Math.max(1.0, Math.round((currentZoom - 0.25) * 100) / 100);
                 applyZoom();
             }
         });
