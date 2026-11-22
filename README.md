@@ -6,8 +6,9 @@
 
 <p align="center">
   <img src="https://img.shields.io/badge/🌀_PANZER_SDK-v2.3.8.1-1f4e79" alt="SDK Badge">
-  <img src="https://img.shields.io/badge/📊_PANZER_APP-v2.4.3.1-2563eb" alt="App Badge">
-  <img src="https://img.shields.io/badge/⚙️🪖_CORE_PANZER-v7.9.41+-4f4f00" alt="Core Badge">
+  <img src="https://img.shields.io/badge/📊_PANZER_APP-v2.4.3.3-2563eb" alt="App Badge">
+  <img src="https://img.shields.io/badge/🔒👁️_SANDBOX_VIEWER-v1.0.0.4-6d28d9" alt="Sandbox Viewer Badge">
+  <img src="https://img.shields.io/badge/⚙️🪖_CORE_PANZER-v7.9.42+-4f4f00" alt="Core Badge">
   <img src="https://img.shields.io/badge/PoC-📱_PWA_x_PA-af0000" alt="PoC Badge">
   <img src="https://img.shields.io/badge/Licenza-🇪🇺_EUPL_v1.2-0055a5" alt="License Badge">
 </p>
@@ -23,7 +24,7 @@
 <br>
 
 > [!NOTE]
-> 💡 **La demo live permette di testare immediatamente:** la Resilienza di rete, la Modalità Bunker 🗄️, la simulazione Lie-Fi 🤥🛜, lo sblocco tramite **PIN o WebAuthn PRF / Passkey** 🔐🧬 e il Download 📥 simultaneo delle risorse dal Manifesto.
+> 💡 **La demo live permette di testare immediatamente:** la Resilienza di rete, la Modalità Bunker 🗄️, la simulazione Lie-Fi 🤥🛜, lo sblocco tramite **PIN o WebAuthn PRF / Passkey** 🔐🧬, la consultazione isolata dei documenti nel visore sandbox 🔒👁️ e il Download 📥 simultaneo delle risorse dal Manifesto.
 
 <br>
 
@@ -31,7 +32,7 @@
 
 ## 🚀 Obiettivi del Progetto
 
-- 🌀 **Proof of Concept (PoC):** <br> Architettura software sovrana per **Progressive Web App (📲 PWA)** basata sul **⚙️🪖 Core Panzer v7.9.41+**, il client **PanzerSDK v2.3.8.1** e la Dashboard **App Controller v2.4.3.1**, progettata in modalità *🔐 Zero-Trust*.
+- 🌀 **Proof of Concept (PoC):** <br> Architettura software sovrana per **Progressive Web App (📲 PWA)** basata sul **⚙️🪖 Core Panzer v7.9.42+**, il client **PanzerSDK v2.3.8.1**, il visore isolato **Sandbox Viewer v1.0.0.4** e la Dashboard **App Controller v2.4.3.3**, progettata in modalità *🔐 Zero-Trust*.
 
 - 🏛️ **Conformità Istituzionale:** <br> Il sistema garantisce **massima resilienza informatica**, continuità operativa *offline-first*, consultazione protetta di atti e documenti della **Pubblica Amministrazione (PA)**, nel pieno rispetto delle linee guida tecniche 📑 **AgID** e del **📜 Codice dell'Amministrazione Digitale (CAD)** per il riuso (*🇪🇺 EUPL v1.2*).
 
@@ -43,11 +44,11 @@
 
 ## 🛠️ Architettura e Caratteristiche Principali
 
-Il sistema si compone di due livelli perfettamente integrati: il **Service Worker (`ServiceWorker.js` - `v7.9.40+`)** che agisce come entità autonoma di difesa, e l'**SDK & Dashboard Client (`SDK.js` `v2.3.8.1` / `app.js` `v2.4.3.1`)** che gestisce l'interfaccia, la memoria, i flussi PIN/Passkey PRF e i meccanismi di blocco con gestione avanzata del caveau cifrato.
+Il sistema si compone di tre livelli integrati: il **Service Worker (`ServiceWorker.js` - `v7.9.42+`)** che agisce come entità autonoma di difesa, l'**SDK & Dashboard Client (`SDK.js` `v2.3.8.1` / `app.js` `v2.4.3.3`)** che gestisce l'interfaccia, la memoria, i flussi PIN/Passkey PRF e i meccanismi di blocco, e il **Visore Isolato (`js/sandbox_viewer.js` - `v1.0.0.4`)** per la visualizzazione protetta in `iframe`.
 
 <br>
 
-### 🔹 1. Core Engine ( `ServiceWorker.js` - v7.9.40+ )
+### 🔹 1. Core Engine ( `ServiceWorker.js` - v7.9.42+ )
 
 - **🔐🔑 Pin-Protected & PRF Key Wrapping (`PBKDF2` / `HKDF` + `AES-GCM 256-bit`):** <br> La Master Key è protetta a riposo su IndexedDB (`PWA_Vault`) tramite `wrapped_master_key` derivato dal PIN (`100.000 iterazioni PBKDF2, SHA-256`) e supporta l'associazione opzionale di una credenziale **WebAuthn PRF** (`prf_wrapped_master_key` derivata via `HKDF-SHA256` con dominio `PANZER_WEBAUTHN_PRF_KEK_V1` e salt casuale).
 
@@ -65,11 +66,11 @@ Il sistema si compone di due livelli perfettamente integrati: il **Service Worke
 
 - **🔀📡 Architettura di Instradamento & Security Headers (`injectSecurityHeaders`):** <br> Instradamento compartimentato su `mainCache` (`Bunker` cifrato) e `userCache` (`Magazzino` con TTL), con iniezione automatica delle intestazioni HTTP difensive (`X-Content-Type-Options: nosniff`, `X-Frame-Options: DENY`, `Referrer-Policy`, `Cross-Origin-Resource-Policy: same-origin`, `X-XSS-Protection`).
 
-- **✉️↔️📬 Canale IPC PostMessage Hardened:** <br> Origin guard, lista esplicita dei comandi autorizzati (`INIT_DB`, `LOCK_VAULT`, `SUBMIT_PIN`, `CHANGE_PIN`, `CHECK_VAULT_STATUS`, `GET_PRF_CONFIG`, `UNLOCK_PRF`, `REGISTER_PRF`), `validateAndSanitizeAssetPath` (anti-SSRF e anti-path traversal), limite `MAX_ALLOWED_ASSETS = 500` e `universalScanner` (`MAX_NODES_LIMIT = 999`, profondità max 12).
+- **✉️↔️📬 Canale IPC PostMessage Hardened:** <br> Origin guard (`event.origin === self.origin`), lista esplicita dei comandi autorizzati (`INIT_DB`, `LOCK_VAULT`, `SUBMIT_PIN`, `CHANGE_PIN`, `CHECK_VAULT_STATUS`, `GET_PRF_CONFIG`, `UNLOCK_PRF`, `REGISTER_PRF`), `validateAndSanitizeAssetPath` (anti-SSRF e anti-path traversal), limite `MAX_ALLOWED_ASSETS = 500` e `universalScanner` (`MAX_NODES_LIMIT = 999`, profondità max 12).
 
 <br>
 
-### 🔹 2. Client SDK & Dashboard ( `SDK.js` v2.3.8.1 & `app.js` v2.4.3.1 )
+### 🔹 2. Client SDK, Dashboard & Sandbox Viewer ( `SDK.js` v2.3.8.1, `app.js` v2.4.3.3 & `js/sandbox_viewer.js` v1.0.0.4 )
 
 - **🔏🛡️ PanzerVaultManager & Sblocco all'Avvio (`initVaultCheck`):** <br> Gestione del timer di inattività di 10 minuti con auto-lock della RAM, controllo di sessione per scheda (`panzer_tab_active`), modale grafico unificato (`showPinModal`) per `setup`, `unlock`, `change` e `register-prf`, e sblocco immediato all'avvio o dopo refresh.
 
@@ -79,7 +80,7 @@ Il sistema si compone di due livelli perfettamente integrati: il **Service Worke
 
 - **🐺 Watchdog Anti-Incognito ❌🕵️:** <br> Rilevamento selettivo della navigazione in incognito o sandbox restrittive sui motori Chromium/Blink con timeout adattivo.
 
-- **🔒 Visore Sandbox Protetto (`openInSandbox` & `closeSandbox`):** <br> Apertura isolata dei documenti tramite `iframe` (`sandbox="allow-scripts"`), rendering rasterizzato delle pagine PDF tramite `pdfjsLib`, zoom regolabile e **Zeroization preventiva della RAM** (`Uint8Array.fill(0)`) alla chiusura.
+- **🔒 Visore Sandbox Protetto (`openInSandbox`, `renderAndMountSandbox`, `closeSandbox` & `js/sandbox_viewer.js`):** <br> Isolamento tramite `iframe` (`sandbox="allow-scripts"`) con script esterno `js/sandbox_viewer.js` (`v1.0.0.4`), handshake su `nonce` di sessione (`PANZER_VIEWER_READY`, `PANZER_RENDER_VIEWER`, `PANZER_RENDER_ACK`, `PANZER_CLEAR_VIEWER`), trasferimento tramite `ArrayBuffer`, rendering rasterizzato delle pagine PDF tramite `pdfjsLib`, zoom regolabile (`1.0`–`3.0`) con panning puntatore/touch e **Zeroization preventiva della RAM** (`Uint8Array.fill(0)`) alla chiusura.
 
 - **❄️ Immutabilità & Hardening Client:** <br> Sigillatura delle configurazioni e del manifesto in memoria (`Object.freeze` / `deepFreeze`), sanitizzazione dei filtri di ricerca e rendering tabellare tramite `DocumentFragment` e `textContent`.
 
@@ -146,7 +147,12 @@ Il sistema si compone di due livelli perfettamente integrati: il **Service Worke
 ## 📜 Changelog & Storico Versioni
 
 <details>
-<summary><strong>⚙️🪖 Espandi Changelog <br> CORE PANZER ( v7.6+ → v7.9.40+ )</strong></summary>
+<summary><strong>⚙️🪖 Espandi Changelog <br> CORE PANZER ( v7.6+ → v7.9.42+ )</strong></summary>
+
+<br>
+
+### 🪖 NOVITÀ v7.9.42+ (`🔐🧬 Fallback Passkey / PIN`)
+- 🔐🧬 **Correzioni Flusso Passkey con Fallback su PIN:** <br> Rifinito il flusso Passkey/WebAuthn PRF introdotto nella `v7.9.40+` con ripiego automatico su authenticator esterno o su solo PIN quando la Passkey non è disponibile, non funziona o non supporta PRF, mantenendo invariato il canale IPC (`UNLOCK_PRF` con `fallbackToPin: true` e `REGISTER_PRF`).
 
 <br>
 
@@ -264,7 +270,17 @@ Il sistema si compone di due livelli perfettamente integrati: il **Service Worke
 <br>
 
 <details>
-<summary><strong>⚙️📦 Espandi Changelog <br> SDK ( v2.3.8.1 ) & DASHBOARD APP ( v2.4.3.1 )</strong></summary>
+<summary><strong>⚙️📦 Espandi Changelog <br> SDK ( v2.3.8.1 ), SANDBOX VIEWER ( v1.0.0.4 ) & DASHBOARD APP ( v2.4.3.3 )</strong></summary>
+
+<br>
+
+### 📣 NOVITÀ APP v2.4.3.3 & SANDBOX VIEWER v1.0.0.4 (`🔒👁️ Visore Sandbox CSP, Handshake Nonce, Zoom & Panning`)
+
+- 🔒👁️ **Visore Isolato con `srcdoc` e Modulo `js/sandbox_viewer.js` (`v1.0.0.4`):** <br> Separato il codice del visore nel file esterno `js/sandbox_viewer.js` (incluso in `getDefinedCoreAssets` in `app.js` `v2.4.3.3`) con `iframe` `sandbox="allow-scripts"` senza script inline.
+
+- 🤝📩 **Handshake su `nonce` & Trasferimento `ArrayBuffer`:** <br> Sincronizzazione tramite `PANZER_VIEWER_READY`, `PANZER_RENDER_VIEWER`, `PANZER_RENDER_ACK`, `PANZER_VIEWER_ERR` e `PANZER_CLEAR_VIEWER` con invio di copie `ArrayBuffer` (`.slice(0)` e `pageBlob.arrayBuffer()`).
+
+- 🔭🖐️ **Zoom Stabile (`1.0`–`3.0`) e Panning Desktop/Mobile:** <br> Ripristino pulito al `100%`, trascinamento tramite pointer/touch quando `zoom > 1.0` e soglia minima di `currentZoom` fissata a `1.0` sui pulsanti `+`/`-`.
 
 <br>
 
