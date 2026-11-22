@@ -474,7 +474,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         });
     }
 
-    // 🖼️📄 Generatore del visore protetto (origine opaca 'null', canale blindato da nonce e handshake ready).
+    // 🖼️📄 Generatore del visore protetto.
     const renderAndMountSandbox = async () => {
         activeSandboxNonce = (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function')
             ? crypto.randomUUID()
@@ -596,86 +596,110 @@ document.addEventListener('DOMContentLoaded', async () => {
                     scroller.addEventListener('pointercancel', stopDrag, { passive: true });
 
                     window.addEventListener('message', (event) => {
-                        if (channelSealed) return;
-                        if (event.source !== window.parent) return;
-                        if (event.origin !== 'null' && event.origin !== '') return;
+                        try {
+                            if (channelSealed) return;
+                            if (event.source !== window.parent) return;
+                            if (event.origin !== 'null' && event.origin !== '') return;
 
-                        const data = event.data;
-                        if (!data || typeof data !== 'object' || Array.isArray(data)) return;
-                        if (typeof data.nonce !== 'string' || data.nonce !== EXPECTED_NONCE) return;
+                            const data = event.data;
+                            if (!data || typeof data !== 'object' || Array.isArray(data)) return;
+                            if (typeof data.nonce !== 'string' || data.nonce !== EXPECTED_NONCE) return;
 
-                        const allowedTypes = ['PANZER_RENDER_VIEWER', 'PANZER_ZOOM_VIEWER', 'PANZER_CLEAR_VIEWER'];
-                        if (!allowedTypes.includes(data.type)) return;
+                            const allowedTypes = ['PANZER_RENDER_VIEWER', 'PANZER_ZOOM_VIEWER', 'PANZER_CLEAR_VIEWER'];
+                            if (!allowedTypes.includes(data.type)) return;
 
-                        if (data.type === 'PANZER_ZOOM_VIEWER') {
-                            if (!isValidZoom(data.zoom)) return;
-                            applyZoomState(data.zoom);
-                            return;
-                        }
-
-                        if (data.type === 'PANZER_CLEAR_VIEWER') {
-                            channelSealed = true;
-                            revokeLocalUrls();
-                            root.innerHTML = '';
-                            currentZoomVal = 1.0;
-                            document.body.style.touchAction = '';
-                            document.body.style.cursor = 'default';
-                            return;
-                        }
-
-                        if (data.type === 'PANZER_RENDER_VIEWER') {
-                            if (!isValidMime(data.mimeType)) return;
-                            if (data.zoom !== undefined && !isValidZoom(data.zoom)) return;
-
-                            revokeLocalUrls();
-                            root.innerHTML = '';
-                            const mime = data.mimeType.split(';')[0].trim().toLowerCase();
-
-                            if (mime.startsWith('image/') && data.blob instanceof Blob) {
-                                const objUrl = URL.createObjectURL(data.blob);
-                                currentUrls.push(objUrl);
-
-                                const stage = document.createElement('div');
-                                stage.className = 'img-stage';
-                                const container = document.createElement('div');
-                                container.className = 'img-container';
-                                const img = document.createElement('img');
-                                img.src = objUrl;
-                                img.alt = 'Immagine protetta';
-                                container.appendChild(img);
-                                stage.appendChild(container);
-                                root.appendChild(stage);
-                            } else if (mime.includes('pdf') && Array.isArray(data.pageBlobs) && data.pageBlobs.length <= 500) {
-                                const wrapper = document.createElement('div');
-                                wrapper.id = 'pdf-wrapper';
-
-                                data.pageBlobs.forEach((pBlob, idx) => {
-                                    if (!(pBlob instanceof Blob)) return;
-                                    const pUrl = URL.createObjectURL(pBlob);
-                                    currentUrls.push(pUrl);
-
-                                    const pageImg = document.createElement('img');
-                                    pageImg.className = 'pdf-page';
-                                    pageImg.src = pUrl;
-                                    pageImg.alt = 'Pagina ' + (idx + 1);
-                                    wrapper.appendChild(pageImg);
-                                });
-
-                                root.appendChild(wrapper);
-                            } else if (data.blob instanceof Blob) {
-                                const gUrl = URL.createObjectURL(data.blob);
-                                currentUrls.push(gUrl);
-
-                                const stage = document.createElement('div');
-                                stage.className = 'generic-stage';
-                                const objEl = document.createElement('object');
-                                objEl.data = gUrl;
-                                objEl.type = mime;
-                                stage.appendChild(objEl);
-                                root.appendChild(stage);
+                            if (data.type === 'PANZER_ZOOM_VIEWER') {
+                                if (!isValidZoom(data.zoom)) return;
+                                applyZoomState(data.zoom);
+                                return;
                             }
 
-                            applyZoomState(data.zoom !== undefined ? data.zoom : 1.0);
+                            if (data.type === 'PANZER_CLEAR_VIEWER') {
+                                channelSealed = true;
+                                revokeLocalUrls();
+                                root.innerHTML = '';
+                                currentZoomVal = 1.0;
+                                document.body.style.touchAction = '';
+                                document.body.style.cursor = 'default';
+                                return;
+                            }
+
+                            if (data.type === 'PANZER_RENDER_VIEWER') {
+                                if (!isValidMime(data.mimeType)) return;
+                                if (data.zoom !== undefined && !isValidZoom(data.zoom)) return;
+
+                                revokeLocalUrls();
+                                root.innerHTML = '';
+                                const mime = data.mimeType.split(';')[0].trim().toLowerCase();
+                                let mountedCount = 0;
+
+                                if (mime.startsWith('image/') && data.blob instanceof Blob) {
+                                    const objUrl = URL.createObjectURL(data.blob);
+                                    currentUrls.push(objUrl);
+
+                                    const stage = document.createElement('div');
+                                    stage.className = 'img-stage';
+                                    const container = document.createElement('div');
+                                    container.className = 'img-container';
+                                    const img = document.createElement('img');
+                                    img.src = objUrl;
+                                    img.alt = 'Immagine protetta';
+                                    container.appendChild(img);
+                                    stage.appendChild(container);
+                                    root.appendChild(stage);
+                                    mountedCount = 1;
+                                } else if (mime.includes('pdf') && Array.isArray(data.pageBlobs) && data.pageBlobs.length <= 500) {
+                                    const wrapper = document.createElement('div');
+                                    wrapper.id = 'pdf-wrapper';
+
+                                    data.pageBlobs.forEach((pBlob, idx) => {
+                                        if (!(pBlob instanceof Blob)) return;
+                                        const pUrl = URL.createObjectURL(pBlob);
+                                        currentUrls.push(pUrl);
+
+                                        const pageImg = document.createElement('img');
+                                        pageImg.className = 'pdf-page';
+                                        pageImg.src = pUrl;
+                                        pageImg.alt = 'Pagina ' + (idx + 1);
+                                        wrapper.appendChild(pageImg);
+                                        mountedCount++;
+                                    });
+
+                                    root.appendChild(wrapper);
+                                } else if (data.blob instanceof Blob) {
+                                    const gUrl = URL.createObjectURL(data.blob);
+                                    currentUrls.push(gUrl);
+
+                                    const stage = document.createElement('div');
+                                    stage.className = 'generic-stage';
+                                    const objEl = document.createElement('object');
+                                    objEl.data = gUrl;
+                                    objEl.type = mime;
+                                    stage.appendChild(objEl);
+                                    root.appendChild(stage);
+                                    mountedCount = 1;
+                                }
+
+                                applyZoomState(data.zoom !== undefined ? data.zoom : 1.0);
+
+                                if (window.parent && window.parent !== window) {
+                                    window.parent.postMessage({
+                                        type: 'PANZER_RENDER_ACK',
+                                        nonce: EXPECTED_NONCE,
+                                        count: mountedCount
+                                    }, '*');
+                                }
+                            }
+                        } catch (frameErr) {
+                            try {
+                                if (window.parent && window.parent !== window) {
+                                    window.parent.postMessage({
+                                        type: 'PANZER_VIEWER_ERR',
+                                        nonce: EXPECTED_NONCE,
+                                        msg: frameErr && frameErr.message ? String(frameErr.message) : 'FrameError'
+                                    }, '*');
+                                }
+                            } catch (_) {}
                         }
                     });
 
@@ -735,30 +759,63 @@ document.addEventListener('DOMContentLoaded', async () => {
             sandboxFrame.src = activeViewerBlobUrl;
         });
 
-        if (activeMimeType && activeMimeType.startsWith('image/')) {
-            const imgBlob = new Blob([activeRawBuffer], { type: activeMimeType });
-            postToSandboxFrame({
+        const sent = activeMimeType && activeMimeType.startsWith('image/')
+            ? postToSandboxFrame({
                 type: 'PANZER_RENDER_VIEWER',
                 mimeType: activeMimeType,
-                blob: imgBlob,
+                blob: new Blob([activeRawBuffer], { type: activeMimeType }),
                 zoom: currentZoom
-            });
-        } else if (activeMimeType && activeMimeType.includes('pdf')) {
-            postToSandboxFrame({
-                type: 'PANZER_RENDER_VIEWER',
-                mimeType: activeMimeType,
-                pageBlobs: activePageBlobs || [],
-                zoom: currentZoom
-            });
-        } else if (activeRawBuffer) {
-            const genericBlob = new Blob([activeRawBuffer], { type: activeMimeType || 'application/octet-stream' });
-            postToSandboxFrame({
-                type: 'PANZER_RENDER_VIEWER',
-                mimeType: activeMimeType || 'application/octet-stream',
-                blob: genericBlob,
-                zoom: currentZoom
-            });
+            })
+            : (activeMimeType && activeMimeType.includes('pdf'))
+                ? postToSandboxFrame({
+                    type: 'PANZER_RENDER_VIEWER',
+                    mimeType: activeMimeType,
+                    pageBlobs: activePageBlobs || [],
+                    zoom: currentZoom
+                })
+                : activeRawBuffer
+                    ? postToSandboxFrame({
+                        type: 'PANZER_RENDER_VIEWER',
+                        mimeType: activeMimeType || 'application/octet-stream',
+                        blob: new Blob([activeRawBuffer], { type: activeMimeType || 'application/octet-stream' }),
+                        zoom: currentZoom
+                    })
+                    : false;
+
+        if (!sent) {
+            logToTerminal('warn', '⚠️ Invio payload al visore sandbox non riuscito.');
+            return;
         }
+
+        await new Promise((resolve) => {
+            let done = false;
+            const cleanup = () => {
+                if (done) return;
+                done = true;
+                clearTimeout(timer);
+                window.removeEventListener('message', onDiagMsg);
+                resolve();
+            };
+            const onDiagMsg = (event) => {
+                if (event.source !== sandboxFrame.contentWindow) return;
+                const d = event.data;
+                if (!d || typeof d !== 'object' || d.nonce !== currentNonce) return;
+                if (d.type === 'PANZER_RENDER_ACK') {
+                    logToTerminal('vault', `📩 Sandbox ACK: montati ${d.count ?? 0} elementi.`);
+                    cleanup();
+                } else if (d.type === 'PANZER_VIEWER_ERR') {
+                    logToTerminal('error', `❌ Sandbox ERR: ${d.msg || 'errore interno'}`);
+                    cleanup();
+                }
+            };
+            const timer = setTimeout(() => {
+                if (!done) {
+                    logToTerminal('warn', '⚠️ Nessun ACK dal visore sandbox entro il timeout.');
+                }
+                cleanup();
+            }, 1500);
+            window.addEventListener('message', onDiagMsg);
+        });
     };
 
     // 🔒 Visore Sandbox Protetto.
