@@ -1445,6 +1445,7 @@ self.addEventListener('message', (event) => {
                     
                     // 🛠️ SETUP:
                     let db = null;
+                    let rawBytes = null;
                     try {
                         // 🛑 Bonifica...
                         await new Promise((res) => {
@@ -1464,7 +1465,7 @@ self.addEventListener('message', (event) => {
                         const newSalt = crypto.getRandomValues(new Uint8Array(16));
                         const wrapped = await wrapMasterKey(tempKey, pinBytes, newSalt);
 
-                        const rawBytes = await crypto.subtle.exportKey("raw", tempKey);
+                        rawBytes = await crypto.subtle.exportKey("raw", tempKey);
                         key = await crypto.subtle.importKey(
                             "raw",
                             rawBytes,
