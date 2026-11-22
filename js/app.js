@@ -124,7 +124,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         statusBadge.className = `badge-status ${badgeClass}`;
     };
     
-        // 🔏 Modale Grafico Unificato per Gestione PIN (Setup, Sblocco, Cambio, Associa PRF)
+    // 🔏 Modale Grafico Unificato per Gestione PIN (Setup, Sblocco, Cambio, Associa PRF)
     const showPinModal = (mode = 'unlock', messageText = 'Inserisci il PIN di sblocco:') => {
         let pinModal = document.getElementById('PA-pin-manager-modal');
         if (!pinModal) {
@@ -166,65 +166,90 @@ document.addEventListener('DOMContentLoaded', async () => {
             pinModal.style.display = 'none';
         };
 
-        const closeBtnHtml = canDismissModal
-            ? `<button type="button" id="pa-pin-close-x" aria-label="Chiudi" title="Chiudi" style="
-                    position: absolute; top: 12px; right: 12px; width: 32px; height: 32px;
-                    background: transparent; color: #94a3b8; border: 1px solid #475569;
-                    border-radius: 6px; cursor: pointer; font-size: 1rem; line-height: 1;
-                    display: flex; align-items: center; justify-content: center;
-               ">✕</button>`
-            : '';
+        const makePinInput = (id, placeholder, marginBottom = '12px') => {
+            const inp = document.createElement('input');
+            inp.type = 'password';
+            inp.id = id;
+            inp.placeholder = placeholder;
+            inp.maxLength = 8;
+            inp.style.cssText = `width: 100%; padding: 12px; box-sizing: border-box; background: #0f172a; border: 1px solid #64748b; color: #fff; font-size: 1.1rem; border-radius: 6px; text-align: center; letter-spacing: 4px; margin-bottom: ${marginBottom};`;
+            return inp;
+        };
 
-        let innerFields = '';
-        let buttonText = 'Sblocca Caveau';
+        const buildPinCardFragment = () => {
+            const frag = document.createDocumentFragment();
+            const card = document.createElement('div');
+            card.style.cssText = 'position: relative; background: #1e293b; border: 1px solid #475569; padding: 30px; border-radius: 12px; max-width: 380px; width: 100%; text-align: center; box-shadow: 0 10px 25px rgba(0,0,0,0.5);';
 
-        if (mode === 'setup') {
-            innerFields = `
-                <input type="password" id="pa-pin-1" placeholder="Crea PIN (min 4 cifre)" maxlength="8" style="width: 100%; padding: 12px; box-sizing: border-box; background: #0f172a; border: 1px solid #64748b; color: #fff; font-size: 1.1rem; border-radius: 6px; text-align: center; letter-spacing: 4px; margin-bottom: 12px;">
-                <input type="password" id="pa-pin-2" placeholder="Conferma PIN" maxlength="8" style="width: 100%; padding: 12px; box-sizing: border-box; background: #0f172a; border: 1px solid #64748b; color: #fff; font-size: 1.1rem; border-radius: 6px; text-align: center; letter-spacing: 4px; margin-bottom: 16px;">
-            `;
-            buttonText = 'Crea Caveau Cifrato';
-        } else if (mode === 'change') {
-            innerFields = `
-                <input type="password" id="pa-pin-old" placeholder="Vecchio PIN" maxlength="8" style="width: 100%; padding: 12px; box-sizing: border-box; background: #0f172a; border: 1px solid #64748b; color: #fff; font-size: 1.1rem; border-radius: 6px; text-align: center; letter-spacing: 4px; margin-bottom: 12px;">
-                <input type="password" id="pa-pin-1" placeholder="Nuovo PIN" maxlength="8" style="width: 100%; padding: 12px; box-sizing: border-box; background: #0f172a; border: 1px solid #64748b; color: #fff; font-size: 1.1rem; border-radius: 6px; text-align: center; letter-spacing: 4px; margin-bottom: 12px;">
-                <input type="password" id="pa-pin-2" placeholder="Conferma Nuovo PIN" maxlength="8" style="width: 100%; padding: 12px; box-sizing: border-box; background: #0f172a; border: 1px solid #64748b; color: #fff; font-size: 1.1rem; border-radius: 6px; text-align: center; letter-spacing: 4px; margin-bottom: 16px;">
-            `;
-            buttonText = 'Aggiorna PIN';
-        } else if (mode === 'register-prf') {
-            innerFields = `
-                <input type="password" id="pa-pin-1" placeholder="Inserisci PIN corrente" maxlength="8" style="width: 100%; padding: 12px; box-sizing: border-box; background: #0f172a; border: 1px solid #64748b; color: #fff; font-size: 1.1rem; border-radius: 6px; text-align: center; letter-spacing: 4px; margin-bottom: 12px;">
-                <button type="button" id="pa-pin-cancel-btn" style="
-                    width: 100%; padding: 10px; margin-bottom: 12px; background: #0f172a; color: #cbd5e1;
-                    border: 1px solid #475569; border-radius: 6px; cursor: pointer; font-size: 0.9rem;
-                ">Annulla</button>
-            `;
-            buttonText = '🧬 Associa Passkey / Biometria';
-        } else {
-            innerFields = `
-                <input type="password" id="pa-pin-1" placeholder="Inserisci PIN" maxlength="8" style="width: 100%; padding: 12px; box-sizing: border-box; background: #0f172a; border: 1px solid #64748b; color: #fff; font-size: 1.1rem; border-radius: 6px; text-align: center; letter-spacing: 4px; margin-bottom: 12px;">
-                <button type="button" id="pa-prf-unlock-btn" style="
-                    display: none; width: 100%; padding: 10px; margin-bottom: 14px;
-                    background: #0f172a; color: #38bdf8; border: 1px solid #38bdf8;
-                    border-radius: 6px; font-weight: 600; cursor: pointer; font-size: 0.95rem;
-                ">🔐🧬 Entra con Passkey / Biometria</button>
-            `;
-            buttonText = 'Sblocca Caveau';
-        }
+            if (canDismissModal) {
+                const closeXBtn = document.createElement('button');
+                closeXBtn.type = 'button';
+                closeXBtn.id = 'pa-pin-close-x';
+                closeXBtn.setAttribute('aria-label', 'Chiudi');
+                closeXBtn.title = 'Chiudi';
+                closeXBtn.style.cssText = 'position: absolute; top: 12px; right: 12px; width: 32px; height: 32px; background: transparent; color: #94a3b8; border: 1px solid #475569; border-radius: 6px; cursor: pointer; font-size: 1rem; line-height: 1; display: flex; align-items: center; justify-content: center;';
+                closeXBtn.textContent = '✕';
+                card.appendChild(closeXBtn);
+            }
 
-        pinModal.innerHTML = `
-            <div style="position: relative; background: #1e293b; border: 1px solid #475569; padding: 30px; border-radius: 12px; max-width: 380px; width: 100%; text-align: center; box-shadow: 0 10px 25px rgba(0,0,0,0.5);">
-                ${closeBtnHtml}
-                <div style="font-size: 36px; margin-bottom: 12px;">🔐🪖</div>
-                <h3 style="margin-top: 0; color: #38bdf8; font-size: 1.2rem;">SICUREZZA BUNKER PA</h3>
-                <p id="pa-pin-modal-msg" style="font-size: 0.9rem; color: #cbd5e1; margin-bottom: 20px;">${messageText}</p>
-                ${innerFields}
-                <button id="pa-pin-action-btn" style="
-                    width: 100%; padding: 12px; background: #2563eb; color: #fff; border: none; border-radius: 6px;
-                    font-weight: bold; cursor: pointer; font-size: 1rem; transition: background 0.2s;
-                ">${buttonText}</button>
-            </div>
-        `;
+            const iconDiv = document.createElement('div');
+            iconDiv.style.cssText = 'font-size: 36px; margin-bottom: 12px;';
+            iconDiv.textContent = '🔐🪖';
+            card.appendChild(iconDiv);
+
+            const titleEl = document.createElement('h3');
+            titleEl.style.cssText = 'margin-top: 0; color: #38bdf8; font-size: 1.2rem;';
+            titleEl.textContent = 'SICUREZZA BUNKER PA';
+            card.appendChild(titleEl);
+
+            const msgEl = document.createElement('p');
+            msgEl.id = 'pa-pin-modal-msg';
+            msgEl.style.cssText = 'font-size: 0.9rem; color: #cbd5e1; margin-bottom: 20px;';
+            msgEl.textContent = messageText;
+            card.appendChild(msgEl);
+
+            let buttonText = 'Sblocca Caveau';
+
+            if (mode === 'setup') {
+                card.appendChild(makePinInput('pa-pin-1', 'Crea PIN (min 4 cifre)', '12px'));
+                card.appendChild(makePinInput('pa-pin-2', 'Conferma PIN', '16px'));
+                buttonText = 'Crea Caveau Cifrato';
+            } else if (mode === 'change') {
+                card.appendChild(makePinInput('pa-pin-old', 'Vecchio PIN', '12px'));
+                card.appendChild(makePinInput('pa-pin-1', 'Nuovo PIN', '12px'));
+                card.appendChild(makePinInput('pa-pin-2', 'Conferma Nuovo PIN', '16px'));
+                buttonText = 'Aggiorna PIN';
+            } else if (mode === 'register-prf') {
+                card.appendChild(makePinInput('pa-pin-1', 'Inserisci PIN corrente', '12px'));
+                const cancelBtn = document.createElement('button');
+                cancelBtn.type = 'button';
+                cancelBtn.id = 'pa-pin-cancel-btn';
+                cancelBtn.style.cssText = 'width: 100%; padding: 10px; margin-bottom: 12px; background: #0f172a; color: #cbd5e1; border: 1px solid #475569; border-radius: 6px; cursor: pointer; font-size: 0.9rem;';
+                cancelBtn.textContent = 'Annulla';
+                card.appendChild(cancelBtn);
+                buttonText = '🧬 Associa Passkey / Biometria';
+            } else {
+                card.appendChild(makePinInput('pa-pin-1', 'Inserisci PIN', '12px'));
+                const prfBtn = document.createElement('button');
+                prfBtn.type = 'button';
+                prfBtn.id = 'pa-prf-unlock-btn';
+                prfBtn.style.cssText = 'display: none; width: 100%; padding: 10px; margin-bottom: 14px; background: #0f172a; color: #38bdf8; border: 1px solid #38bdf8; border-radius: 6px; font-weight: 600; cursor: pointer; font-size: 0.95rem;';
+                prfBtn.textContent = '🔐🧬 Entra con Passkey / Biometria';
+                card.appendChild(prfBtn);
+                buttonText = 'Sblocca Caveau';
+            }
+
+            const actionBtn = document.createElement('button');
+            actionBtn.id = 'pa-pin-action-btn';
+            actionBtn.style.cssText = 'width: 100%; padding: 12px; background: #2563eb; color: #fff; border: none; border-radius: 6px; font-weight: bold; cursor: pointer; font-size: 1rem; transition: background 0.2s;';
+            actionBtn.textContent = buttonText;
+            card.appendChild(actionBtn);
+
+            frag.appendChild(card);
+            return frag;
+        };
+
+        pinModal.replaceChildren(buildPinCardFragment());
         pinModal.style.display = 'flex';
 
         const btn = document.getElementById('pa-pin-action-btn');
@@ -318,26 +343,43 @@ document.addEventListener('DOMContentLoaded', async () => {
                                 : false;
 
                             if (canPrf && typeof sdk.vaultManager.registerPrfCredential === 'function') {
-                                pinModal.innerHTML = `
-                                    <div style="position: relative; background: #1e293b; border: 1px solid #475569; padding: 30px; border-radius: 12px; max-width: 380px; width: 100%; text-align: center; box-shadow: 0 10px 25px rgba(0,0,0,0.5);">
-                                        <div style="font-size: 36px; margin-bottom: 12px;">🧬🔐</div>
-                                        <h3 style="margin-top: 0; color: #38bdf8; font-size: 1.2rem;">ACCESSO RAPIDO PASSKEY</h3>
-                                        <p id="pa-prf-setup-msg" style="font-size: 0.9rem; color: #cbd5e1; margin-bottom: 20px;">
-                                            PIN impostato. Vuoi associare ora una Passkey / Biometria per sbloccare il caveau senza PIN?
-                                        </p>
-                                        <button type="button" id="pa-prf-register-btn" style="
-                                            width: 100%; padding: 12px; margin-bottom: 10px; background: #2563eb; color: #fff;
-                                            border: none; border-radius: 6px; font-weight: bold; cursor: pointer; font-size: 1rem;
-                                        ">🔐🧬 Associa Passkey / Biometria</button>
-                                        <button type="button" id="pa-prf-skip-btn" style="
-                                            width: 100%; padding: 10px; background: #0f172a; color: #cbd5e1;
-                                            border: 1px solid #475569; border-radius: 6px; cursor: pointer; font-size: 0.9rem;
-                                        ">Salta (usa solo PIN)</button>
-                                    </div>
-                                `;
+                                const prfFrag = document.createDocumentFragment();
+                                const prfCard = document.createElement('div');
+                                prfCard.style.cssText = 'position: relative; background: #1e293b; border: 1px solid #475569; padding: 30px; border-radius: 12px; max-width: 380px; width: 100%; text-align: center; box-shadow: 0 10px 25px rgba(0,0,0,0.5);';
 
-                                const regBtn = document.getElementById('pa-prf-register-btn');
-                                const skipBtn = document.getElementById('pa-prf-skip-btn');
+                                const prfIcon = document.createElement('div');
+                                prfIcon.style.cssText = 'font-size: 36px; margin-bottom: 12px;';
+                                prfIcon.textContent = '🧬🔐';
+                                prfCard.appendChild(prfIcon);
+
+                                const prfTitle = document.createElement('h3');
+                                prfTitle.style.cssText = 'margin-top: 0; color: #38bdf8; font-size: 1.2rem;';
+                                prfTitle.textContent = 'ACCESSO RAPIDO PASSKEY';
+                                prfCard.appendChild(prfTitle);
+
+                                const prfMsg = document.createElement('p');
+                                prfMsg.id = 'pa-prf-setup-msg';
+                                prfMsg.style.cssText = 'font-size: 0.9rem; color: #cbd5e1; margin-bottom: 20px;';
+                                prfMsg.textContent = 'PIN impostato. Vuoi associare ora una Passkey / Biometria per sbloccare il caveau senza PIN?';
+                                prfCard.appendChild(prfMsg);
+
+                                const regBtn = document.createElement('button');
+                                regBtn.type = 'button';
+                                regBtn.id = 'pa-prf-register-btn';
+                                regBtn.style.cssText = 'width: 100%; padding: 12px; margin-bottom: 10px; background: #2563eb; color: #fff; border: none; border-radius: 6px; font-weight: bold; cursor: pointer; font-size: 1rem;';
+                                regBtn.textContent = '🔐🧬 Associa Passkey / Biometria';
+                                prfCard.appendChild(regBtn);
+
+                                const skipBtn = document.createElement('button');
+                                skipBtn.type = 'button';
+                                skipBtn.id = 'pa-prf-skip-btn';
+                                skipBtn.style.cssText = 'width: 100%; padding: 10px; background: #0f172a; color: #cbd5e1; border: 1px solid #475569; border-radius: 6px; cursor: pointer; font-size: 0.9rem;';
+                                skipBtn.textContent = 'Salta (usa solo PIN)';
+                                prfCard.appendChild(skipBtn);
+
+                                prfFrag.appendChild(prfCard);
+                                pinModal.replaceChildren(prfFrag);
+
                                 const setupMsg = document.getElementById('pa-prf-setup-msg');
 
                                 if (skipBtn) {
@@ -1206,10 +1248,17 @@ p { font-size: 14px; letter-spacing: 0.5px; font-weight: 500; }
             return url.includes(filterQuery) || type.includes(filterQuery) || category.includes(filterQuery);
         });
 
-        storageTbody.innerHTML = '';
-
+        storageTbody.replaceChildren();
         if (filteredAssets.length === 0) {
-            storageTbody.innerHTML = `<tr><td colspan="5" style="text-align: center; color: var(--text-muted);">Nessuna risorsa trovata per il filtro applicato.</td></tr>`;
+            const emptyFrag = document.createDocumentFragment();
+            const emptyTr = document.createElement('tr');
+            const emptyTd = document.createElement('td');
+            emptyTd.colSpan = 5;
+            emptyTd.style.cssText = 'text-align: center; color: var(--text-muted);';
+            emptyTd.textContent = 'Nessuna risorsa trovata per il filtro applicato.';
+            emptyTr.appendChild(emptyTd);
+            emptyFrag.appendChild(emptyTr);
+            storageTbody.appendChild(emptyFrag);
             return;
         }
 
@@ -1257,7 +1306,11 @@ p { font-size: 14px; letter-spacing: 0.5px; font-weight: 500; }
             tdSize.textContent = sizeFormatted;
 
             const tdCache = document.createElement('td');
-            tdCache.innerHTML = cacheBadge;
+            const cacheSpan = document.createElement('span');
+            cacheSpan.style.fontWeight = isCached ? 'bold' : 'normal';
+            cacheSpan.style.color = isCached ? 'var(--accent-green)' : 'var(--text-muted)';
+            cacheSpan.textContent = isCached ? '🟢🗄️ Cifrato' : '🔴🗄️ Non Presente';
+            tdCache.appendChild(cacheSpan);
 
             const tdAction = document.createElement('td');
             const actionDiv = document.createElement('div');
@@ -1339,7 +1392,8 @@ p { font-size: 14px; letter-spacing: 0.5px; font-weight: 500; }
     });
 
     btnClearLog.addEventListener('click', () => {
-        terminalOutput.innerHTML = '';
+        terminalOutput.replaceChildren();
+
         logToTerminal('info', '🧹 Console pulita.');
     });
 

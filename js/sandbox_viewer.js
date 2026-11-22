@@ -1,7 +1,7 @@
 /**
  * 🌀🪖 Panzer-Core-Framework — Visore Isolato per Documenti PA (js/sandbox_viewer.js)
  *
- * v1.0.0.4
+ * v1.0.1.0
  * 
  * 🛡️ Modulo client zero-dipendenze eseguito all'interno di un contenitore <iframe>
  * isolato (sandbox="allow-scripts", origine opaca) per la visualizzazione in sola
@@ -233,7 +233,7 @@
             if (data.type === 'PANZER_CLEAR_VIEWER') {
                 channelSealed = true;
                 revokeLocalUrls();
-                if (root) root.innerHTML = '';
+                if (root) root.replaceChildren();
                 currentZoomVal = 1.0;
                 document.body.style.touchAction = '';
                 document.body.style.cursor = 'default';
@@ -246,7 +246,7 @@
                 if (data.zoom !== undefined && !isValidZoom(data.zoom)) return;
 
                 revokeLocalUrls();
-                if (root) root.innerHTML = '';
+                if (root) root.replaceChildren();
                 const mime = data.mimeType.split(';')[0].trim().toLowerCase();
                 let mountedCount = 0;
 
@@ -255,6 +255,7 @@
                     const objUrl = URL.createObjectURL(blob);
                     currentUrls.push(objUrl);
 
+                    const frag = document.createDocumentFragment();
                     const stage = document.createElement('div');
                     stage.className = 'img-stage';
                     const container = document.createElement('div');
@@ -264,11 +265,13 @@
                     img.alt = 'Immagine protetta';
                     container.appendChild(img);
                     stage.appendChild(container);
-                    root.appendChild(stage);
+                    frag.appendChild(stage);
+                    root.appendChild(frag);
                     mountedCount = 1;
                 } else if (mime.includes('pdf') && Array.isArray(data.pageBuffers) && data.pageBuffers.length <= 500) {
                     const wrapper = document.createElement('div');
                     wrapper.id = 'pdf-wrapper';
+                    const pagesFrag = document.createDocumentFragment();
 
                     data.pageBuffers.forEach((pBuf, idx) => {
                         if (!(pBuf instanceof ArrayBuffer)) return;
@@ -280,23 +283,26 @@
                         pageImg.className = 'pdf-page';
                         pageImg.src = pUrl;
                         pageImg.alt = `Pagina ${idx + 1}`;
-                        wrapper.appendChild(pageImg);
+                        pagesFrag.appendChild(pageImg);
                         mountedCount++;
                     });
 
+                    wrapper.appendChild(pagesFrag);
                     root.appendChild(wrapper);
                 } else if (data.buffer instanceof ArrayBuffer) {
                     const gBlob = new Blob([data.buffer], { type: mime });
                     const gUrl = URL.createObjectURL(gBlob);
                     currentUrls.push(gUrl);
 
+                    const frag = document.createDocumentFragment();
                     const stage = document.createElement('div');
                     stage.className = 'generic-stage';
                     const objEl = document.createElement('object');
                     objEl.data = gUrl;
                     objEl.type = mime;
                     stage.appendChild(objEl);
-                    root.appendChild(stage);
+                    frag.appendChild(stage);
+                    root.appendChild(frag);
                     mountedCount = 1;
                 }
 
