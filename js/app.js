@@ -474,7 +474,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         });
     }
 
-    // 🖼️📄 Generatore del visore protetto (origine opaca 'null', canale blindato da nonce e validazione payload).
+    // 🖼️📄 Generatore del visore protetto (origine opaca 'null', canale blindato da nonce e handshake ready).
     const renderAndMountSandbox = async () => {
         activeSandboxNonce = (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function')
             ? crypto.randomUUID()
@@ -678,6 +678,15 @@ document.addEventListener('DOMContentLoaded', async () => {
                             applyZoomState(data.zoom !== undefined ? data.zoom : 1.0);
                         }
                     });
+
+                    try {
+                        if (window.parent && window.parent !== window) {
+                            window.parent.postMessage({
+                                type: 'PANZER_VIEWER_READY',
+                                nonce: EXPECTED_NONCE
+                            }, '*');
+                        }
+                    } catch (_) {}
                 })();
                 </script>
             </body>
@@ -690,12 +699,38 @@ document.addEventListener('DOMContentLoaded', async () => {
         const viewerBlob = new Blob([viewerHtml], { type: 'text/html' });
         activeViewerBlobUrl = URL.createObjectURL(viewerBlob);
 
+        const currentNonce = activeSandboxNonce;
+
         await new Promise((resolve) => {
-            const onLoad = () => {
-                sandboxFrame.removeEventListener('load', onLoad);
+            let settled = false;
+            let fallbackTimer = null;
+
+            const finish = () => {
+                if (settled) return;
+                settled = true;
+                clearTimeout(fallbackTimer);
+                window.removeEventListener('message', onReadyMsg);
+                sandboxFrame.removeEventListener('load', onFrameLoad);
                 resolve();
             };
-            sandboxFrame.addEventListener('load', onLoad, { once: true });
+
+            const onReadyMsg = (event) => {
+                if (event.source !== sandboxFrame.contentWindow) return;
+                const d = event.data;
+                if (!d || typeof d !== 'object') return;
+                if (d.type === 'PANZER_VIEWER_READY' && d.nonce === currentNonce) {
+                    finish();
+                }
+            };
+
+            const onFrameLoad = () => {
+                fallbackTimer = setTimeout(finish, 80);
+            };
+
+            fallbackTimer = setTimeout(finish, 1200);
+            window.addEventListener('message', onReadyMsg);
+            sandboxFrame.addEventListener('load', onFrameLoad, { once: true });
+
             sandboxFrame.setAttribute('sandbox', 'allow-scripts');
             sandboxFrame.src = activeViewerBlobUrl;
         });
