@@ -5,9 +5,9 @@
 <h1 align="center">🏗️ PANZER SDK & CORE FRAMEWORK</h1>
 
 <p align="center">
-  <img src="https://img.shields.io/badge/🌀_PANZER_SDK-v2.3.8.1-1f4e79" alt="SDK Badge">
-  <img src="https://img.shields.io/badge/📊_PANZER_APP-v2.4.3.3-2563eb" alt="App Badge">
-  <img src="https://img.shields.io/badge/🔒👁️_SANDBOX_VIEWER-v1.0.0.4-6d28d9" alt="Sandbox Viewer Badge">
+  <img src="https://img.shields.io/badge/🌀_PANZER_SDK-v2.3.8.2-1f4e79" alt="SDK Badge">
+  <img src="https://img.shields.io/badge/📊_PANZER_APP-v2.4.3.4-2563eb" alt="App Badge">
+  <img src="https://img.shields.io/badge/🔒👁️_SANDBOX_VIEWER-v1.0.1.0-6d28d9" alt="Sandbox Viewer Badge">
   <img src="https://img.shields.io/badge/⚙️🪖_CORE_PANZER-v7.9.42+-4f4f00" alt="Core Badge">
   <img src="https://img.shields.io/badge/PoC-📱_PWA_x_PA-af0000" alt="PoC Badge">
   <img src="https://img.shields.io/badge/Licenza-🇪🇺_EUPL_v1.2-0055a5" alt="License Badge">
@@ -32,7 +32,7 @@
 
 ## 🚀 Obiettivi del Progetto
 
-- 🌀 **Proof of Concept (PoC):** <br> Architettura software sovrana per **Progressive Web App (📲 PWA)** basata sul **⚙️🪖 Core Panzer v7.9.42+**, il client **PanzerSDK v2.3.8.1**, il visore isolato **Sandbox Viewer v1.0.0.4** e la Dashboard **App Controller v2.4.3.3**, progettata in modalità *🔐 Zero-Trust*.
+- 🌀 **Proof of Concept (PoC):** <br> Architettura software sovrana per **Progressive Web App (📲 PWA)** basata sul **⚙️🪖 Core Panzer v7.9.42+**, il client **PanzerSDK v2.3.8.2**, il visore isolato **Sandbox Viewer v1.0.1.0** e la Dashboard **App Controller v2.4.3.4**, progettata in modalità *🔐 Zero-Trust*.
 
 - 🏛️ **Conformità Istituzionale:** <br> Il sistema garantisce **massima resilienza informatica**, continuità operativa *offline-first*, consultazione protetta di atti e documenti della **Pubblica Amministrazione (PA)**, nel pieno rispetto delle linee guida tecniche 📑 **AgID** e del **📜 Codice dell'Amministrazione Digitale (CAD)** per il riuso (*🇪🇺 EUPL v1.2*).
 
@@ -44,7 +44,7 @@
 
 ## 🛠️ Architettura e Caratteristiche Principali
 
-Il sistema si compone di tre livelli integrati: il **Service Worker (`ServiceWorker.js` - `v7.9.42+`)** che agisce come entità autonoma di difesa, l'**SDK & Dashboard Client (`SDK.js` `v2.3.8.1` / `app.js` `v2.4.3.3`)** che gestisce l'interfaccia, la memoria, i flussi PIN/Passkey PRF e i meccanismi di blocco, e il **Visore Isolato (`js/sandbox_viewer.js` - `v1.0.0.4`)** per la visualizzazione protetta in `iframe`.
+Il sistema si compone di tre livelli integrati: il **Service Worker (`ServiceWorker.js` - `v7.9.42+`)** che agisce come entità autonoma di difesa, l'**SDK & Dashboard Client (`SDK.js` `v2.3.8.2` / `app.js` `v2.4.3.4`)** che gestisce l'interfaccia, la memoria, i flussi PIN/Passkey PRF e i meccanismi di blocco, e il **Visore Isolato (`js/sandbox_viewer.js` - `v1.0.1.0`)** per la visualizzazione protetta in `iframe`.
 
 <br>
 
@@ -70,7 +70,7 @@ Il sistema si compone di tre livelli integrati: il **Service Worker (`ServiceWor
 
 <br>
 
-### 🔹 2. Client SDK, Dashboard & Sandbox Viewer ( `SDK.js` v2.3.8.1, `app.js` v2.4.3.3 & `js/sandbox_viewer.js` v1.0.0.4 )
+### 🔹 2. Client SDK, Dashboard & Sandbox Viewer ( `SDK.js` v2.3.8.2, `app.js` v2.4.3.4 & `js/sandbox_viewer.js` v1.0.1.0 )
 
 - **🔏🛡️ PanzerVaultManager & Sblocco all'Avvio (`initVaultCheck`):** <br> Gestione del timer di inattività di 10 minuti con auto-lock della RAM, controllo di sessione per scheda (`panzer_tab_active`), modale grafico unificato (`showPinModal`) per `setup`, `unlock`, `change` e `register-prf`, e sblocco immediato all'avvio o dopo refresh.
 
@@ -80,9 +80,9 @@ Il sistema si compone di tre livelli integrati: il **Service Worker (`ServiceWor
 
 - **🐺 Watchdog Anti-Incognito ❌🕵️:** <br> Rilevamento selettivo della navigazione in incognito o sandbox restrittive sui motori Chromium/Blink con timeout adattivo.
 
-- **🔒 Visore Sandbox Protetto (`openInSandbox`, `renderAndMountSandbox`, `closeSandbox` & `js/sandbox_viewer.js`):** <br> Isolamento tramite `iframe` (`sandbox="allow-scripts"`) con script esterno `js/sandbox_viewer.js` (`v1.0.0.4`), handshake su `nonce` di sessione (`PANZER_VIEWER_READY`, `PANZER_RENDER_VIEWER`, `PANZER_RENDER_ACK`, `PANZER_CLEAR_VIEWER`), trasferimento tramite `ArrayBuffer`, rendering rasterizzato delle pagine PDF tramite `pdfjsLib`, zoom regolabile (`1.0`–`3.0`) con panning puntatore/touch e **Zeroization preventiva della RAM** (`Uint8Array.fill(0)`) alla chiusura.
+- **🔒 Visore Sandbox Protetto (`openInSandbox`, `renderAndMountSandbox`, `closeSandbox` & `js/sandbox_viewer.js`):** <br> Isolamento tramite `iframe` (`sandbox="allow-scripts"`) con script esterno `js/sandbox_viewer.js` (`v1.0.1.0`), handshake su `nonce` di sessione (`PANZER_VIEWER_READY`, `PANZER_RENDER_VIEWER`, `PANZER_RENDER_ACK`, `PANZER_VIEWER_ERR`, `PANZER_CLEAR_VIEWER`), trasferimento tramite `ArrayBuffer`, rendering rasterizzato delle pagine PDF tramite `pdfjsLib`, zoom regolabile (`1.0`–`3.0`) con panning puntatore/touch, bonifica DOM tramite `replaceChildren()` / `DocumentFragment` e **Zeroization preventiva della RAM** (`Uint8Array.fill(0)`) alla chiusura.
 
-- **❄️ Immutabilità & Hardening Client:** <br> Sigillatura delle configurazioni e del manifesto in memoria (`Object.freeze` / `deepFreeze`), sanitizzazione dei filtri di ricerca e rendering tabellare tramite `DocumentFragment` e `textContent`.
+- **❄️ Immutabilità & Hardening Client:** <br> Sigillatura delle configurazioni e del manifesto in memoria (`Object.freeze` / `deepFreeze`), sanitizzazione dei filtri di ricerca e rendering tabellare/modale/console tramite `DocumentFragment`, `replaceChildren()` e `textContent` senza `innerHTML`.
 
 - **🎖️ Zero-Dipendenze:** <br> Sviluppato interamente in **🍦 Vanilla JS**, senza framework esterni e allineato ai principi di riuso dell'**Art. 69 del CAD**.
 
@@ -270,7 +270,17 @@ Il sistema si compone di tre livelli integrati: il **Service Worker (`ServiceWor
 <br>
 
 <details>
-<summary><strong>⚙️📦 Espandi Changelog <br> SDK ( v2.3.8.1 ), SANDBOX VIEWER ( v1.0.0.4 ) & DASHBOARD APP ( v2.4.3.3 )</strong></summary>
+<summary><strong>⚙️📦 Espandi Changelog <br> SDK ( v2.3.8.2 ), SANDBOX VIEWER ( v1.0.1.0 ) & DASHBOARD APP ( v2.4.3.4 )</strong></summary>
+
+<br>
+
+### 📣 NOVITÀ APP v2.4.3.4, SANDBOX VIEWER v1.0.1.0 & SDK v2.3.8.2 (`🧹🛡️ Bonifica DOM Senza innerHTML & Hardening Visore`)
+
+- 🧹 **Eliminazione Completa di `innerHTML` (`app.js` `v2.4.3.4` & `js/sandbox_viewer.js` `v1.0.1.0`):** <br> Sostituiti tutti gli svuotamenti e i montaggi HTML tramite `replaceChildren()` e `DocumentFragment` in `renderStorageTable` (riga vuota e badge di stato cache), `btnClearLog`, `showPinModal` / flusso PRF e nel visore `js/sandbox_viewer.js` (`PANZER_CLEAR_VIEWER`, `PANZER_RENDER_VIEWER` e montaggio pagine PDF).
+
+- 🔒👁️ **Aggiornamento Visore Isolato `js/sandbox_viewer.js` (`v1.0.1.0`):** <br> Allineata la versione del modulo `js/sandbox_viewer.js` con bonifica DOM nativa (`replaceChildren()` / `DocumentFragment`) mantenendo invariati il controllo `nonce`, la verifica `event.source === window.parent`, la sigillatura `channelSealed`, la revoca degli Object URL e la gestione zoom/panning.
+
+- ⚙️ **Allineamento SDK (`v2.3.8.2`):** <br> Aggiornata la release del client `SDK.js` alla `v2.3.8.2` in coerenza con l'aggiornamento della suite Dashboard/Visore.
 
 <br>
 
