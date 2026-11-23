@@ -280,7 +280,7 @@ Il sistema si compone di tre livelli integrati: il **Service Worker (`ServiceWor
 
 - 🔒👁️ **Aggiornamento Visore Isolato `js/sandbox_viewer.js` (`v1.0.1.0`):** <br> Allineata la versione del modulo `js/sandbox_viewer.js` con bonifica DOM nativa (`replaceChildren()` / `DocumentFragment`) mantenendo invariati il controllo `nonce`, la verifica `event.source === window.parent`, la sigillatura `channelSealed`, la revoca degli Object URL e la gestione zoom/panning.
 
-- ⚙️ **Allineamento SDK (`v2.3.8.2`):** <br> Aggiornata la release del client `SDK.js` alla `v2.3.8.2` in coerenza con l'aggiornamento della suite Dashboard/Visore.
+- 🪳 **Bug Fix: SDK (`v2.3.8.2`), ... **
 
 <br>
 
